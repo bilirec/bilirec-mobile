@@ -12,7 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'bilirec_service.dart';
 
 const String _expectedRunningKey = 'expected_service_running';
-const String _basePathKey = 'base_path';
+const String _outputDirKey = 'output_dir';
 const String _stoppedByUserKey = 'stopped_by_user';
 const String _pendingNotificationActionKey = 'pending_notification_action';
 
@@ -39,16 +39,18 @@ class BilirecTaskHandler extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     BilirecService.initialize();
-    String basePath;
+    final appSupport = await getApplicationSupportDirectory();
+    final basePath = appSupport.path;
+    String? outputDir;
     try {
       final prefs = await SharedPreferences.getInstance();
-      basePath = prefs.getString(_basePathKey) ?? '';
+      final saved = prefs.getString(_outputDirKey) ?? '';
+      outputDir = saved.isNotEmpty ? saved : null;
       await prefs.setBool(_stoppedByUserKey, false);
-    } catch (_) {
-      final appSupport = await getApplicationSupportDirectory();
-      basePath = appSupport.path;
-    }
-    final result = BilirecService.start(StartConfig(basePath: basePath));
+    } catch (_) {}
+    final result = BilirecService.start(
+      StartConfig(basePath: basePath, outputDir: outputDir),
+    );
     _nativeStarted = result == 0;
     _backendWasAlive = _nativeStarted;
     FlutterForegroundTask.sendDataToMain({
@@ -217,7 +219,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   bool _loading = true;
   bool _batteryDialogVisible = false;
   String _statusText = '初始化中...';
-  final TextEditingController _basePathController = TextEditingController();
+  final TextEditingController _outputDirController = TextEditingController();
   final List<String> _allowedBaseRoots = [];
 
   @override
@@ -232,7 +234,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     FlutterForegroundTask.removeTaskDataCallback(_onTaskData);
-    _basePathController.dispose();
+    _outputDirController.dispose();
     super.dispose();
   }
 
@@ -270,17 +272,15 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     final expectedRunning = prefs.getBool(_expectedRunningKey) ?? false;
-    _basePathController.text = prefs.getString(_basePathKey) ?? '';
+    _outputDirController.text = prefs.getString(_outputDirKey) ?? '';
     final running = await FlutterForegroundTask.isRunningService;
     final ignoringOptimization = Platform.isAndroid
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
         : true;
     await _loadAllowedBaseRoots();
 
-    if (_basePathController.text.trim().isEmpty && _allowedBaseRoots.isNotEmpty) {
-      final defaultPath = _allowedBaseRoots.first;
-      _basePathController.text = defaultPath;
-      await prefs.setString(_basePathKey, defaultPath);
+    if (_outputDirController.text.trim().isEmpty && _allowedBaseRoots.isNotEmpty) {
+      // Leave outputDir empty by default; basePath is always the internal app dir.
     }
 
     var status = running ? 'Bilirec 後端運行中' : 'Bilirec 後端未運行';
@@ -471,14 +471,14 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   }
 
   Future<void> _browseBasePath() async {
-    final currentBase = _basePathController.text.trim();
-    final initialBase = currentBase.isNotEmpty
-        ? currentBase
+    final currentDir = _outputDirController.text.trim();
+    final initialDir = currentDir.isNotEmpty
+        ? currentDir
         : (_allowedBaseRoots.isNotEmpty ? _allowedBaseRoots.first : null);
 
     final selected = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: '選擇 Base Path',
-      initialDirectory: initialBase,
+      dialogTitle: '選擇錄製輸出路徑',
+      initialDirectory: initialDir,
     );
 
     if (selected == null || !mounted) return;
@@ -491,11 +491,11 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
 
     setState(() {
-      _basePathController.text = selected;
+      _outputDirController.text = selected;
     });
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_basePathKey, selected);
+    await prefs.setString(_outputDirKey, selected);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -848,7 +848,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '設置檔案輸出路徑',
+                              '設置錄製輸出路徑',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: 12),
@@ -857,14 +857,14 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                               child: FilledButton.icon(
                                 onPressed: _browseBasePath,
                                 icon: const Icon(Icons.folder_open),
-                                label: const Text('瀏覽並設置路徑'),
+                                label: const Text('瀏覽並設置輸出路徑'),
                               ),
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              _basePathController.text.trim().isEmpty
-                                  ? '目前尚未設置路徑'
-                                  : '目前路徑: ${_basePathController.text.trim()}',
+                              _outputDirController.text.trim().isEmpty
+                                  ? '目前尚未設置輸出路徑（使用預設）'
+                                  : '輸出路徑: ${_outputDirController.text.trim()}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
