@@ -10,12 +10,18 @@ class StartConfig {
     this.port,
     this.host,
     this.frontendUrl,
+    this.outputDir,
+    this.username,
+    this.password,
   });
 
   final String basePath;
   final int? port;
   final String? host;
   final String? frontendUrl;
+  final String? outputDir;
+  final String? username;
+  final String? password;
 
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{'basePath': basePath};
@@ -23,6 +29,15 @@ class StartConfig {
     if (host != null && host!.isNotEmpty) map['host'] = host;
     if (frontendUrl != null && frontendUrl!.isNotEmpty) {
       map['frontendUrl'] = frontendUrl;
+    }
+    if (outputDir != null && outputDir!.isNotEmpty) {
+      map['outputDir'] = outputDir;
+    }
+    if (username != null && username!.isNotEmpty) {
+      map['username'] = username;
+    }
+    if (password != null && password!.isNotEmpty) {
+      map['password'] = password;
     }
     return map;
   }
