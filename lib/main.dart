@@ -14,6 +14,7 @@ import 'bilirec_service.dart';
 const String _expectedRunningKey = 'expected_service_running';
 const String _basePathKey = 'base_path';
 const String _stoppedByUserKey = 'stopped_by_user';
+const String _pendingNotificationActionKey = 'pending_notification_action';
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
@@ -107,10 +108,35 @@ class BilirecTaskHandler extends TaskHandler {
   @override
   void onReceiveData(Object data) {}
 
+  Future<void> _persistPendingAction(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingNotificationActionKey, id);
+  }
+
   @override
-  void onNotificationButtonPressed(String id) {
+  void onNotificationButtonPressed(String id) async {
+    // Handle critical notification actions in task isolate so they still work
+    // after the UI process is swiped away.
+    final prefs = await SharedPreferences.getInstance();
+
+    if (id == 'stop') {
+      await prefs.setBool(_stoppedByUserKey, true);
+      await prefs.setBool(_expectedRunningKey, false);
+
+      if (_nativeStarted) {
+        BilirecService.stop();
+        _nativeStarted = false;
+      }
+
+      await FlutterForegroundTask.stopService();
+    } else if (id == 'frontend') {
+      // Open browser from UI isolate for better plugin compatibility.
+      await _persistPendingAction(id);
+      FlutterForegroundTask.launchApp('/');
+    }
+
     FlutterForegroundTask.sendDataToMain({
-      'type': 'action_ack',
+      'type': 'action_handled',
       'source': 'notification',
       'id': id,
     });
@@ -230,6 +256,17 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     });
   }
 
+  Future<void> _consumePendingNotificationAction() async {
+    final prefs = await SharedPreferences.getInstance();
+    final action = prefs.getString(_pendingNotificationActionKey);
+    if (action == null || action.isEmpty) return;
+
+    await prefs.remove(_pendingNotificationActionKey);
+    if (!mounted) return;
+
+    await _handleNotificationAction(action);
+  }
+
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     final expectedRunning = prefs.getBool(_expectedRunningKey) ?? false;
@@ -260,6 +297,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     });
 
     _ensureBatteryDialog();
+    _consumePendingNotificationAction(); // fire-and-forget
   }
 
   Future<void> _loadAllowedBaseRoots() async {
@@ -331,8 +369,18 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           setState(() {
             _statusText = '已收到通知服務心跳';
           });
-        } else if (id != null && (id == 'frontend' || id == 'stop')) {
-          _handleNotificationAction(id);
+        }
+        break;
+      case 'action_handled':
+        final id = data['id']?.toString();
+        if (id == 'stop') {
+          setState(() {
+            _isServiceRunning = false;
+            _isStartingService = false;
+            _statusText = '已透過通知停止服務';
+          });
+        } else if (id == 'frontend') {
+          _consumePendingNotificationAction(); // fire-and-forget
         }
         break;
       default:
@@ -342,6 +390,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   Future<void> _handleNotificationAction(String action) async {
     if (action == 'frontend') {
+      var opened = false;
       try {
         final Uri uri;
         if (Platform.isAndroid) {
@@ -352,18 +401,35 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         } else {
           uri = Uri.parse('https://app.bilirec.org');
         }
-        await launchUrl(uri);
+        opened = await launchUrl(uri);
       } catch (_) {
+        opened = false;
+      }
+
+      if (!opened) {
         try {
-          await launchUrl(
+          opened = await launchUrl(
             Uri.parse('https://app.bilirec.org'),
             mode: LaunchMode.externalApplication,
           );
-        } catch (_) {}
+        } catch (_) {
+          opened = false;
+        }
+      }
+
+      if (!mounted) return;
+      if (!opened) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('無法啟動前端瀏覽器')));
       }
     } else if (action == 'stop') {
-      await _toggleService(false);
+      await _refreshServiceState();
     }
+  }
+
+  Future<void> _openFrontendFromUi() async {
+    await _handleNotificationAction('frontend');
   }
 
   Future<void> _notifyPpkKilled() async {
@@ -444,7 +510,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     setState(() {
       _isIgnoringBatteryOptimizations = ignoring;
-      if (ignoring) {
+      // Keep runtime status as the primary message while service is running.
+      if (ignoring && !_isServiceRunning) {
         _statusText = '已設定電池無限制，bilirec 更不容易被系統終止';
       }
     });
@@ -752,6 +819,16 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                       ],
                     ),
                     const SizedBox(height: 8),
+                    if (_isServiceRunning)
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _openFrontendFromUi,
+                          icon: const Icon(Icons.open_in_new, size: 18),
+                          label: const Text('啟動前端'),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
@@ -801,6 +878,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     );
   }
 }
+
+
+
 
 
 
