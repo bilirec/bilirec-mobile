@@ -41,20 +41,20 @@ void main() {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Bilirec 後臺服務控制中心'), findsOneWidget);
+    expect(find.text('Bilirec 後台服務控制中心'), findsOneWidget);
     expect(find.text('Bilirec 後端未運行'), findsOneWidget);
     expect(find.text('啟動'), findsOneWidget);
     expect(find.text('檢測後端連線'), findsOneWidget);
   });
 
-  testWidgets('初次載入會自動帶入並顯示預設 base path', (tester) async {
+  testWidgets('初次載入會顯示預設輸出路徑提示', (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('目前路徑: C:/mock/support'), findsOneWidget);
+    expect(find.text('目前尚未設置輸出路徑（使用預設）'), findsOneWidget);
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('base_path'), 'C:/mock/support');
+    expect(prefs.getString('output_dir'), isNull);
   });
 
   testWidgets('在非 Android 環境點擊啟動會顯示限制訊息', (tester) async {
@@ -65,5 +65,18 @@ void main() {
     await tester.pump();
 
     expect(find.text('目前僅支援 Android 前景服務'), findsOneWidget);
+  });
+
+  testWidgets('可以在 UI 切換到簡中', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('繁中'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('簡中').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bilirec 后台服务控制中心'), findsOneWidget);
+    expect(find.text('检测后端连接'), findsOneWidget);
   });
 }

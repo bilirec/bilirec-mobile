@@ -10,11 +10,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'bilirec_service.dart';
+import 'l10n/app_localizations.dart';
 
 const String _expectedRunningKey = 'expected_service_running';
 const String _outputDirKey = 'output_dir';
 const String _stoppedByUserKey = 'stopped_by_user';
 const String _pendingNotificationActionKey = 'pending_notification_action';
+const String _localeCodeKey = 'locale_code';
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
@@ -188,24 +190,69 @@ Future<void> main() async {
   runApp(const BilirecApp());
 }
 
-class BilirecApp extends StatelessWidget {
+class BilirecApp extends StatefulWidget {
   const BilirecApp({super.key});
+
+  @override
+  State<BilirecApp> createState() => _BilirecAppState();
+}
+
+class _BilirecAppState extends State<BilirecApp> {
+  Locale _locale = AppLocaleConfig.traditionalLocale;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedLocale();
+  }
+
+  Future<void> _loadSavedLocale() async {
+    final prefs = await SharedPreferences.getInstance();
+    final code = prefs.getString(_localeCodeKey);
+    if (code == null || !mounted) return;
+    setState(() {
+      _locale = AppLocaleConfig.localeForCode(code);
+    });
+  }
+
+  Future<void> _setLocale(Locale locale) async {
+    final code = AppLocaleConfig.codeForLocale(locale);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_localeCodeKey, code);
+    if (!mounted) return;
+    setState(() {
+      _locale = AppLocaleConfig.localeForCode(code);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Bilirec Control',
+      locale: _locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF8EDBFF)),
         useMaterial3: true,
       ),
-      home: const BilirecHomePage(),
+      home: BilirecHomePage(
+        currentLocale: _locale,
+        onLocaleChanged: _setLocale,
+      ),
     );
   }
 }
 
 class BilirecHomePage extends StatefulWidget {
-  const BilirecHomePage({super.key});
+  const BilirecHomePage({
+    required this.currentLocale,
+    required this.onLocaleChanged,
+    super.key,
+  });
+
+  final Locale currentLocale;
+  final Future<void> Function(Locale locale) onLocaleChanged;
 
   @override
   State<BilirecHomePage> createState() => _BilirecHomePageState();
@@ -218,9 +265,24 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   bool _isIgnoringBatteryOptimizations = false;
   bool _loading = true;
   bool _batteryDialogVisible = false;
-  String _statusText = '初始化中...';
+  String _statusText = 'Initializing...';
   final TextEditingController _outputDirController = TextEditingController();
   final List<String> _allowedBaseRoots = [];
+
+  AppLocalizations get l10n => AppLocalizations.of(context);
+
+  String get _currentLanguageCode =>
+      AppLocaleConfig.codeForLocale(widget.currentLocale);
+
+  Future<void> _onLanguageSelected(String code) async {
+    await widget.onLocaleChanged(AppLocaleConfig.localeForCode(code));
+    if (!mounted) return;
+    setState(() {
+      _statusText = _isServiceRunning
+          ? l10n.tr('backendRunning')
+          : l10n.tr('backendNotRunning');
+    });
+  }
 
   @override
   void initState() {
@@ -228,6 +290,14 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     WidgetsBinding.instance.addObserver(this);
     FlutterForegroundTask.addTaskDataCallback(_onTaskData);
     _bootstrap();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_statusText == 'Initializing...') {
+      _statusText = l10n.tr('initializing');
+    }
   }
 
   @override
@@ -253,7 +323,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       _isServiceRunning = running;
       _loading = false;
       if (!running) {
-        _statusText = 'Bilirec 後端未運行';
+        _statusText = l10n.tr('backendNotRunning');
       }
     });
   }
@@ -283,9 +353,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       // Leave outputDir empty by default; basePath is always the internal app dir.
     }
 
-    var status = running ? 'Bilirec 後端運行中' : 'Bilirec 後端未運行';
+    var status = running ? l10n.tr('backendRunning') : l10n.tr('backendNotRunning');
     if (expectedRunning && !running) {
-      status = 'Bilirec 後端未運行';
+      status = l10n.tr('backendNotRunning');
     }
 
     if (!mounted) return;
@@ -337,11 +407,14 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           _isServiceRunning = ok;
           _isStartingService = false;
           if (ok) {
-            _statusText = 'Bilirec 後端運行中';
+            _statusText = l10n.tr('backendRunning');
           } else if (result == 1) {
-            _statusText = '服務啟動失敗：native 核心返回 exit code 1';
+            _statusText = l10n.tr('serviceStartFailedNativeExit');
           } else {
-            _statusText = '服務啟動失敗，代碼: $result';
+            _statusText = l10n.tr(
+              'serviceStartFailedWithCode',
+              params: {'code': '$result'},
+            );
           }
         });
         break;
@@ -349,14 +422,14 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         setState(() {
           _isServiceRunning = false;
           _isStartingService = false;
-          _statusText = 'Bilirec 後端已停止';
+          _statusText = l10n.tr('backendStopped');
         });
         break;
       case 'backend_dead':
         final stoppedByUser = data['stoppedByUser'] == true;
         setState(() {
           _isServiceRunning = false;
-          _statusText = 'Bilirec 後端無回應（可能被系統終止）';
+          _statusText = l10n.tr('backendNoResponse');
         });
         if (!stoppedByUser) {
           _notifyPpkKilled(); // fire-and-forget
@@ -367,7 +440,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         final id = data['id']?.toString();
         if (id == 'notify') {
           setState(() {
-            _statusText = '已收到通知服務心跳';
+            _statusText = l10n.tr('notificationHeartbeatReceived');
           });
         }
         break;
@@ -377,7 +450,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           setState(() {
             _isServiceRunning = false;
             _isStartingService = false;
-            _statusText = '已透過通知停止服務';
+            _statusText = l10n.tr('serviceStoppedFromNotification');
           });
         } else if (id == 'frontend') {
           _consumePendingNotificationAction(); // fire-and-forget
@@ -421,7 +494,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       if (!opened) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('無法啟動前端瀏覽器')));
+        ).showSnackBar(SnackBar(content: Text(l10n.tr('cannotOpenFrontendBrowser'))));
       }
     } else if (action == 'stop') {
       await _refreshServiceState();
@@ -436,8 +509,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     await _setExpectedRunning(false);
     await _localNotifications.show(
       2027,
-      'Bilirec 服務已被系統終止',
-      '偵測到前景服務異常中斷（疑似 PPK），請重新啟動並確認電池無限制。',
+      l10n.tr('ppkKilledTitle'),
+      l10n.tr('ppkKilledBody'),
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'bilirec_ppk_alert',
@@ -477,7 +550,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         : (_allowedBaseRoots.isNotEmpty ? _allowedBaseRoots.first : null);
 
     final selected = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: '選擇錄製輸出路徑',
+      dialogTitle: l10n.tr('selectOutputPath'),
       initialDirectory: initialDir,
     );
 
@@ -485,7 +558,14 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     if (!_isPathAllowed(selected)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('路徑不支援前景服務，請選擇以下路徑底下: ${_allowedBaseRoots.join(' | ')}')),
+        SnackBar(
+          content: Text(
+            l10n.tr(
+              'pathUnsupported',
+              params: {'paths': _allowedBaseRoots.join(' | ')},
+            ),
+          ),
+        ),
       );
       return;
     }
@@ -499,7 +579,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已自動儲存路徑')));
+    ).showSnackBar(SnackBar(content: Text(l10n.tr('pathAutoSaved'))));
   }
 
   Future<void> _refreshBatteryOptimizationState() async {
@@ -512,7 +592,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       _isIgnoringBatteryOptimizations = ignoring;
       // Keep runtime status as the primary message while service is running.
       if (ignoring && !_isServiceRunning) {
-        _statusText = '已設定電池無限制，bilirec 更不容易被系統終止';
+        _statusText = l10n.tr('batteryUnrestrictedReady');
       }
     });
 
@@ -541,14 +621,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         return PopScope(
           canPop: false,
           child: AlertDialog(
-            title: const Text('需要電池無限制'),
-            content: const Text(
-              '請將 bilirec 設為電池無限制，否則後台服務可能被系統關閉。\n\n完成後請回到 App。',
-            ),
+            title: Text(l10n.tr('batteryDialogTitle')),
+            content: Text(l10n.tr('batteryDialogContent')),
             actions: [
               FilledButton.tonal(
                 onPressed: _requestBatteryUnrestricted,
-                child: const Text('前往設定'),
+                child: Text(l10n.tr('goToSettings')),
               ),
             ],
           ),
@@ -565,7 +643,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   Future<void> _toggleService(bool enable) async {
     if (!Platform.isAndroid) {
       setState(() {
-        _statusText = '目前僅支援 Android 前景服務';
+        _statusText = l10n.tr('androidOnly');
       });
       return;
     }
@@ -574,7 +652,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       if (enable) {
         setState(() {
           _isStartingService = true;
-          _statusText = '正在啟動服務...';
+          _statusText = l10n.tr('startingService');
         });
 
         final permission = await FlutterForegroundTask.checkNotificationPermission();
@@ -584,7 +662,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           if (requested != NotificationPermission.granted) {
             setState(() {
               _isStartingService = false;
-              _statusText = '通知權限未開啟，無法啟動前景服務';
+              _statusText = l10n.tr('notificationPermissionDenied');
             });
             return;
           }
@@ -592,11 +670,11 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
         final started = await FlutterForegroundTask.startService(
           serviceId: 2026,
-          notificationTitle: 'Bilirec 後端正在運行',
-          notificationText: '後台錄製服務運行中',
+          notificationTitle: l10n.tr('notificationTitleRunning'),
+          notificationText: l10n.tr('notificationTextRunning'),
           notificationButtons: [
-            const NotificationButton(id: 'frontend', text: '啟動前端'),
-            const NotificationButton(id: 'stop', text: '停止服務'),
+            NotificationButton(id: 'frontend', text: l10n.tr('openFrontend')),
+            NotificationButton(id: 'stop', text: l10n.tr('notificationButtonStop')),
           ],
           callback: startCallback,
         );
@@ -606,7 +684,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         setState(() {
           _isServiceRunning = false;
           _isStartingService = ok;
-          _statusText = ok ? '前景服務已啟動，等待核心回報...' : '前景服務啟動失敗';
+          _statusText = ok
+              ? l10n.tr('foregroundStartWaitingCore')
+              : l10n.tr('foregroundStartFailed');
         });
       } else {
         await SharedPreferences.getInstance().then(
@@ -618,7 +698,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         setState(() {
           _isServiceRunning = !ok;
           _isStartingService = false;
-          _statusText = ok ? 'Bilirec 後端已停止' : '停止服務失敗';
+          _statusText = ok ? l10n.tr('backendStopped') : l10n.tr('stopServiceFailed');
         });
         if (!ok) {
           SharedPreferences.getInstance()
@@ -628,7 +708,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     } catch (e) {
       setState(() {
         _isStartingService = false;
-        _statusText = '服務操作失敗: $e';
+        _statusText = l10n.tr('serviceOperationFailed', params: {'error': '$e'});
       });
     }
   }
@@ -645,18 +725,20 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       final healthy = response.statusCode < 500;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(healthy ? '後端服務正常，可以連線' : '後端服務回應異常，請稍後再試'),
+          content: Text(
+            healthy ? l10n.tr('backendHealthy') : l10n.tr('backendUnhealthy'),
+          ),
         ),
       );
     } on TimeoutException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('後端服務無回應，請確認服務是否已啟動')),
+        SnackBar(content: Text(l10n.tr('backendNoResponseHint'))),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('無法連線至後端服務，請確認服務是否已啟動')),
+        SnackBar(content: Text(l10n.tr('backendCannotConnect'))),
       );
     } finally {
       client.close(force: true);
@@ -681,7 +763,37 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     final size = MediaQuery.sizeOf(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bilirec 後臺服務控制中心')),
+      appBar: AppBar(
+        title: Text(l10n.tr('controlCenterTitle')),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: l10n.tr('languageMenuTooltip'),
+            initialValue: _currentLanguageCode,
+            onSelected: _onLanguageSelected,
+            itemBuilder: (_) => [
+              PopupMenuItem<String>(
+                value: AppLocaleConfig.traditionalCode,
+                child: Text(l10n.tr('languageTraditional')),
+              ),
+              PopupMenuItem<String>(
+                value: AppLocaleConfig.simplifiedCode,
+                child: Text(l10n.tr('languageSimplified')),
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Center(
+                child: Text(
+                  _currentLanguageCode == AppLocaleConfig.simplifiedCode
+                      ? l10n.tr('languageSimplified')
+                      : l10n.tr('languageTraditional'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
@@ -767,8 +879,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                                   ),
                                                 ),
                                                 const SizedBox(height: 8),
-                                                const Text(
-                                                  '啟動中...',
+                                                Text(
+                                                  l10n.tr('startingShort'),
                                                   style: TextStyle(
                                                     color: Colors.white,
                                                     fontWeight:
@@ -791,8 +903,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                                 const SizedBox(height: 6),
                                                 Text(
                                                   _isServiceRunning
-                                                      ? '停止'
-                                                      : '啟動',
+                                                      ? l10n.tr('stop')
+                                                      : l10n.tr('start'),
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight:
@@ -825,7 +937,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                         child: FilledButton.icon(
                           onPressed: _openFrontendFromUi,
                           icon: const Icon(Icons.open_in_new, size: 18),
-                          label: const Text('啟動前端'),
+                          label: Text(l10n.tr('openFrontend')),
                         ),
                       ),
                     const SizedBox(height: 8),
@@ -834,7 +946,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                       child: OutlinedButton.icon(
                         onPressed: _checkLocalhost8080,
                         icon: const Icon(Icons.lan, size: 16),
-                         label: const Text('檢測後端連線'),
+                        label: Text(l10n.tr('checkBackendConnection')),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF5BAEDB),
                         ),
@@ -848,7 +960,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '設置錄製輸出路徑',
+                              l10n.tr('setOutputPathTitle'),
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: 12),
@@ -857,14 +969,19 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                               child: FilledButton.icon(
                                 onPressed: _browseBasePath,
                                 icon: const Icon(Icons.folder_open),
-                                label: const Text('瀏覽並設置輸出路徑'),
+                                label: Text(l10n.tr('browseAndSetOutputPath')),
                               ),
                             ),
                             const SizedBox(height: 12),
                             Text(
                               _outputDirController.text.trim().isEmpty
-                                  ? '目前尚未設置輸出路徑（使用預設）'
-                                  : '輸出路徑: ${_outputDirController.text.trim()}',
+                                  ? l10n.tr('outputPathUnset')
+                                  : l10n.tr(
+                                      'outputPathValue',
+                                      params: {
+                                        'path': _outputDirController.text.trim(),
+                                      },
+                                    ),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
