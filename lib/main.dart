@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -8,15 +9,16 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import 'bilirec_service.dart';
 import 'l10n/app_localizations.dart';
+import 'resource_monitor.dart';
 
 const String _expectedRunningKey = 'expected_service_running';
 const String _outputDirKey = 'output_dir';
 const String _stoppedByUserKey = 'stopped_by_user';
 const String _localeCodeKey = 'locale_code';
+const String _coreRunningKey = 'core_running';
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
@@ -34,11 +36,14 @@ void startCallback() {
 }
 
 class BilirecTaskHandler extends TaskHandler {
+  late final ResourceMonitor _monitor;
+
   bool _nativeStarted = false;
   bool _backendWasAlive = false;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    _monitor = ResourceMonitor();
     BilirecService.initialize();
     final appSupport = await getApplicationSupportDirectory();
     final basePath = appSupport.path;
@@ -59,6 +64,7 @@ class BilirecTaskHandler extends TaskHandler {
       'ok': _nativeStarted,
       'result': result,
     });
+    await FlutterForegroundTask.saveData(key: _coreRunningKey, value: _nativeStarted);
   }
 
   @override
@@ -73,6 +79,7 @@ class BilirecTaskHandler extends TaskHandler {
           'type': 'backend_dead',
           'stoppedByUser': stoppedByUser,
         });
+        await FlutterForegroundTask.saveData(key: _coreRunningKey, value: false);
       } else if (alive && !_backendWasAlive) {
         _backendWasAlive = true;
       }
@@ -81,6 +88,43 @@ class BilirecTaskHandler extends TaskHandler {
       'type': 'heartbeat',
       'time': timestamp.toIso8601String(),
     });
+
+    final (cpu, ram) = _monitor.getUsage();
+    debugPrint('資源使用 - CPU: ${cpu.toStringAsFixed(2)}%, RAM: ${ram.toStringAsFixed(2)}MB');
+    final text = await FlutterForegroundTask.getData(key: 'notificationTextRunning') as String? ?? '';
+    final recordingLabel = await FlutterForegroundTask.getData(key: 'recording') as String? ?? '錄製中';
+    final isRecording = await _isRecording() ? '$recordingLabel • ' : '';
+    await FlutterForegroundTask.updateService(
+      notificationText: '$text\n$isRecording${_formatMonitorData(cpu, ram)}',
+    );
+  }
+
+  // 建議的顯示格式轉換邏輯
+  String _formatMonitorData(int cpu, int ram) {
+    // 1. CPU 超過 50% 時標示為高負載，否則正常
+    String cpuDisplay = cpu > 50 ? "CPU: 🔥$cpu%" : "CPU: $cpu%";
+
+    // 2. RAM 簡單顯示 MB，若過大（例如超過 1000MB）可考慮自動轉換為 GB
+    String ramDisplay = ram > 1000 ? "${(ram / 1024).toStringAsFixed(1)}GB" : "${ram}MB";
+
+    return "$cpuDisplay • RAM: $ramDisplay";
+  }
+
+  Future<bool> _isRecording() async {
+    final client = HttpClient();
+    try {
+      final req = await client
+          .getUrl(Uri.parse('http://127.0.0.1:8080/record/list'))
+          .timeout(const Duration(seconds: 3));
+      final res = await req.close().timeout(const Duration(seconds: 3));
+      final body = await res.transform(utf8.decoder).join();
+      final list = jsonDecode(body);
+      return list is List && list.isNotEmpty;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
   }
 
   Future<bool> _pingBackend() async {
@@ -106,6 +150,7 @@ class BilirecTaskHandler extends TaskHandler {
       _nativeStarted = false;
     }
     FlutterForegroundTask.sendDataToMain({'type': 'service_stopped'});
+    await FlutterForegroundTask.saveData(key: _coreRunningKey, value: false);
   }
 
   @override
@@ -217,7 +262,7 @@ class _BilirecAppState extends State<BilirecApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Bilirec Control',
+      title: 'Bilirec',
       locale: _locale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -304,8 +349,18 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
   }
 
+  Future<bool> _isServiceCoreRunning() async {
+    try {
+      final running = await FlutterForegroundTask.isRunningService;
+      final healthy = await FlutterForegroundTask.getData(key: _coreRunningKey) as bool? ?? false;
+      return running && healthy;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _refreshServiceState() async {
-    final running = await FlutterForegroundTask.isRunningService;
+    final running = await _isServiceCoreRunning();
     if (!mounted) return;
     setState(() {
       _isServiceRunning = running;
@@ -320,7 +375,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     final prefs = await SharedPreferences.getInstance();
     final expectedRunning = prefs.getBool(_expectedRunningKey) ?? false;
     _outputDirController.text = prefs.getString(_outputDirKey) ?? '';
-    final running = await FlutterForegroundTask.isRunningService;
+    final running = await _isServiceCoreRunning();
     final ignoringOptimization = Platform.isAndroid
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
         : true;
@@ -578,6 +633,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
             return;
           }
         }
+
+        await FlutterForegroundTask.saveData(key: 'notificationTextRunning', value: l10n.tr('notificationTextRunning'));
+        await FlutterForegroundTask.saveData(key: 'recording', value: l10n.tr('recording'));
 
         final started = await FlutterForegroundTask.startService(
           serviceId: 2026,
@@ -879,7 +937,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                               width: double.infinity,
                               child: FilledButton.icon(
                                 onPressed:
-                                    _isServiceRunning ? null : _browseBasePath,
+                                    _isStartingService || _isServiceRunning ? null : _browseBasePath,
                                 icon: const Icon(Icons.folder_open),
                                 label: Text(l10n.tr('browseAndSetOutputPath')),
                               ),
