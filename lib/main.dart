@@ -480,11 +480,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     if (selected == null || !mounted) return;
 
-    // must grant external storage permission to control the output directory
-    if (!await Permission.manageExternalStorage.request().isGranted) {
-      return;
-    }
-
     setState(() {
       _outputDirController.text = selected;
     });
