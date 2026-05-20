@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'bilirec_service.dart';
 import 'l10n/app_localizations.dart';
@@ -15,7 +16,6 @@ import 'l10n/app_localizations.dart';
 const String _expectedRunningKey = 'expected_service_running';
 const String _outputDirKey = 'output_dir';
 const String _stoppedByUserKey = 'stopped_by_user';
-const String _pendingNotificationActionKey = 'pending_notification_action';
 const String _localeCodeKey = 'locale_code';
 
 final FlutterLocalNotificationsPlugin _localNotifications =
@@ -27,7 +27,6 @@ const AndroidNotificationChannel _ppkAlertChannel = AndroidNotificationChannel(
   description: 'PPK/system-kill alerts for bilirec foreground service',
   importance: Importance.high,
 );
-
 
 @pragma('vm:entry-point')
 void startCallback() {
@@ -112,11 +111,6 @@ class BilirecTaskHandler extends TaskHandler {
   @override
   void onReceiveData(Object data) {}
 
-  Future<void> _persistPendingAction(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_pendingNotificationActionKey, id);
-  }
-
   @override
   void onNotificationButtonPressed(String id) async {
     // Handle critical notification actions in task isolate so they still work
@@ -133,10 +127,6 @@ class BilirecTaskHandler extends TaskHandler {
       }
 
       await FlutterForegroundTask.stopService();
-    } else if (id == 'frontend') {
-      // Open browser from UI isolate for better plugin compatibility.
-      await _persistPendingAction(id);
-      FlutterForegroundTask.launchApp('/');
     }
 
     FlutterForegroundTask.sendDataToMain({
@@ -160,8 +150,7 @@ Future<void> main() async {
   );
   await _localNotifications
       .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(_ppkAlertChannel);
 
   FlutterForegroundTask.init(
@@ -267,7 +256,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   bool _batteryDialogVisible = false;
   String _statusText = 'Initializing...';
   final TextEditingController _outputDirController = TextEditingController();
-  final List<String> _allowedBaseRoots = [];
 
   AppLocalizations get l10n => AppLocalizations.of(context);
 
@@ -328,17 +316,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     });
   }
 
-  Future<void> _consumePendingNotificationAction() async {
-    final prefs = await SharedPreferences.getInstance();
-    final action = prefs.getString(_pendingNotificationActionKey);
-    if (action == null || action.isEmpty) return;
-
-    await prefs.remove(_pendingNotificationActionKey);
-    if (!mounted) return;
-
-    await _handleNotificationAction(action);
-  }
-
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     final expectedRunning = prefs.getBool(_expectedRunningKey) ?? false;
@@ -347,13 +324,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     final ignoringOptimization = Platform.isAndroid
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
         : true;
-    await _loadAllowedBaseRoots();
 
-    if (_outputDirController.text.trim().isEmpty && _allowedBaseRoots.isNotEmpty) {
-      // Leave outputDir empty by default; basePath is always the internal app dir.
-    }
-
-    var status = running ? l10n.tr('backendRunning') : l10n.tr('backendNotRunning');
+    var status =
+        running ? l10n.tr('backendRunning') : l10n.tr('backendNotRunning');
     if (expectedRunning && !running) {
       status = l10n.tr('backendNotRunning');
     }
@@ -367,30 +340,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     });
 
     _ensureBatteryDialog();
-    _consumePendingNotificationAction(); // fire-and-forget
-  }
-
-  Future<void> _loadAllowedBaseRoots() async {
-    final roots = <String>{};
-    final appSupport = await getApplicationSupportDirectory();
-    roots.add(_normalizePath(appSupport.path));
-
-    if (Platform.isAndroid) {
-      final external = await getExternalStorageDirectory();
-      if (external != null) {
-        roots.add(_normalizePath(external.path));
-      }
-      final extras = await getExternalStorageDirectories();
-      if (extras != null) {
-        for (final dir in extras) {
-          roots.add(_normalizePath(dir.path));
-        }
-      }
-    }
-
-    _allowedBaseRoots
-      ..clear()
-      ..addAll(roots.where((r) => r.isNotEmpty));
   }
 
   void _onTaskData(Object data) {
@@ -452,8 +401,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
             _isStartingService = false;
             _statusText = l10n.tr('serviceStoppedFromNotification');
           });
-        } else if (id == 'frontend') {
-          _consumePendingNotificationAction(); // fire-and-forget
         }
         break;
       default:
@@ -461,48 +408,41 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
   }
 
-  Future<void> _handleNotificationAction(String action) async {
-    if (action == 'frontend') {
-      var opened = false;
+  Future<void> _openFrontendFromUi() async {
+    var opened = false;
+    try {
+      final Uri uri;
+      if (Platform.isAndroid) {
+        uri = Uri.parse(
+          'intent://app.bilirec.org'
+          '#Intent;scheme=https;package=com.android.chrome;action=android.intent.action.VIEW;end',
+        );
+      } else {
+        uri = Uri.parse('https://app.bilirec.org');
+      }
+      opened = await launchUrl(uri);
+    } catch (_) {
+      opened = false;
+    }
+
+    if (!opened) {
       try {
-        final Uri uri;
-        if (Platform.isAndroid) {
-          uri = Uri.parse(
-            'intent://app.bilirec.org'
-            '#Intent;scheme=https;package=com.android.chrome;end',
-          );
-        } else {
-          uri = Uri.parse('https://app.bilirec.org');
-        }
-        opened = await launchUrl(uri);
+        opened = await launchUrl(
+          Uri.parse('https://app.bilirec.org'),
+          mode: LaunchMode.externalApplication,
+        );
       } catch (_) {
         opened = false;
       }
-
-      if (!opened) {
-        try {
-          opened = await launchUrl(
-            Uri.parse('https://app.bilirec.org'),
-            mode: LaunchMode.externalApplication,
-          );
-        } catch (_) {
-          opened = false;
-        }
-      }
-
-      if (!mounted) return;
-      if (!opened) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.tr('cannotOpenFrontendBrowser'))));
-      }
-    } else if (action == 'stop') {
-      await _refreshServiceState();
     }
-  }
 
-  Future<void> _openFrontendFromUi() async {
-    await _handleNotificationAction('frontend');
+    if (!mounted) return;
+    if (!opened) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
+          SnackBar(content: Text(l10n.tr('cannotOpenFrontendBrowser'))));
+    }
   }
 
   Future<void> _notifyPpkKilled() async {
@@ -529,25 +469,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     await prefs.setBool(_expectedRunningKey, value);
   }
 
-  String _normalizePath(String value) {
-    final normalized = value.replaceAll('\\', '/');
-    return normalized.endsWith('/')
-        ? normalized.substring(0, normalized.length - 1)
-        : normalized;
-  }
-
-  bool _isPathAllowed(String path) {
-    final normalized = _normalizePath(path);
-    return _allowedBaseRoots.any(
-      (root) => normalized == root || normalized.startsWith('$root/'),
-    );
-  }
-
   Future<void> _browseBasePath() async {
     final currentDir = _outputDirController.text.trim();
-    final initialDir = currentDir.isNotEmpty
-        ? currentDir
-        : (_allowedBaseRoots.isNotEmpty ? _allowedBaseRoots.first : null);
+    final initialDir = currentDir.isNotEmpty ? currentDir : null;
 
     final selected = await FilePicker.platform.getDirectoryPath(
       dialogTitle: l10n.tr('selectOutputPath'),
@@ -556,17 +480,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     if (selected == null || !mounted) return;
 
-    if (!_isPathAllowed(selected)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            l10n.tr(
-              'pathUnsupported',
-              params: {'paths': _allowedBaseRoots.join(' | ')},
-            ),
-          ),
-        ),
-      );
+    // must grant external storage permission to control the output directory
+    if (!await Permission.manageExternalStorage.request().isGranted) {
       return;
     }
 
@@ -655,7 +570,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           _statusText = l10n.tr('startingService');
         });
 
-        final permission = await FlutterForegroundTask.checkNotificationPermission();
+        final permission =
+            await FlutterForegroundTask.checkNotificationPermission();
         if (permission != NotificationPermission.granted) {
           final requested =
               await FlutterForegroundTask.requestNotificationPermission();
@@ -673,8 +589,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           notificationTitle: l10n.tr('notificationTitleRunning'),
           notificationText: l10n.tr('notificationTextRunning'),
           notificationButtons: [
-            NotificationButton(id: 'frontend', text: l10n.tr('openFrontend')),
-            NotificationButton(id: 'stop', text: l10n.tr('notificationButtonStop')),
+            NotificationButton(
+                id: 'stop', text: l10n.tr('notificationButtonStop')),
           ],
           callback: startCallback,
         );
@@ -690,7 +606,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         });
       } else {
         await SharedPreferences.getInstance().then(
-              (p) => p.setBool(_stoppedByUserKey, true),
+          (p) => p.setBool(_stoppedByUserKey, true),
         );
         await _setExpectedRunning(false);
         final stopped = await FlutterForegroundTask.stopService();
@@ -698,7 +614,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         setState(() {
           _isServiceRunning = !ok;
           _isStartingService = false;
-          _statusText = ok ? l10n.tr('backendStopped') : l10n.tr('stopServiceFailed');
+          _statusText =
+              ok ? l10n.tr('backendStopped') : l10n.tr('stopServiceFailed');
         });
         if (!ok) {
           SharedPreferences.getInstance()
@@ -708,7 +625,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     } catch (e) {
       setState(() {
         _isStartingService = false;
-        _statusText = l10n.tr('serviceOperationFailed', params: {'error': '$e'});
+        _statusText =
+            l10n.tr('serviceOperationFailed', params: {'error': '$e'});
       });
     }
   }
@@ -719,7 +637,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       final request = await client
           .getUrl(Uri.parse('http://127.0.0.1:8080/'))
           .timeout(const Duration(seconds: 2));
-      final response = await request.close().timeout(const Duration(seconds: 2));
+      final response =
+          await request.close().timeout(const Duration(seconds: 2));
       await response.drain<void>();
       if (!mounted) return;
       final healthy = response.statusCode < 500;
@@ -747,8 +666,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   Future<void> _requestBatteryUnrestricted() async {
     if (!Platform.isAndroid) return;
-    final granted = await FlutterForegroundTask
-        .requestIgnoreBatteryOptimization();
+    final granted =
+        await FlutterForegroundTask.requestIgnoreBatteryOptimization();
 
     if (!granted) {
       await FlutterForegroundTask.openIgnoreBatteryOptimizationSettings();
@@ -861,8 +780,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                     ),
                                   Center(
                                     child: AnimatedSwitcher(
-                                      duration: const Duration(
-                                          milliseconds: 280),
+                                      duration:
+                                          const Duration(milliseconds: 280),
                                       child: _isStartingService
                                           ? Column(
                                               key: const ValueKey('starting'),
@@ -883,15 +802,13 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                                   l10n.tr('startingShort'),
                                                   style: TextStyle(
                                                     color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.bold,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ],
                                             )
                                           : Column(
-                                              key: ValueKey(
-                                                  _isServiceRunning),
+                                              key: ValueKey(_isServiceRunning),
                                               mainAxisAlignment:
                                                   MainAxisAlignment.center,
                                               children: [
@@ -907,8 +824,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                                       : l10n.tr('start'),
                                                   style: const TextStyle(
                                                     color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.bold,
+                                                    fontWeight: FontWeight.bold,
                                                     fontSize: 14,
                                                   ),
                                                 ),
@@ -967,7 +883,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton.icon(
-                                onPressed: _browseBasePath,
+                                onPressed:
+                                    _isServiceRunning ? null : _browseBasePath,
                                 icon: const Icon(Icons.folder_open),
                                 label: Text(l10n.tr('browseAndSetOutputPath')),
                               ),
@@ -979,7 +896,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                   : l10n.tr(
                                       'outputPathValue',
                                       params: {
-                                        'path': _outputDirController.text.trim(),
+                                        'path':
+                                            _outputDirController.text.trim(),
                                       },
                                     ),
                               style: Theme.of(context).textTheme.bodySmall,
@@ -995,13 +913,3 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     );
   }
 }
-
-
-
-
-
-
-
-
-
-
