@@ -25,8 +25,8 @@ final FlutterLocalNotificationsPlugin _localNotifications =
 
 const AndroidNotificationChannel _ppkAlertChannel = AndroidNotificationChannel(
   'bilirec_ppk_alert',
-  'Bilirec Alerts',
-  description: 'PPK/system-kill alerts for bilirec foreground service',
+  'Bilirec 重要提醒',
+  description: '當服務被系統中斷時顯示提醒',
   importance: Importance.high,
 );
 
@@ -201,8 +201,8 @@ Future<void> main() async {
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
       channelId: 'bilirec_service_channel',
-      channelName: 'Bilirec Background Service',
-      channelDescription: 'Shows when bilirec backend is running.',
+      channelName: 'Bilirec 服務狀態',
+      channelDescription: '顯示 Bilirec 服務目前是否運作中',
       channelImportance: NotificationChannelImportance.LOW,
       priority: NotificationPriority.LOW,
       onlyAlertOnce: true,
@@ -519,9 +519,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'bilirec_ppk_alert',
-          'Bilirec Alerts',
-          channelDescription:
-              'PPK/system-kill alerts for bilirec foreground service',
+          'Bilirec 重要提醒',
+          channelDescription: '當服務被系統中斷時顯示提醒',
           importance: Importance.high,
           priority: Priority.high,
         ),
