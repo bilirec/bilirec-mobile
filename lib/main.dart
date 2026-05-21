@@ -232,7 +232,15 @@ class BilirecApp extends StatefulWidget {
 }
 
 class _BilirecAppState extends State<BilirecApp> {
-  Locale _locale = AppLocaleConfig.traditionalLocale;
+  Locale _locale = _devicePreferredLocale();
+
+  static Locale _devicePreferredLocale() {
+    final deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
+    return AppLocaleConfig.codeForLocale(deviceLocale) ==
+            AppLocaleConfig.simplifiedCode
+        ? AppLocaleConfig.simplifiedLocale
+        : AppLocaleConfig.traditionalLocale;
+  }
 
   @override
   void initState() {
@@ -299,10 +307,18 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   bool _isIgnoringBatteryOptimizations = false;
   bool _loading = true;
   bool _batteryDialogVisible = false;
-  String _statusText = 'Initializing...';
+  String _statusKey = 'initializing';
+  Map<String, String> _statusParams = const {};
   final TextEditingController _outputDirController = TextEditingController();
 
   AppLocalizations get l10n => AppLocalizations.of(context);
+
+  String get _statusText => l10n.tr(_statusKey, params: _statusParams);
+
+  void _setStatus(String key, {Map<String, String> params = const {}}) {
+    _statusKey = key;
+    _statusParams = params;
+  }
 
   String get _currentLanguageCode =>
       AppLocaleConfig.codeForLocale(widget.currentLocale);
@@ -311,9 +327,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     await widget.onLocaleChanged(AppLocaleConfig.localeForCode(code));
     if (!mounted) return;
     setState(() {
-      _statusText = _isServiceRunning
-          ? l10n.tr('backendRunning')
-          : l10n.tr('backendNotRunning');
+      _setStatus(_isServiceRunning ? 'backendRunning' : 'backendNotRunning');
     });
   }
 
@@ -328,8 +342,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_statusText == 'Initializing...') {
-      _statusText = l10n.tr('initializing');
+    if (_statusKey.isEmpty) {
+      _setStatus('initializing');
     }
   }
 
@@ -366,7 +380,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       _isServiceRunning = running;
       _loading = false;
       if (!running) {
-        _statusText = l10n.tr('backendNotRunning');
+        _setStatus('backendNotRunning');
       }
     });
   }
@@ -380,17 +394,16 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
         : true;
 
-    var status =
-        running ? l10n.tr('backendRunning') : l10n.tr('backendNotRunning');
+    var statusKey = running ? 'backendRunning' : 'backendNotRunning';
     if (expectedRunning && !running) {
-      status = l10n.tr('backendNotRunning');
+      statusKey = 'backendNotRunning';
     }
 
     if (!mounted) return;
     setState(() {
       _isServiceRunning = running;
       _isIgnoringBatteryOptimizations = ignoringOptimization;
-      _statusText = status;
+      _setStatus(statusKey);
       _loading = false;
     });
 
@@ -411,14 +424,11 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           _isServiceRunning = ok;
           _isStartingService = false;
           if (ok) {
-            _statusText = l10n.tr('backendRunning');
+            _setStatus('backendRunning');
           } else if (result == 1) {
-            _statusText = l10n.tr('serviceStartFailedNativeExit');
+            _setStatus('serviceStartFailedNativeExit');
           } else {
-            _statusText = l10n.tr(
-              'serviceStartFailedWithCode',
-              params: {'code': '$result'},
-            );
+            _setStatus('serviceStartFailedWithCode', params: {'code': '$result'});
           }
         });
         break;
@@ -426,14 +436,14 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         setState(() {
           _isServiceRunning = false;
           _isStartingService = false;
-          _statusText = l10n.tr('backendStopped');
+          _setStatus('backendStopped');
         });
         break;
       case 'backend_dead':
         final stoppedByUser = data['stoppedByUser'] == true;
         setState(() {
           _isServiceRunning = false;
-          _statusText = l10n.tr('backendNoResponse');
+          _setStatus('backendNoResponse');
         });
         if (!stoppedByUser) {
           _notifyPpkKilled(); // fire-and-forget
@@ -444,7 +454,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         final id = data['id']?.toString();
         if (id == 'notify') {
           setState(() {
-            _statusText = l10n.tr('notificationHeartbeatReceived');
+            _setStatus('notificationHeartbeatReceived');
           });
         }
         break;
@@ -454,7 +464,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           setState(() {
             _isServiceRunning = false;
             _isStartingService = false;
-            _statusText = l10n.tr('serviceStoppedFromNotification');
+            _setStatus('serviceStoppedFromNotification');
           });
         }
         break;
@@ -557,7 +567,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       _isIgnoringBatteryOptimizations = ignoring;
       // Keep runtime status as the primary message while service is running.
       if (ignoring && !_isServiceRunning) {
-        _statusText = l10n.tr('batteryUnrestrictedReady');
+        _setStatus('batteryUnrestrictedReady');
       }
     });
 
@@ -608,7 +618,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   Future<void> _toggleService(bool enable) async {
     if (!Platform.isAndroid) {
       setState(() {
-        _statusText = l10n.tr('androidOnly');
+        _setStatus('androidOnly');
       });
       return;
     }
@@ -617,7 +627,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       if (enable) {
         setState(() {
           _isStartingService = true;
-          _statusText = l10n.tr('startingService');
+          _setStatus('startingService');
         });
 
         final permission =
@@ -628,7 +638,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           if (requested != NotificationPermission.granted) {
             setState(() {
               _isStartingService = false;
-              _statusText = l10n.tr('notificationPermissionDenied');
+              _setStatus('notificationPermissionDenied');
             });
             return;
           }
@@ -653,9 +663,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         setState(() {
           _isServiceRunning = false;
           _isStartingService = ok;
-          _statusText = ok
-              ? l10n.tr('foregroundStartWaitingCore')
-              : l10n.tr('foregroundStartFailed');
+          _setStatus(ok ? 'foregroundStartWaitingCore' : 'foregroundStartFailed');
         });
       } else {
         await SharedPreferences.getInstance().then(
@@ -667,8 +675,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         setState(() {
           _isServiceRunning = !ok;
           _isStartingService = false;
-          _statusText =
-              ok ? l10n.tr('backendStopped') : l10n.tr('stopServiceFailed');
+          _setStatus(ok ? 'backendStopped' : 'stopServiceFailed');
         });
         if (!ok) {
           SharedPreferences.getInstance()
@@ -678,8 +685,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     } catch (e) {
       setState(() {
         _isStartingService = false;
-        _statusText =
-            l10n.tr('serviceOperationFailed', params: {'error': '$e'});
+        _setStatus('serviceOperationFailed', params: {'error': '$e'});
       });
     }
   }

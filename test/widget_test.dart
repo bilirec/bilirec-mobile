@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -67,16 +68,25 @@ void main() {
     expect(find.text('目前僅支援 Android 前景服務'), findsOneWidget);
   });
 
-  testWidgets('可以在 UI 切換到簡中', (tester) async {
+  testWidgets('語言切換會即時同步所有文案', (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('繁中'));
+    await tester.tap(find.text('繁'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('簡中').last);
+    await tester.tap(find.byType(PopupMenuItem<String>).at(1));
     await tester.pumpAndSettle();
 
     expect(find.text('Bilirec 后台服务控制中心'), findsOneWidget);
+    expect(find.text('Bilirec 后端未运行'), findsOneWidget);
     expect(find.text('检测后端连接'), findsOneWidget);
+
+    await tester.tap(find.text('简'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuItem<String>).at(0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bilirec 後台服務控制中心'), findsOneWidget);
+    expect(find.text('Bilirec 後端未運行'), findsOneWidget);
   });
 }
