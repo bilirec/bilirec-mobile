@@ -95,7 +95,7 @@ class BilirecTaskHandler extends TaskHandler {
     final recordingLabel = await FlutterForegroundTask.getData(key: 'recording') as String? ?? '錄製中';
     final isRecording = await _isRecording() ? '$recordingLabel • ' : '';
     await FlutterForegroundTask.updateService(
-      notificationText: '$text\n$isRecording${_formatMonitorData(cpu, ram)}',
+      notificationText: '$text\n[ $isRecording${_formatMonitorData(cpu, ram)} ]',
     );
   }
 
@@ -734,6 +734,65 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     await _refreshBatteryOptimizationState();
   }
 
+  Widget _buildServiceActionSection() {
+    final visible = _isServiceRunning;
+
+    // Use AnimatedSize for height-only transition.
+    // Hidden state uses full-width SizedBox(height:0) so AnimatedSize only
+    // interpolates height (not width), preventing horizontal shrink.
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.fastOutSlowIn,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 240),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInOutCubic,
+        layoutBuilder: (currentChild, previousChildren) => Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        ),
+        transitionBuilder: (child, animation) {
+          final slide = Tween<Offset>(
+            begin: const Offset(0, 0.2),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: slide, child: child),
+          );
+        },
+        child: visible
+            ? Column(
+                key: const ValueKey('service-actions-visible'),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _openFrontendFromUi,
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: Text(l10n.tr('openFrontend')),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _checkLocalhost8080,
+                    icon: const Icon(Icons.lan, size: 16),
+                    label: Text(l10n.tr('checkBackendConnection')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF5BAEDB),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              )
+            // Full-width zero-height box so AnimatedSize only animates height
+            : const SizedBox(key: ValueKey('service-actions-hidden'), height: 0),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusColor = _isServiceRunning ? Colors.green : Colors.orange;
@@ -776,192 +835,189 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
+                child: Stack(
                   children: [
-                    Expanded(
+                    Positioned.fill(
                       child: Center(
-                        child: SizedBox(
-                          width: size.width * 0.28,
-                          height: size.height * 0.12,
-                          child: GestureDetector(
-                            onTap: _isStartingService
-                                ? null
-                                : () => _toggleService(!_isServiceRunning),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: _isServiceRunning
-                                      ? [
-                                          const Color(0xFF63B3ED),
-                                          const Color(0xFF4FD1C5),
-                                        ]
-                                      : [
-                                          const Color(0xFF9AD9FF),
-                                          const Color(0xFF7FC8FF),
-                                        ],
-                                ),
-                                borderRadius: BorderRadius.circular(28),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF5BAEDB,
-                                    ).withValues(alpha: 0.55),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 8),
+                        child: Transform.translate(
+                          offset: const Offset(0, -64),
+                          child: SizedBox(
+                            width: size.width * 0.28,
+                            height: size.height * 0.12,
+                            child: GestureDetector(
+                              onTap: _isStartingService
+                                  ? null
+                                  : () => _toggleService(!_isServiceRunning),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: _isServiceRunning
+                                        ? [
+                                            const Color(0xFF63B3ED),
+                                            const Color(0xFF4FD1C5),
+                                          ]
+                                        : [
+                                            const Color(0xFF9AD9FF),
+                                            const Color(0xFF7FC8FF),
+                                          ],
                                   ),
-                                  if (_isStartingService)
+                                  borderRadius: BorderRadius.circular(28),
+                                  boxShadow: [
                                     BoxShadow(
                                       color: const Color(
-                                        0xFFB9E9FF,
-                                      ).withValues(alpha: 0.7),
-                                      blurRadius: 40,
-                                      offset: const Offset(0, 12),
+                                        0xFF5BAEDB,
+                                      ).withValues(alpha: 0.55),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 8),
                                     ),
-                                ],
-                              ),
-                              child: Stack(
-                                children: [
-                                  if (_isStartingService)
-                                    Positioned.fill(
-                                      child: Center(
-                                        child: Opacity(
-                                          opacity: 0.25,
-                                          child: Icon(
-                                            Icons.cloud_sync,
-                                            size: 80,
-                                            color: const Color(0xFFCFF1FF),
+                                    if (_isStartingService)
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFFB9E9FF,
+                                        ).withValues(alpha: 0.7),
+                                        blurRadius: 40,
+                                        offset: const Offset(0, 12),
+                                      ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  children: [
+                                    if (_isStartingService)
+                                      Positioned.fill(
+                                        child: Center(
+                                          child: Opacity(
+                                            opacity: 0.25,
+                                            child: Icon(
+                                              Icons.cloud_sync,
+                                              size: 80,
+                                              color: const Color(0xFFCFF1FF),
+                                            ),
                                           ),
                                         ),
                                       ),
+                                    Center(
+                                      child: AnimatedSwitcher(
+                                        duration:
+                                            const Duration(milliseconds: 280),
+                                        child: _isStartingService
+                                            ? Column(
+                                                key: const ValueKey('starting'),
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  SizedBox(
+                                                    width: 24,
+                                                    height: 24,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2.5,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    l10n.tr('startingShort'),
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              )
+                                            : Column(
+                                                key: ValueKey(
+                                                  _isServiceRunning,
+                                                ),
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.power_settings_new,
+                                                    size: 40,
+                                                    color: Colors.white,
+                                                  ),
+                                                  const SizedBox(height: 6),
+                                                  Text(
+                                                    _isServiceRunning
+                                                        ? l10n.tr('stop')
+                                                        : l10n.tr('start'),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                      ),
                                     ),
-                                  Center(
-                                    child: AnimatedSwitcher(
-                                      duration:
-                                          const Duration(milliseconds: 280),
-                                      child: _isStartingService
-                                          ? Column(
-                                              key: const ValueKey('starting'),
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                SizedBox(
-                                                  width: 24,
-                                                  height: 24,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    strokeWidth: 2.5,
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  l10n.tr('startingShort'),
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                          : Column(
-                                              key: ValueKey(_isServiceRunning),
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                const Icon(
-                                                  Icons.power_settings_new,
-                                                  size: 40,
-                                                  color: Colors.white,
-                                                ),
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  _isServiceRunning
-                                                      ? l10n.tr('stop')
-                                                      : l10n.tr('start'),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                    Row(
-                      children: [
-                        Icon(Icons.shield, color: statusColor),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(_statusText)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_isServiceRunning)
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _openFrontendFromUi,
-                          icon: const Icon(Icons.open_in_new, size: 18),
-                          label: Text(l10n.tr('openFrontend')),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _checkLocalhost8080,
-                        icon: const Icon(Icons.lan, size: 16),
-                        label: Text(l10n.tr('checkBackendConnection')),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF5BAEDB),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              l10n.tr('setOutputPathTitle'),
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed:
-                                    _isStartingService || _isServiceRunning ? null : _browseBasePath,
-                                icon: const Icon(Icons.folder_open),
-                                label: Text(l10n.tr('browseAndSetOutputPath')),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.shield, color: statusColor),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(_statusText)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          _buildServiceActionSection(),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    l10n.tr('setOutputPathTitle'),
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.icon(
+                                      onPressed:
+                                          _isStartingService || _isServiceRunning ? null : _browseBasePath,
+                                      icon: const Icon(Icons.folder_open),
+                                      label: Text(l10n.tr('browseAndSetOutputPath')),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _outputDirController.text.trim().isEmpty
+                                        ? l10n.tr('outputPathUnset')
+                                        : l10n.tr(
+                                            'outputPathValue',
+                                            params: {
+                                              'path':
+                                                  _outputDirController.text.trim(),
+                                            },
+                                          ),
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _outputDirController.text.trim().isEmpty
-                                  ? l10n.tr('outputPathUnset')
-                                  : l10n.tr(
-                                      'outputPathValue',
-                                      params: {
-                                        'path':
-                                            _outputDirController.text.trim(),
-                                      },
-                                    ),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
