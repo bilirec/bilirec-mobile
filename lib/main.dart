@@ -731,8 +731,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           _setStatus('startingService');
         });
 
-        await _yieldToNextFrame();
         if (!_isLatestRequest(requestId) || !mounted) return;
+        await Future.delayed(const Duration(seconds: 1));
 
         final permission =
             await FlutterForegroundTask.checkNotificationPermission();
