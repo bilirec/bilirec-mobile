@@ -315,7 +315,7 @@ enum ServiceUiState { stopped, starting, running, stopping }
 enum ServiceIntent { stopped, running }
 
 class _BilirecHomePageState extends State<BilirecHomePage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   ServiceUiState _serviceUiState = ServiceUiState.stopped;
   ServiceIntent _desiredServiceState = ServiceIntent.stopped;
   int _latestRequestId = 0;
@@ -326,6 +326,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   String _statusKey = 'initializing';
   Map<String, String> _statusParams = const {};
   final TextEditingController _outputDirController = TextEditingController();
+  AnimationController? _pulseController;
+  Animation<double>? _pulseScale;
+  Animation<double>? _pulseOpacity;
 
   AppLocalizations get l10n => AppLocalizations.of(context);
 
@@ -404,11 +407,42 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     });
   }
 
+  void _ensurePulseAnimation() {
+    if (_pulseController != null) return;
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    final curved =
+        CurvedAnimation(parent: controller, curve: Curves.easeInOutCubic);
+    _pulseController = controller;
+    _pulseScale = Tween<double>(begin: 0.82, end: 1.16).animate(curved);
+    _pulseOpacity = Tween<double>(begin: 0.72, end: 1.0).animate(curved);
+    // Don't auto-repeat, we'll control it based on state
+  }
+
+  void _updatePulseAnimation() {
+    if (_pulseController == null) return;
+
+    // Only run pulse animation when in starting state
+    if (_serviceUiState == ServiceUiState.starting) {
+      if (!_pulseController!.isAnimating) {
+        _pulseController!.repeat(reverse: true);
+      }
+    } else {
+      // Stop animation for other states (but don't reset to avoid state issues)
+      if (_pulseController!.isAnimating) {
+        _pulseController!.stop();
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     FlutterForegroundTask.addTaskDataCallback(_onTaskData);
+    _ensurePulseAnimation();
     _bootstrap();
   }
 
@@ -424,6 +458,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     FlutterForegroundTask.removeTaskDataCallback(_onTaskData);
+    _pulseController?.dispose();
     _outputDirController.dispose();
     super.dispose();
   }
@@ -766,6 +801,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           ],
           callback: startCallback,
         );
+
         final ok = started is ServiceRequestSuccess;
 
         if (!_isLatestRequest(requestId) || !mounted) {
@@ -941,9 +977,25 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   @override
   Widget build(BuildContext context) {
+    _ensurePulseAnimation();
+    _updatePulseAnimation();
     final statusColor = _isServiceRunning ? Colors.green : Colors.orange;
     final size = MediaQuery.sizeOf(context);
     final actionInFlight = _isOperationInFlight;
+    final buttonGradientColors = actionInFlight
+        ? const [
+            Color(0xFF4F7BFF),
+            Color(0xFF57C6FF),
+          ]
+        : (_isServiceRunning
+            ? const [
+                Color(0xFF63B3ED),
+                Color(0xFF4FD1C5),
+              ]
+            : const [
+                Color(0xFF9AD9FF),
+                Color(0xFF7FC8FF),
+              ]);
 
     return Scaffold(
       appBar: AppBar(
@@ -995,20 +1047,14 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                               onTap: actionInFlight
                                   ? null
                                   : () => _toggleService(!_isServiceRunning),
-                              child: Container(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 260),
+                                curve: Curves.easeOutCubic,
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
-                                    colors: _isServiceRunning
-                                        ? [
-                                            const Color(0xFF63B3ED),
-                                            const Color(0xFF4FD1C5),
-                                          ]
-                                        : [
-                                            const Color(0xFF9AD9FF),
-                                            const Color(0xFF7FC8FF),
-                                          ],
+                                    colors: buttonGradientColors,
                                   ),
                                   borderRadius: BorderRadius.circular(28),
                                   boxShadow: [
@@ -1031,80 +1077,65 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                 ),
                                 child: Stack(
                                   children: [
-                                    if (actionInFlight)
-                                      Positioned.fill(
-                                        child: Center(
-                                          child: Opacity(
-                                            opacity: 0.25,
-                                            child: Icon(
-                                              Icons.cloud_sync,
-                                              size: 80,
-                                              color: const Color(0xFFCFF1FF),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
                                     Center(
                                       child: AnimatedSwitcher(
                                         duration:
                                             const Duration(milliseconds: 280),
-                                        child: actionInFlight
-                                            ? Column(
-                                                key: ValueKey(_serviceUiState),
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  SizedBox(
-                                                    width: 24,
-                                                    height: 24,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      strokeWidth: 2.5,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  Text(
-                                                    _serviceUiState ==
-                                                            ServiceUiState
-                                                                .stopping
-                                                        ? l10n.tr('stop')
-                                                        : l10n.tr(
-                                                            'startingShort'),
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              )
-                                            : Column(
-                                                key: ValueKey(
-                                                  _isServiceRunning,
-                                                ),
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  const Icon(
-                                                    Icons.power_settings_new,
-                                                    size: 40,
-                                                    color: Colors.white,
-                                                  ),
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    _isServiceRunning
-                                                        ? l10n.tr('stop')
-                                                        : l10n.tr('start'),
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                ],
+                                        child: Column(
+                                          key: ValueKey(actionInFlight
+                                              ? _serviceUiState
+                                              : _isServiceRunning),
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            SizedBox(
+                                              width: 40,
+                                              height: 40,
+                                              child: Center(
+                                                child: _serviceUiState ==
+                                                        ServiceUiState.starting
+                                                    ? FadeTransition(
+                                                        opacity:
+                                                            _pulseOpacity ??
+                                                                const AlwaysStoppedAnimation<double>(
+                                                                    1.0),
+                                                        child: ScaleTransition(
+                                                          scale: _pulseScale ??
+                                                              const AlwaysStoppedAnimation<double>(
+                                                                  1.0),
+                                                          child: const Icon(
+                                                            Icons.power_settings_new,
+                                                            size: 40,
+                                                            color: Colors.white,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : const Icon(
+                                                        Icons.power_settings_new,
+                                                        size: 40,
+                                                        color: Colors.white,
+                                                      ),
                                               ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              actionInFlight
+                                                  ? (_serviceUiState ==
+                                                          ServiceUiState
+                                                              .stopping
+                                                      ? l10n.tr('stop')
+                                                      : l10n.tr('startingShort'))
+                                                  : (_isServiceRunning
+                                                      ? l10n.tr('stop')
+                                                      : l10n.tr('start')),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
