@@ -64,7 +64,8 @@ class BilirecTaskHandler extends TaskHandler {
       'ok': _nativeStarted,
       'result': result,
     });
-    await FlutterForegroundTask.saveData(key: _coreRunningKey, value: _nativeStarted);
+    await FlutterForegroundTask.saveData(
+        key: _coreRunningKey, value: _nativeStarted);
   }
 
   @override
@@ -79,7 +80,8 @@ class BilirecTaskHandler extends TaskHandler {
           'type': 'backend_dead',
           'stoppedByUser': stoppedByUser,
         });
-        await FlutterForegroundTask.saveData(key: _coreRunningKey, value: false);
+        await FlutterForegroundTask.saveData(
+            key: _coreRunningKey, value: false);
       } else if (alive && !_backendWasAlive) {
         _backendWasAlive = true;
       }
@@ -90,12 +92,19 @@ class BilirecTaskHandler extends TaskHandler {
     });
 
     final (cpu, ram) = _monitor.getUsage();
-    debugPrint('資源使用 - CPU: ${cpu.toStringAsFixed(2)}%, RAM: ${ram.toStringAsFixed(2)}MB');
-    final text = await FlutterForegroundTask.getData(key: 'notificationTextRunning') as String? ?? '';
-    final recordingLabel = await FlutterForegroundTask.getData(key: 'recording') as String? ?? '錄製中';
+    debugPrint(
+        '資源使用 - CPU: ${cpu.toStringAsFixed(2)}%, RAM: ${ram.toStringAsFixed(2)}MB');
+    final text =
+        await FlutterForegroundTask.getData(key: 'notificationTextRunning')
+                as String? ??
+            '';
+    final recordingLabel =
+        await FlutterForegroundTask.getData(key: 'recording') as String? ??
+            '錄製中';
     final isRecording = await _isRecording() ? '$recordingLabel • ' : '';
     await FlutterForegroundTask.updateService(
-      notificationText: '$text\n[ $isRecording${_formatMonitorData(cpu, ram)} ]',
+      notificationText:
+          '$text\n[ $isRecording${_formatMonitorData(cpu, ram)} ]',
     );
   }
 
@@ -105,7 +114,8 @@ class BilirecTaskHandler extends TaskHandler {
     String cpuDisplay = cpu > 50 ? "CPU: 🔥$cpu%" : "CPU: $cpu%";
 
     // 2. RAM 簡單顯示 MB，若過大（例如超過 1000MB）可考慮自動轉換為 GB
-    String ramDisplay = ram > 1000 ? "${(ram / 1024).toStringAsFixed(1)}GB" : "${ram}MB";
+    String ramDisplay =
+        ram > 1000 ? "${(ram / 1024).toStringAsFixed(1)}GB" : "${ram}MB";
 
     return "$cpuDisplay • RAM: $ramDisplay";
   }
@@ -300,10 +310,16 @@ class BilirecHomePage extends StatefulWidget {
   State<BilirecHomePage> createState() => _BilirecHomePageState();
 }
 
+enum ServiceUiState { stopped, starting, running, stopping }
+
+enum ServiceIntent { stopped, running }
+
 class _BilirecHomePageState extends State<BilirecHomePage>
     with WidgetsBindingObserver {
-  bool _isServiceRunning = false;
-  bool _isStartingService = false;
+  ServiceUiState _serviceUiState = ServiceUiState.stopped;
+  ServiceIntent _desiredServiceState = ServiceIntent.stopped;
+  int _latestRequestId = 0;
+  int _healthCheckEpoch = 0;
   bool _isIgnoringBatteryOptimizations = false;
   bool _loading = true;
   bool _batteryDialogVisible = false;
@@ -313,11 +329,68 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   AppLocalizations get l10n => AppLocalizations.of(context);
 
+  bool get _isServiceRunning => _serviceUiState == ServiceUiState.running;
+  bool get _isOperationInFlight =>
+      _serviceUiState == ServiceUiState.starting ||
+      _serviceUiState == ServiceUiState.stopping;
+
   String get _statusText => l10n.tr(_statusKey, params: _statusParams);
 
   void _setStatus(String key, {Map<String, String> params = const {}}) {
     _statusKey = key;
     _statusParams = params;
+  }
+
+  int _newRequest(ServiceIntent intent) {
+    _desiredServiceState = intent;
+    _healthCheckEpoch++;
+    return ++_latestRequestId;
+  }
+
+  bool _isLatestRequest(int requestId) => requestId == _latestRequestId;
+
+  Future<void> _confirmRunning(int requestId) async {
+    final epoch = ++_healthCheckEpoch;
+    final deadline = DateTime.now().add(const Duration(seconds: 12));
+    while (DateTime.now().isBefore(deadline)) {
+      if (!mounted ||
+          !_isLatestRequest(requestId) ||
+          _desiredServiceState != ServiceIntent.running ||
+          epoch != _healthCheckEpoch) {
+        return;
+      }
+
+      final running = await _isServiceCoreRunning();
+      if (running) {
+        if (!mounted ||
+            !_isLatestRequest(requestId) ||
+            _desiredServiceState != ServiceIntent.running ||
+            epoch != _healthCheckEpoch) {
+          return;
+        }
+        setState(() {
+          _serviceUiState = ServiceUiState.running;
+          _setStatus('backendRunning');
+        });
+        return;
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+    }
+
+    if (!mounted ||
+        !_isLatestRequest(requestId) ||
+        _desiredServiceState != ServiceIntent.running ||
+        epoch != _healthCheckEpoch) {
+      return;
+    }
+
+    await _setExpectedRunning(false);
+    if (!mounted || !_isLatestRequest(requestId)) return;
+    setState(() {
+      _serviceUiState = ServiceUiState.stopped;
+      _setStatus('backendNoResponse');
+    });
   }
 
   String get _currentLanguageCode =>
@@ -366,7 +439,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   Future<bool> _isServiceCoreRunning() async {
     try {
       final running = await FlutterForegroundTask.isRunningService;
-      final healthy = await FlutterForegroundTask.getData(key: _coreRunningKey) as bool? ?? false;
+      final healthy =
+          await FlutterForegroundTask.getData(key: _coreRunningKey) as bool? ??
+              false;
       return running && healthy;
     } catch (_) {
       return false;
@@ -377,9 +452,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     final running = await _isServiceCoreRunning();
     if (!mounted) return;
     setState(() {
-      _isServiceRunning = running;
       _loading = false;
-      if (!running) {
+      if (!_isOperationInFlight) {
+        _serviceUiState =
+            running ? ServiceUiState.running : ServiceUiState.stopped;
+      }
+      if (!running && !_isOperationInFlight) {
         _setStatus('backendNotRunning');
       }
     });
@@ -401,7 +479,10 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     if (!mounted) return;
     setState(() {
-      _isServiceRunning = running;
+      _serviceUiState =
+          running ? ServiceUiState.running : ServiceUiState.stopped;
+      _desiredServiceState =
+          running ? ServiceIntent.running : ServiceIntent.stopped;
       _isIgnoringBatteryOptimizations = ignoringOptimization;
       _setStatus(statusKey);
       _loading = false;
@@ -418,31 +499,47 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     switch (type) {
       case 'service_started':
+        if (_desiredServiceState != ServiceIntent.running) {
+          break;
+        }
         final ok = data['ok'] == true;
         final result = data['result'];
+        final requestId = _latestRequestId;
         setState(() {
-          _isServiceRunning = ok;
-          _isStartingService = false;
           if (ok) {
-            _setStatus('backendRunning');
+            _serviceUiState = ServiceUiState.starting;
+            _setStatus('foregroundStartWaitingCore');
           } else if (result == 1) {
+            _serviceUiState = ServiceUiState.stopped;
+            _desiredServiceState = ServiceIntent.stopped;
             _setStatus('serviceStartFailedNativeExit');
           } else {
-            _setStatus('serviceStartFailedWithCode', params: {'code': '$result'});
+            _serviceUiState = ServiceUiState.stopped;
+            _desiredServiceState = ServiceIntent.stopped;
+            _setStatus('serviceStartFailedWithCode',
+                params: {'code': '$result'});
           }
         });
+        if (ok) {
+          unawaited(_confirmRunning(requestId));
+        }
         break;
       case 'service_stopped':
+        if (_desiredServiceState == ServiceIntent.running &&
+            _isOperationInFlight) {
+          break;
+        }
         setState(() {
-          _isServiceRunning = false;
-          _isStartingService = false;
+          _serviceUiState = ServiceUiState.stopped;
+          _desiredServiceState = ServiceIntent.stopped;
           _setStatus('backendStopped');
         });
         break;
       case 'backend_dead':
         final stoppedByUser = data['stoppedByUser'] == true;
         setState(() {
-          _isServiceRunning = false;
+          _serviceUiState = ServiceUiState.stopped;
+          _desiredServiceState = ServiceIntent.stopped;
           _setStatus('backendNoResponse');
         });
         if (!stoppedByUser) {
@@ -461,9 +558,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       case 'action_handled':
         final id = data['id']?.toString();
         if (id == 'stop') {
+          _newRequest(ServiceIntent.stopped);
           setState(() {
-            _isServiceRunning = false;
-            _isStartingService = false;
+            _serviceUiState = ServiceUiState.stopped;
             _setStatus('serviceStoppedFromNotification');
           });
         }
@@ -622,12 +719,20 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       return;
     }
 
+    if (_isOperationInFlight) {
+      return;
+    }
+
     try {
       if (enable) {
+        final requestId = _newRequest(ServiceIntent.running);
         setState(() {
-          _isStartingService = true;
+          _serviceUiState = ServiceUiState.starting;
           _setStatus('startingService');
         });
+
+        await _yieldToNextFrame();
+        if (!_isLatestRequest(requestId) || !mounted) return;
 
         final permission =
             await FlutterForegroundTask.checkNotificationPermission();
@@ -635,16 +740,21 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           final requested =
               await FlutterForegroundTask.requestNotificationPermission();
           if (requested != NotificationPermission.granted) {
+            if (!_isLatestRequest(requestId) || !mounted) return;
             setState(() {
-              _isStartingService = false;
+              _serviceUiState = ServiceUiState.stopped;
+              _desiredServiceState = ServiceIntent.stopped;
               _setStatus('notificationPermissionDenied');
             });
             return;
           }
         }
 
-        await FlutterForegroundTask.saveData(key: 'notificationTextRunning', value: l10n.tr('notificationTextRunning'));
-        await FlutterForegroundTask.saveData(key: 'recording', value: l10n.tr('recording'));
+        await FlutterForegroundTask.saveData(
+            key: 'notificationTextRunning',
+            value: l10n.tr('notificationTextRunning'));
+        await FlutterForegroundTask.saveData(
+            key: 'recording', value: l10n.tr('recording'));
 
         final started = await FlutterForegroundTask.startService(
           serviceId: 2026,
@@ -658,22 +768,46 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         );
         final ok = started is ServiceRequestSuccess;
 
+        if (!_isLatestRequest(requestId) || !mounted) {
+          return;
+        }
+
         await _setExpectedRunning(ok);
         setState(() {
-          _isServiceRunning = false;
-          _isStartingService = ok;
-          _setStatus(ok ? 'foregroundStartWaitingCore' : 'foregroundStartFailed');
+          _serviceUiState =
+              ok ? ServiceUiState.starting : ServiceUiState.stopped;
+          if (!ok) {
+            _desiredServiceState = ServiceIntent.stopped;
+          }
+          _setStatus(
+              ok ? 'foregroundStartWaitingCore' : 'foregroundStartFailed');
         });
+        if (ok) {
+          unawaited(_confirmRunning(requestId));
+        }
       } else {
+        final requestId = _newRequest(ServiceIntent.stopped);
+        setState(() {
+          _serviceUiState = ServiceUiState.stopping;
+        });
+
+        await _yieldToNextFrame();
+        if (!_isLatestRequest(requestId) || !mounted) return;
+
         await SharedPreferences.getInstance().then(
           (p) => p.setBool(_stoppedByUserKey, true),
         );
         await _setExpectedRunning(false);
         final stopped = await FlutterForegroundTask.stopService();
         final ok = stopped is ServiceRequestSuccess;
+        if (!_isLatestRequest(requestId) || !mounted) {
+          return;
+        }
         setState(() {
-          _isServiceRunning = !ok;
-          _isStartingService = false;
+          _serviceUiState =
+              ok ? ServiceUiState.stopped : ServiceUiState.running;
+          _desiredServiceState =
+              ok ? ServiceIntent.stopped : ServiceIntent.running;
           _setStatus(ok ? 'backendStopped' : 'stopServiceFailed');
         });
         if (!ok) {
@@ -683,7 +817,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       }
     } catch (e) {
       setState(() {
-        _isStartingService = false;
+        _serviceUiState = ServiceUiState.stopped;
+        _desiredServiceState = ServiceIntent.stopped;
         _setStatus('serviceOperationFailed', params: {'error': '$e'});
       });
     }
@@ -732,6 +867,16 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
 
     await _refreshBatteryOptimizationState();
+  }
+
+  Future<void> _yieldToNextFrame() {
+    final completer = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    return completer.future;
   }
 
   Widget _buildServiceActionSection() {
@@ -788,7 +933,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                 ],
               )
             // Full-width zero-height box so AnimatedSize only animates height
-            : const SizedBox(key: ValueKey('service-actions-hidden'), height: 0),
+            : const SizedBox(
+                key: ValueKey('service-actions-hidden'), height: 0),
       ),
     );
   }
@@ -797,6 +943,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   Widget build(BuildContext context) {
     final statusColor = _isServiceRunning ? Colors.green : Colors.orange;
     final size = MediaQuery.sizeOf(context);
+    final actionInFlight = _isOperationInFlight;
 
     return Scaffold(
       appBar: AppBar(
@@ -845,7 +992,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                             width: size.width * 0.28,
                             height: size.height * 0.12,
                             child: GestureDetector(
-                              onTap: _isStartingService
+                              onTap: actionInFlight
                                   ? null
                                   : () => _toggleService(!_isServiceRunning),
                               child: Container(
@@ -872,7 +1019,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                       blurRadius: 20,
                                       offset: const Offset(0, 8),
                                     ),
-                                    if (_isStartingService)
+                                    if (actionInFlight)
                                       BoxShadow(
                                         color: const Color(
                                           0xFFB9E9FF,
@@ -884,7 +1031,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                 ),
                                 child: Stack(
                                   children: [
-                                    if (_isStartingService)
+                                    if (actionInFlight)
                                       Positioned.fill(
                                         child: Center(
                                           child: Opacity(
@@ -901,9 +1048,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                       child: AnimatedSwitcher(
                                         duration:
                                             const Duration(milliseconds: 280),
-                                        child: _isStartingService
+                                        child: actionInFlight
                                             ? Column(
-                                                key: const ValueKey('starting'),
+                                                key: ValueKey(_serviceUiState),
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
                                                 children: [
@@ -918,7 +1065,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                                   ),
                                                   const SizedBox(height: 8),
                                                   Text(
-                                                    l10n.tr('startingShort'),
+                                                    _serviceUiState ==
+                                                            ServiceUiState
+                                                                .stopping
+                                                        ? l10n.tr('stop')
+                                                        : l10n.tr(
+                                                            'startingShort'),
                                                     style: TextStyle(
                                                       color: Colors.white,
                                                       fontWeight:
@@ -988,16 +1140,20 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                 children: [
                                   Text(
                                     l10n.tr('setOutputPathTitle'),
-                                    style: Theme.of(context).textTheme.titleMedium,
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
                                   ),
                                   const SizedBox(height: 12),
                                   SizedBox(
                                     width: double.infinity,
                                     child: FilledButton.icon(
                                       onPressed:
-                                          _isStartingService || _isServiceRunning ? null : _browseBasePath,
+                                          actionInFlight || _isServiceRunning
+                                              ? null
+                                              : _browseBasePath,
                                       icon: const Icon(Icons.folder_open),
-                                      label: Text(l10n.tr('browseAndSetOutputPath')),
+                                      label: Text(
+                                          l10n.tr('browseAndSetOutputPath')),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
@@ -1007,11 +1163,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                         : l10n.tr(
                                             'outputPathValue',
                                             params: {
-                                              'path':
-                                                  _outputDirController.text.trim(),
+                                              'path': _outputDirController.text
+                                                  .trim(),
                                             },
                                           ),
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
                                 ],
                               ),
