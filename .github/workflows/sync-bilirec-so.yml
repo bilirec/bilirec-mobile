@@ -1,0 +1,166 @@
+name: Sync bilirec Android SO
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:00 HKT every day (UTC+8)
+    - cron: "0 19 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  sync-libbilirec:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Resolve latest release assets
+        id: release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = 'bilirec';
+            const repo = 'bilirec';
+            const requiredAssets = {
+              arm64: 'libbilirec-android-arm64-v8a.so',
+              x64: 'libbilirec-android-x86_64.so',
+            };
+
+            const release = await github.rest.repos.getLatestRelease({ owner, repo });
+            const data = release.data;
+            if (!data.tag_name) {
+              core.setFailed('tag_name is missing in latest release payload');
+              return;
+            }
+            if (data.prerelease) {
+              core.setFailed(`Latest release ${data.tag_name} is prerelease; expected stable release.`);
+              return;
+            }
+
+            const byName = new Map((data.assets || []).map((asset) => [asset.name, asset.browser_download_url]));
+            const arm64Url = byName.get(requiredAssets.arm64);
+            const x64Url = byName.get(requiredAssets.x64);
+
+            const missing = [];
+            if (!arm64Url) missing.push(requiredAssets.arm64);
+            if (!x64Url) missing.push(requiredAssets.x64);
+            if (missing.length > 0) {
+              core.setFailed(`Required release assets not found: ${missing.join(', ')}`);
+              return;
+            }
+
+            core.setOutput('tag', data.tag_name);
+            core.setOutput('arm64_url', arm64Url);
+            core.setOutput('x64_url', x64Url);
+
+      - name: Download release binaries
+        run: |
+          set -euo pipefail
+
+          mkdir -p .tmp/bilirec-release
+
+          curl -fsSL "${{ steps.release.outputs.arm64_url }}" -o .tmp/bilirec-release/libbilirec-android-arm64-v8a.so
+          curl -fsSL "${{ steps.release.outputs.x64_url }}" -o .tmp/bilirec-release/libbilirec-android-x86_64.so
+
+      - name: Compare hashes and update jniLibs
+        id: compare
+        run: |
+          set -euo pipefail
+
+          arm_src=".tmp/bilirec-release/libbilirec-android-arm64-v8a.so"
+          x64_src=".tmp/bilirec-release/libbilirec-android-x86_64.so"
+
+          arm_dst="android/app/src/main/jniLibs/arm64-v8a/libbilirec.so"
+          x64_dst="android/app/src/main/jniLibs/x86_64/libbilirec.so"
+
+          mkdir -p "$(dirname "${arm_dst}")" "$(dirname "${x64_dst}")"
+
+          changed_arm=false
+          changed_x64=false
+
+          src_arm_hash="$(sha256sum "${arm_src}" | awk '{print $1}')"
+          src_x64_hash="$(sha256sum "${x64_src}" | awk '{print $1}')"
+
+          if [ ! -f "${arm_dst}" ]; then
+            changed_arm=true
+          else
+            dst_arm_hash="$(sha256sum "${arm_dst}" | awk '{print $1}')"
+            if [ "${src_arm_hash}" != "${dst_arm_hash}" ]; then
+              changed_arm=true
+            fi
+          fi
+
+          if [ ! -f "${x64_dst}" ]; then
+            changed_x64=true
+          else
+            dst_x64_hash="$(sha256sum "${x64_dst}" | awk '{print $1}')"
+            if [ "${src_x64_hash}" != "${dst_x64_hash}" ]; then
+              changed_x64=true
+            fi
+          fi
+
+          if [ "${changed_arm}" = true ]; then
+            cp "${arm_src}" "${arm_dst}"
+          fi
+
+          if [ "${changed_x64}" = true ]; then
+            cp "${x64_src}" "${x64_dst}"
+          fi
+
+          scope="none"
+          if [ "${changed_arm}" = true ] && [ "${changed_x64}" = true ]; then
+            scope="all"
+          elif [ "${changed_arm}" = true ]; then
+            scope="arm64-v8a only"
+          elif [ "${changed_x64}" = true ]; then
+            scope="x86_64 only"
+          fi
+
+          changed=false
+          if [ "${scope}" != "none" ]; then
+            changed=true
+          fi
+
+          {
+            echo "changed=${changed}"
+            echo "scope=${scope}"
+            echo "changed_arm=${changed_arm}"
+            echo "changed_x64=${changed_x64}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Tag: ${{ steps.release.outputs.tag }}"
+          echo "arm64-v8a changed: ${changed_arm}"
+          echo "x86_64 changed: ${changed_x64}"
+          echo "Update scope: ${scope}"
+
+      - name: Commit and push updates
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          SCOPE: ${{ steps.compare.outputs.scope }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add android/app/src/main/jniLibs/arm64-v8a/libbilirec.so
+          git add android/app/src/main/jniLibs/x86_64/libbilirec.so
+
+          if git diff --cached --quiet; then
+            echo "No staged changes to commit."
+            exit 0
+          fi
+
+          git commit -m "bump: update libbilirec.so to ${TAG} (${SCOPE})"
+          git push origin "HEAD:${{ github.ref_name }}"
+
+      - name: No updates detected
+        if: steps.compare.outputs.changed != 'true'
+        run: echo "libbilirec.so is already up to date for both ABIs."
