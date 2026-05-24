@@ -42,17 +42,16 @@ void main() {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Bilirec 後台服務控制中心'), findsOneWidget);
-    expect(find.text('Bilirec 後端未運行'), findsOneWidget);
+    expect(find.text('Bilirec 服務控制中心'), findsOneWidget);
+    expect(find.text('Bilirec 系統服務未啟動'), findsOneWidget);
     expect(find.text('啟動'), findsOneWidget);
-    expect(find.text('檢測後端連線'), findsOneWidget);
   });
 
   testWidgets('初次載入會顯示預設輸出路徑提示', (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('目前尚未設置輸出路徑（使用預設）'), findsOneWidget);
+    expect(find.text('目前尚未設定輸出路徑（使用預設）'), findsOneWidget);
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('output_dir'), isNull);
@@ -65,7 +64,7 @@ void main() {
     await tester.tap(find.text('啟動'));
     await tester.pump();
 
-    expect(find.text('目前僅支援 Android 前景服務'), findsOneWidget);
+    expect(find.text('目前只支援 Android'), findsOneWidget);
   });
 
   testWidgets('語言切換會即時同步所有文案', (tester) async {
@@ -77,16 +76,15 @@ void main() {
     await tester.tap(find.byType(PopupMenuItem<String>).at(1));
     await tester.pumpAndSettle();
 
-    expect(find.text('Bilirec 后台服务控制中心'), findsOneWidget);
-    expect(find.text('Bilirec 后端未运行'), findsOneWidget);
-    expect(find.text('检测后端连接'), findsOneWidget);
+    expect(find.text('Bilirec 服务控制中心'), findsOneWidget);
+    expect(find.text('Bilirec 系统服务未启动'), findsOneWidget);
 
     await tester.tap(find.text('简'));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(PopupMenuItem<String>).at(0));
     await tester.pumpAndSettle();
 
-    expect(find.text('Bilirec 後台服務控制中心'), findsOneWidget);
-    expect(find.text('Bilirec 後端未運行'), findsOneWidget);
+    expect(find.text('Bilirec 服務控制中心'), findsOneWidget);
+    expect(find.text('Bilirec 系統服務未啟動'), findsOneWidget);
   });
 }
