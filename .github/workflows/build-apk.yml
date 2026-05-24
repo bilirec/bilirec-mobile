@@ -2,6 +2,13 @@ name: Build APK
 
 on:
   push:
+    paths:
+      - "**/*.dart"
+      - "**/*.kts"
+      - ".github/workflows/**"
+      - "**/*.so"
+  release:
+    types: [created]
   workflow_dispatch:
 
 jobs:
@@ -46,10 +53,32 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
+      - name: Rename APK for artifact/release
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/bilirec-release.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/bilirec-release.apk
           if-no-files-found: error
+
+  upload-release:
+    needs: build-apk
+    if: github.event_name == 'release' && github.event.action == 'created'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-release-apk
+          path: dist
+
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/bilirec-release.apk
 
