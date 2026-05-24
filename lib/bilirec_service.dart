@@ -13,6 +13,7 @@ class StartConfig {
     this.outputDir,
     this.username,
     this.password,
+    this.sseToken,
   });
 
   final String basePath;
@@ -22,6 +23,7 @@ class StartConfig {
   final String? outputDir;
   final String? username;
   final String? password;
+  final String? sseToken;
 
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{'basePath': basePath};
@@ -38,6 +40,9 @@ class StartConfig {
     }
     if (password != null && password!.isNotEmpty) {
       map['password'] = password;
+    }
+    if (sseToken != null && sseToken!.isNotEmpty) {
+      map['sseToken'] = sseToken;
     }
     return map;
   }

@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +21,7 @@ const String _outputDirKey = 'output_dir';
 const String _stoppedByUserKey = 'stopped_by_user';
 const String _localeCodeKey = 'locale_code';
 const String _coreRunningKey = 'core_running';
+const String _enableSsePushKey = 'enable_sse_push';
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
@@ -30,9 +33,50 @@ const AndroidNotificationChannel _ppkAlertChannel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
+const AndroidNotificationChannel _sseEventChannel = AndroidNotificationChannel(
+  'bilirec_sse_event',
+  'Bilirec SSE 推送',
+  description: 'Bilirec 直播事件推送提醒',
+  importance: Importance.high,
+);
+
 @pragma('vm:entry-point')
 void startCallback() {
   FlutterForegroundTask.setTaskHandler(BilirecTaskHandler());
+}
+
+class BilirecSseEvent {
+  const BilirecSseEvent({
+    required this.type,
+    required this.roomId,
+    required this.streamer,
+    required this.roomTitle,
+    required this.message,
+    required this.timestamp,
+  });
+
+  final String type;
+  final int roomId;
+  final String streamer;
+  final String roomTitle;
+  final String message;
+  final int timestamp;
+
+  factory BilirecSseEvent.fromJson(Map<String, dynamic> map) {
+    return BilirecSseEvent(
+      type: map['type']?.toString() ?? 'live_detected',
+      roomId: _toInt(map['room_id']),
+      streamer: map['streamer_name']?.toString() ?? '',
+      roomTitle: map['room_title']?.toString() ?? '',
+      message: map['message']?.toString() ?? '',
+      timestamp: _toInt(map['timestamp']),
+    );
+  }
+
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
 }
 
 class BilirecTaskHandler extends TaskHandler {
@@ -40,10 +84,20 @@ class BilirecTaskHandler extends TaskHandler {
 
   bool _nativeStarted = false;
   bool _backendWasAlive = false;
+  bool _notificationsReady = false;
+  bool _sseEnabled = false;
+  bool _destroyed = false;
+  String? _sseToken;
+  int _sseNotificationId = 4000;
+  HttpClient? _sseClient;
+  StreamSubscription<String>? _sseLineSubscription;
+  Timer? _sseReconnectTimer;
+  final StringBuffer _sseDataBuffer = StringBuffer();
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     _monitor = ResourceMonitor();
+    _destroyed = false;
     BilirecService.initialize();
     final appSupport = await getApplicationSupportDirectory();
     final basePath = appSupport.path;
@@ -52,13 +106,25 @@ class BilirecTaskHandler extends TaskHandler {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getString(_outputDirKey) ?? '';
       outputDir = saved.isNotEmpty ? saved : null;
+      _sseEnabled = prefs.getBool(_enableSsePushKey) ?? false;
+      _sseToken = _sseEnabled ? _generateSseToken() : null;
       await prefs.setBool(_stoppedByUserKey, false);
     } catch (_) {}
     final result = BilirecService.start(
-      StartConfig(basePath: basePath, outputDir: outputDir),
+      StartConfig(
+        basePath: basePath,
+        outputDir: outputDir,
+        sseToken: _sseToken,
+      ),
     );
     _nativeStarted = result == 0;
     _backendWasAlive = _nativeStarted;
+
+    if (_nativeStarted && _sseEnabled && _sseToken != null) {
+      await _ensureNotificationReady();
+      unawaited(_connectSse());
+    }
+
     FlutterForegroundTask.sendDataToMain({
       'type': 'service_started',
       'ok': _nativeStarted,
@@ -155,6 +221,8 @@ class BilirecTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    _destroyed = true;
+    await _stopSseListener();
     if (_nativeStarted) {
       BilirecService.stop();
       _nativeStarted = false;
@@ -165,6 +233,189 @@ class BilirecTaskHandler extends TaskHandler {
 
   @override
   void onReceiveData(Object data) {}
+
+  Future<void> _ensureNotificationReady() async {
+    if (_notificationsReady) return;
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await _localNotifications.initialize(
+      const InitializationSettings(android: androidInit),
+    );
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_sseEventChannel);
+    _notificationsReady = true;
+  }
+
+  String _generateSseToken() {
+    final random = Random.secure();
+    final bytes = Uint8List.fromList(
+      List<int>.generate(24, (_) => random.nextInt(256)),
+    );
+    return base64UrlEncode(bytes).replaceAll('=', '');
+  }
+
+  Future<void> _stopSseListener() async {
+    _sseReconnectTimer?.cancel();
+    _sseReconnectTimer = null;
+    await _sseLineSubscription?.cancel();
+    _sseLineSubscription = null;
+    _sseClient?.close(force: true);
+    _sseClient = null;
+    _sseDataBuffer.clear();
+  }
+
+  Future<void> _connectSse() async {
+    if (_destroyed || !_nativeStarted || !_sseEnabled || _sseToken == null) {
+      return;
+    }
+
+    await _stopSseListener();
+
+    final client = HttpClient();
+    _sseClient = client;
+
+    try {
+      final uri = Uri.parse(
+        'http://127.0.0.1:8080/sse?token=${Uri.encodeQueryComponent(_sseToken!)}',
+      );
+      final req = await client
+          .getUrl(uri)
+          .timeout(const Duration(seconds: 8));
+      req.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
+
+      final res = await req.close().timeout(const Duration(seconds: 8));
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        _scheduleSseReconnect();
+        return;
+      }
+
+      _sseLineSubscription = res
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+        _onSseLine,
+        onError: (_) => _scheduleSseReconnect(),
+        onDone: _scheduleSseReconnect,
+        cancelOnError: true,
+      );
+    } catch (_) {
+      _scheduleSseReconnect();
+    }
+  }
+
+  void _onSseLine(String line) {
+    if (line.isEmpty) {
+      final payload = _sseDataBuffer.toString().trim();
+      _sseDataBuffer.clear();
+      if (payload.isNotEmpty) {
+        _handleSsePayload(payload);
+      }
+      return;
+    }
+
+    if (line.startsWith('data:')) {
+      final data = line.substring(5).trimLeft();
+      if (_sseDataBuffer.isNotEmpty) {
+        _sseDataBuffer.write('\n');
+      }
+      _sseDataBuffer.write(data);
+    }
+  }
+
+  void _scheduleSseReconnect() {
+    if (_destroyed || !_nativeStarted || !_sseEnabled) return;
+    _sseReconnectTimer?.cancel();
+    _sseReconnectTimer = Timer(
+      const Duration(seconds: 3),
+      () => unawaited(_connectSse()),
+    );
+  }
+
+  Future<void> _handleSsePayload(String payload) async {
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is! Map<String, dynamic>) return;
+      final event = BilirecSseEvent.fromJson(decoded);
+      await _showSseNotification(event);
+    } catch (_) {
+      // Ignore malformed SSE payloads and keep stream alive.
+    }
+  }
+
+  Future<void> _showSseNotification(BilirecSseEvent event) async {
+    await _ensureNotificationReady();
+
+    final titleKey = switch (event.type) {
+      'live_auto_record_started' => 'sseTitleAutoRecord',
+      'live_auto_record_failed' => 'sseTitleAutoRecordFailed',
+      'live_ended' => 'sseTitleLiveEnded',
+      'live_record_stopped' => 'sseTitleRecordStopped',
+      'live_detected' => 'sseTitleLive',
+      _ => 'sseUnknownEvent',
+    };
+
+    final title = _tr(titleKey, params: {
+      'streamer': event.streamer.isNotEmpty ? event.streamer : _tr('sseDefaultStreamer'),
+    });
+
+    final body = _buildSseBody(event);
+    final tag = event.roomId > 0
+        ? 'room-${event.roomId}-${event.type}'
+        : 'bilirec-${event.type}';
+
+    await _localNotifications.show(
+      _sseNotificationId++,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _sseEventChannel.id,
+          _sseEventChannel.name,
+          channelDescription: _sseEventChannel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          tag: tag,
+        ),
+      ),
+    );
+  }
+
+  String _buildSseBody(BilirecSseEvent event) {
+    final noTitleTypes = {'live_ended', 'live_record_stopped'};
+    if (!noTitleTypes.contains(event.type) && event.roomTitle.trim().isNotEmpty) {
+      return _truncate(_singleLine(event.roomTitle.trim()), 60);
+    }
+
+    if (event.timestamp > 0) {
+      final time = DateTime.fromMillisecondsSinceEpoch(event.timestamp * 1000)
+          .toLocal();
+      final hour = time.hour.toString().padLeft(2, '0');
+      final minute = time.minute.toString().padLeft(2, '0');
+      return _tr('sseAtTime', params: {'time': '$hour:$minute'});
+    }
+
+    if (event.message.trim().isNotEmpty) {
+      return _truncate(_singleLine(event.message.trim()), 80);
+    }
+
+    return _tr('sseBodyDefault');
+  }
+
+  String _singleLine(String text) => text.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  String _truncate(String text, int maxLen) {
+    if (text.length <= maxLen) return text;
+    return '${text.substring(0, maxLen - 1)}...';
+  }
+
+  String _tr(String key, {Map<String, String> params = const {}}) {
+    final code = AppLocaleConfig.codeForLocale(
+      WidgetsBinding.instance.platformDispatcher.locale,
+    );
+    return AppLocalizations(AppLocaleConfig.localeForCode(code))
+        .tr(key, params: params);
+  }
 
   @override
   void onNotificationButtonPressed(String id) async {
@@ -207,6 +458,10 @@ Future<void> main() async {
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(_ppkAlertChannel);
+  await _localNotifications
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(_sseEventChannel);
 
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
@@ -323,6 +578,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   bool _isIgnoringBatteryOptimizations = false;
   bool _loading = true;
   bool _batteryDialogVisible = false;
+  bool _useSsePush = false;
   String _statusKey = 'initializing';
   Map<String, String> _statusParams = const {};
   final TextEditingController _outputDirController = TextEditingController();
@@ -502,6 +758,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     final prefs = await SharedPreferences.getInstance();
     final expectedRunning = prefs.getBool(_expectedRunningKey) ?? false;
     _outputDirController.text = prefs.getString(_outputDirKey) ?? '';
+    _useSsePush = prefs.getBool(_enableSsePushKey) ?? false;
     final running = await _isServiceCoreRunning();
     final ignoringOptimization = Platform.isAndroid
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
@@ -686,6 +943,15 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(l10n.tr('pathAutoSaved'))));
+  }
+
+  Future<void> _setSsePushEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_enableSsePushKey, enabled);
+    if (!mounted) return;
+    setState(() {
+      _useSsePush = enabled;
+    });
   }
 
   Future<void> _refreshBatteryOptimizationState() async {
@@ -1200,6 +1466,20 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                                           ),
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SwitchListTile.adaptive(
+                                    contentPadding: EdgeInsets.zero,
+                                    value: _useSsePush,
+                                    onChanged: actionInFlight || _isServiceRunning
+                                        ? null
+                                        : (value) => _setSsePushEnabled(value),
+                                    title: Text(l10n.tr('ssePushSwitchTitle')),
+                                    subtitle: Text(
+                                      _useSsePush
+                                          ? l10n.tr('ssePushEnabledHint')
+                                          : l10n.tr('ssePushDisabledHint'),
+                                    ),
                                   ),
                                 ],
                               ),

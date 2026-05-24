@@ -26,6 +26,7 @@
 - 检查录制状态（`/record/list`），并在通知中显示“录制中”。
 - 检测服务被系统中断时，发出高优先级本地提醒。
 - 设置并持久化录制输出路径。
+- 可选启用 SSE 推送（替代 WebPush / FCM），由前台服务接收并转成本地通知。
 - 内置中文繁体 / 简体切换（`zh_Hant` / `zh_Hans`）。
 
 ## 代码实现速览
@@ -46,6 +47,7 @@
   - `Start(char* configJson)`
   - `Stop()`
 - 使用 JSON 传递启动参数（如 `basePath`、`outputDir`）。
+- 启用 SSE 推送时，启动会生成随机 `sseToken` 传给核心，并连接 `GET /sse?token=...` 监听事件。
 
 ### 3) 资源监控（`lib/resource_monitor.dart`）
 
