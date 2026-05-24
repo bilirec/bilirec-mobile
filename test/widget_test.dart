@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/main.dart';
+import 'package:bilirec/shared/preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -47,14 +49,54 @@ void main() {
     expect(find.text('啟動'), findsOneWidget);
   });
 
-  testWidgets('初次載入會顯示預設輸出路徑提示', (tester) async {
+  testWidgets('初次載入會顯示設定按鈕與抽屜內容', (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
+    expect(find.text('打開服務啓動設定'), findsOneWidget);
+
+    await tester.tap(find.text('打開服務啓動設定'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('儲存路徑'), findsOneWidget);
     expect(find.text('目前尚未設定輸出路徑（使用預設）'), findsOneWidget);
+    expect(find.text('變更路徑'), findsOneWidget);
+    expect(find.text('通知與背景防殺'), findsOneWidget);
+    expect(find.text('強效通知模式'), findsOneWidget);
+    expect(find.byType(Switch), findsOneWidget);
+    expect(
+      find.text(
+        '如在中國大陸網絡環境下可能無法接收通知推送，可再嘗試啟用此模式。',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('將於啟動服務後生效'), findsOneWidget);
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('output_dir'), isNull);
+  });
+
+  testWidgets('服務啟動後設定按鈕會被禁用', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'com.pravera.flutter_foreground_task.prefs.$coreRunningKey': true,
+    });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(foregroundChannel, (call) async {
+      switch (call.method) {
+        case 'isRunningService':
+          return true;
+        default:
+          return null;
+      }
+    });
+
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    final settingsCard = tester.widget<SettingsCard>(
+      find.byType(SettingsCard),
+    );
+    expect(settingsCard.enabled, isFalse);
   });
 
   testWidgets('在非 Android 環境點擊啟動會顯示限制訊息', (tester) async {

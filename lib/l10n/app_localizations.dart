@@ -107,13 +107,19 @@ class AppLocalizations {
       'start': '啟動',
       'openFrontend': '打開錄製管理程式',
       'checkBackendConnection': '檢查系統服務連線',
+      'settings': '打開服務啓動設定',
+      'serviceStartupSettingsTitle': '服務啓動設定',
+      'storagePathTitle': '儲存路徑',
+      'changePath': '變更路徑',
       'setOutputPathTitle': '設定錄製輸出路徑',
       'browseAndSetOutputPath': '瀏覽並設定輸出路徑',
       'outputPathUnset': '目前尚未設定輸出路徑（使用預設）',
       'outputPathValue': '輸出路徑：{path}',
-      'ssePushSwitchTitle': '改用 SSE 推送（取代 WebPush）',
-      'ssePushEnabledHint': '已啟用，將於下次啟動服務時生效',
-      'ssePushDisabledHint': '已停用，將使用既有推送機制',
+      'notificationModeTitle': '通知模式設定',
+      'ssePushSwitchTitle': '本地通知模式',
+      'ssePushDescription': '如在中國大陸網絡環境下無法接收開播/錄製通知推送，可嘗試啟用此模式。',
+      'ssePushEnabledHint': '將於啟動服務後生效',
+      'ssePushDisabledHint': '將於啟動服務後生效',
       'notificationTitleRunning': 'Bilirec 系統服務運行中',
       'notificationTextRunning': '打開錄製應用程式即可開始錄製',
       'notificationButtonStop': '停止服務',
@@ -168,13 +174,19 @@ class AppLocalizations {
       'start': '启动',
       'openFrontend': '打开录制管理程序',
       'checkBackendConnection': '检查系统服务连接',
+      'settings': '打开服务启动设置',
+      'serviceStartupSettingsTitle': '服务启动设置',
+      'storagePathTitle': '保存路径',
+      'changePath': '更改路径',
       'setOutputPathTitle': '设置录制输出路径',
       'browseAndSetOutputPath': '浏览并设置输出路径',
       'outputPathUnset': '目前尚未设置输出路径（使用默认）',
       'outputPathValue': '输出路径：{path}',
-      'ssePushSwitchTitle': '改用 SSE 推送（替代 WebPush）',
-      'ssePushEnabledHint': '已启用，将在下次启动服务时生效',
-      'ssePushDisabledHint': '已停用，将使用既有推送机制',
+      'notificationModeTitle': '通知模式設定',
+      'ssePushSwitchTitle': '本地通知模式',
+      'ssePushDescription': '如在中国大陆网络环境下无法接收开播/录制通知推送，可尝试启用此模式。',
+      'ssePushEnabledHint': '将于启动服务后生效',
+      'ssePushDisabledHint': '将于启动服务后生效',
       'notificationTitleRunning': 'Bilirec 系统服务运行中',
       'notificationTextRunning': '打开录制应用程序即可开始录制',
       'notificationButtonStop': '停止服务',
@@ -195,7 +207,8 @@ class AppLocalizations {
   };
 }
 
-class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
