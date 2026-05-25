@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -19,7 +13,8 @@ import 'bilirec_service.dart';
 import 'bilirec_sse_handler.dart';
 import 'resource_monitor.dart';
 
-final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin _localNotifications =
+    FlutterLocalNotificationsPlugin();
 
 const AndroidNotificationChannel _ppkAlertChannel = AndroidNotificationChannel(
   'bilirec_ppk_alert',
@@ -29,7 +24,6 @@ const AndroidNotificationChannel _ppkAlertChannel = AndroidNotificationChannel(
 );
 
 class BilirecTaskHandler extends TaskHandler {
-
   late final ResourceMonitor _monitor;
   late final BilirecSseHandler _sseHandler;
   late final AppLocalizations _l10n;
@@ -70,7 +64,8 @@ class BilirecTaskHandler extends TaskHandler {
     );
 
     await _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_ppkAlertChannel);
 
     BilirecService.initialize();
@@ -109,8 +104,7 @@ class BilirecTaskHandler extends TaskHandler {
           'stoppedByUser': await Preferences.getStoppedByUser(),
         });
         await _notifyPpkKilled();
-        await FlutterForegroundTask.saveData(
-            key: coreRunningKey, value: false);
+        await FlutterForegroundTask.saveData(key: coreRunningKey, value: false);
       } else if (alive && !_backendWasAlive) {
         _backendWasAlive = true;
       }
@@ -124,7 +118,7 @@ class BilirecTaskHandler extends TaskHandler {
     final isRecording = await _isRecording() ? '$recordingLabel • ' : '';
     await FlutterForegroundTask.updateService(
       notificationText:
-      '$text\n[ $isRecording${_formatMonitorData(cpu, ram)} ]',
+          '$text\n[ $isRecording${_formatMonitorData(cpu, ram)} ]',
     );
   }
 
@@ -135,7 +129,7 @@ class BilirecTaskHandler extends TaskHandler {
 
     // 2. RAM 簡單顯示 MB，若過大（例如超過 1000MB）可考慮自動轉換為 GB
     String ramDisplay =
-    ram > 1000 ? "${(ram / 1024).toStringAsFixed(1)}GB" : "${ram}MB";
+        ram > 1000 ? "${(ram / 1024).toStringAsFixed(1)}GB" : "${ram}MB";
 
     return "$cpuDisplay • RAM: $ramDisplay";
   }
@@ -199,7 +193,11 @@ class BilirecTaskHandler extends TaskHandler {
       BilirecService.stop();
       _nativeStarted = false;
     }
-    FlutterForegroundTask.sendDataToMain({'type': 'service_stopped'});
+    final stoppedByUser = await Preferences.getStoppedByUser();
+    FlutterForegroundTask.sendDataToMain({
+      'type': 'service_stopped',
+      'stoppedByUser': stoppedByUser,
+    });
     await FlutterForegroundTask.saveData(key: coreRunningKey, value: false);
   }
 

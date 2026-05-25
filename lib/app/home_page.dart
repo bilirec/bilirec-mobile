@@ -110,9 +110,11 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
 
     await Preferences.setExpectedRunning(false);
+    await _stopForegroundIfRunning();
     if (!mounted || !_isLatestRequest(requestId)) return;
     setState(() {
       _serviceUiState = ServiceUiState.stopped;
+      _desiredServiceState = ServiceIntent.stopped;
       _setStatus('backendNoResponse');
     });
   }
@@ -246,6 +248,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         });
         if (ok) {
           unawaited(_confirmRunning(requestId));
+        } else {
+          unawaited(_stopForegroundIfRunning());
         }
         break;
       case 'service_stopped':
@@ -253,10 +257,13 @@ class _BilirecHomePageState extends State<BilirecHomePage>
             _isOperationInFlight) {
           break;
         }
+        final stoppedByUser = data['stoppedByUser'] == true;
         setState(() {
           _serviceUiState = ServiceUiState.stopped;
           _desiredServiceState = ServiceIntent.stopped;
-          _setStatus('backendStopped');
+          if (stoppedByUser){
+            _setStatus('backendStopped');
+          }
         });
         break;
       case 'backend_dead':
@@ -268,10 +275,22 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         });
         if (!stoppedByUser) {
           Preferences.setExpectedRunning(false); // fire-and-forget
+          unawaited(_stopForegroundIfRunning());
         }
         break;
       default:
         break;
+    }
+  }
+
+  Future<void> _stopForegroundIfRunning() async {
+    try {
+      final running = await FlutterForegroundTask.isRunningService;
+      if (running) {
+        await FlutterForegroundTask.stopService();
+      }
+    } catch (_) {
+      // ignore, UI state will still be reconciled by refresh/task callbacks
     }
   }
 
