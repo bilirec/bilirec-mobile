@@ -8,11 +8,11 @@ import 'package:bilirec/app/widgets/service_power_button_area.dart';
 import 'package:bilirec/app/widgets/service_status_row.dart';
 import 'package:bilirec/foreground/bilirec_task_handler.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 @pragma('vm:entry-point')
 void startCallback() {
@@ -295,33 +295,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   }
 
   Future<void> _openFrontendFromUi() async {
-    var opened = false;
-    try {
-      final Uri uri;
-      if (Platform.isAndroid) {
-        uri = Uri.parse(
-          'intent://app.bilirec.org'
-          '#Intent;scheme=https;package=com.android.chrome;action=android.intent.action.VIEW;end',
-        );
-      } else {
-        uri = Uri.parse('https://app.bilirec.org');
-      }
-      opened = await launchUrl(uri);
-    } catch (e) {
-      debugPrint('Failed to open frontend: $e');
-      opened = false;
-    }
-
-    if (!opened) {
-      try {
-        opened = await launchUrl(
-          Uri.parse('https://app.bilirec.org'),
-          mode: LaunchMode.externalApplication,
-        );
-      } catch (_) {
-        opened = false;
-      }
-    }
+    final opened = await openUrlPreferChrome(
+      Uri.parse('https://app.bilirec.org'),
+    );
 
     if (!mounted) return;
     if (!opened) {
