@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/preferences.dart';
@@ -188,18 +187,36 @@ class BilirecTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    final opId = DateTime.now().microsecondsSinceEpoch;
+    final sw = Stopwatch()..start();
+    debugPrint('[STOP/TASK][$opId] onDestroy enter (isTimeout=$isTimeout)');
     _destroyed = true;
+    debugPrint('[STOP/TASK][$opId] before _sseHandler.stop()');
     await _sseHandler.stop();
+    debugPrint(
+        '[STOP/TASK][$opId] after _sseHandler.stop() (${sw.elapsedMilliseconds}ms)');
     if (_nativeStarted) {
-      await Isolate.run((() => BilirecService.stop()));
+      debugPrint('[STOP/TASK][$opId] before BilirecService.stop()');
+      BilirecService.stop();
       _nativeStarted = false;
+      debugPrint(
+          '[STOP/TASK][$opId] after BilirecService.stop() (${sw.elapsedMilliseconds}ms)');
     }
+    debugPrint('[STOP/TASK][$opId] before Preferences.getStoppedByUser()');
     final stoppedByUser = await Preferences.getStoppedByUser();
+    debugPrint(
+        '[STOP/TASK][$opId] after Preferences.getStoppedByUser() (${sw.elapsedMilliseconds}ms) value=$stoppedByUser');
+    debugPrint('[STOP/TASK][$opId] before sendDataToMain(service_stopped)');
     FlutterForegroundTask.sendDataToMain({
       'type': 'service_stopped',
       'stoppedByUser': stoppedByUser,
     });
+    debugPrint(
+        '[STOP/TASK][$opId] after sendDataToMain(service_stopped) (${sw.elapsedMilliseconds}ms)');
+    debugPrint('[STOP/TASK][$opId] before saveData(core_running=false)');
     await FlutterForegroundTask.saveData(key: coreRunningKey, value: false);
+    debugPrint(
+        '[STOP/TASK][$opId] onDestroy exit (${sw.elapsedMilliseconds}ms)');
   }
 
   @override
@@ -218,15 +235,30 @@ class BilirecTaskHandler extends TaskHandler {
     // Handle critical notification actions in task isolate so they still work
     // after the UI process is swiped away.
     if (id == 'stop') {
+      final opId = DateTime.now().microsecondsSinceEpoch;
+      final sw = Stopwatch()..start();
+      debugPrint('[STOP/NOTI][$opId] stop button pressed');
+      debugPrint('[STOP/NOTI][$opId] before setStoppedByUser(true)');
       await Preferences.setStoppedByUser(true);
+      debugPrint(
+          '[STOP/NOTI][$opId] after setStoppedByUser(true) (${sw.elapsedMilliseconds}ms)');
+      debugPrint('[STOP/NOTI][$opId] before setExpectedRunning(false)');
       await Preferences.setExpectedRunning(false);
+      debugPrint(
+          '[STOP/NOTI][$opId] after setExpectedRunning(false) (${sw.elapsedMilliseconds}ms)');
 
       if (_nativeStarted) {
+        debugPrint('[STOP/NOTI][$opId] before BilirecService.stop()');
         BilirecService.stop();
         _nativeStarted = false;
+        debugPrint(
+            '[STOP/NOTI][$opId] after BilirecService.stop() (${sw.elapsedMilliseconds}ms)');
       }
 
+      debugPrint('[STOP/NOTI][$opId] before FlutterForegroundTask.stopService()');
       await FlutterForegroundTask.stopService();
+      debugPrint(
+          '[STOP/NOTI][$opId] after FlutterForegroundTask.stopService() (${sw.elapsedMilliseconds}ms)');
     }
   }
 

@@ -524,16 +524,31 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         }
       } else {
         final requestId = _newRequest(ServiceIntent.stopped);
+        final stopOpId = DateTime.now().microsecondsSinceEpoch;
+        final stopSw = Stopwatch()..start();
+        debugPrint('[STOP/UI][$stopOpId] requested (requestId=$requestId)');
         setState(() {
           _serviceUiState = ServiceUiState.stopping;
         });
 
+        debugPrint('[STOP/UI][$stopOpId] before _yieldToNextFrame');
         await _yieldToNextFrame();
+        debugPrint(
+            '[STOP/UI][$stopOpId] after _yieldToNextFrame (${stopSw.elapsedMilliseconds}ms)');
         if (!_isLatestRequest(requestId) || !mounted) return;
 
+        debugPrint('[STOP/UI][$stopOpId] before setStoppedByUser(true)');
         await Preferences.setStoppedByUser(true);
+        debugPrint(
+            '[STOP/UI][$stopOpId] after setStoppedByUser(true) (${stopSw.elapsedMilliseconds}ms)');
+        debugPrint('[STOP/UI][$stopOpId] before setExpectedRunning(false)');
         await Preferences.setExpectedRunning(false);
+        debugPrint(
+            '[STOP/UI][$stopOpId] after setExpectedRunning(false) (${stopSw.elapsedMilliseconds}ms)');
+        debugPrint('[STOP/UI][$stopOpId] before FlutterForegroundTask.stopService()');
         final stopped = await FlutterForegroundTask.stopService();
+        debugPrint(
+            '[STOP/UI][$stopOpId] after FlutterForegroundTask.stopService() (${stopSw.elapsedMilliseconds}ms) result=$stopped');
         final ok = stopped is ServiceRequestSuccess;
         if (!_isLatestRequest(requestId) || !mounted) {
           return;
@@ -548,8 +563,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         if (!ok) {
           Preferences.setStoppedByUser(false);
         }
+        debugPrint(
+            '[STOP/UI][$stopOpId] completed (ok=$ok, total=${stopSw.elapsedMilliseconds}ms)');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[STOP/UI] failed: $e');
+      debugPrint('$stackTrace');
       setState(() {
         _serviceUiState = ServiceUiState.stopped;
         _desiredServiceState = ServiceIntent.stopped;
