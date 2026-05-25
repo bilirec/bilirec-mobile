@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/preferences.dart';
@@ -190,7 +191,7 @@ class BilirecTaskHandler extends TaskHandler {
     _destroyed = true;
     await _sseHandler.stop();
     if (_nativeStarted) {
-      BilirecService.stop();
+      await Isolate.run((() => BilirecService.stop()));
       _nativeStarted = false;
     }
     final stoppedByUser = await Preferences.getStoppedByUser();

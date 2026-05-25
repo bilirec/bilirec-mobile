@@ -407,10 +407,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     setState(() {
       _isIgnoringBatteryOptimizations = ignoring;
-      // Keep runtime status as the primary message while service is running.
-      if (ignoring && !_isServiceRunning) {
-        _setStatus('batteryUnrestrictedReady');
-      }
     });
 
     if (ignoring && _batteryDialogVisible) {

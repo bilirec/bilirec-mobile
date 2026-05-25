@@ -127,14 +127,7 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 280),
                     child: Column(
-                      key: ValueKey(
-                        (
-                          widget.actionInFlight,
-                          widget.isServiceRunning,
-                          widget.isStarting,
-                          widget.isStopping,
-                        ),
-                      ),
+                      key: UniqueKey(),
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         SizedBox(
