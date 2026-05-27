@@ -5,6 +5,7 @@ import 'dart:isolate';
 
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/preferences.dart';
+import 'package:bilirec/shared/debugger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -111,7 +112,7 @@ class BilirecTaskHandler extends TaskHandler {
     }
 
     final (cpu, ram) = _monitor.getUsage();
-    debugPrint(
+    debugLog(
         '資源使用 - CPU: ${cpu.toStringAsFixed(2)}%, RAM: ${ram.toStringAsFixed(2)}MB');
     final text = _l10n.tr('notificationTextRunning');
     final recordingLabel = _l10n.tr('recording');
@@ -189,33 +190,33 @@ class BilirecTaskHandler extends TaskHandler {
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     final opId = DateTime.now().microsecondsSinceEpoch;
     final sw = Stopwatch()..start();
-    debugPrint('[STOP/TASK][$opId] onDestroy enter (isTimeout=$isTimeout)');
+    debugLog('[STOP/TASK][$opId] onDestroy enter (isTimeout=$isTimeout)');
     _destroyed = true;
-    debugPrint('[STOP/TASK][$opId] before _sseHandler.stop()');
+    debugLog('[STOP/TASK][$opId] before _sseHandler.stop()');
     await _sseHandler.stop();
-    debugPrint(
+    debugLog(
         '[STOP/TASK][$opId] after _sseHandler.stop() (${sw.elapsedMilliseconds}ms)');
     if (_nativeStarted) {
-      debugPrint('[STOP/TASK][$opId] before BilirecService.stop()');
+      debugLog('[STOP/TASK][$opId] before BilirecService.stop()');
       await BilirecService.stop();
       _nativeStarted = false;
-      debugPrint(
+      debugLog(
           '[STOP/TASK][$opId] after BilirecService.stop() (${sw.elapsedMilliseconds}ms)');
     }
-    debugPrint('[STOP/TASK][$opId] before Preferences.getStoppedByUser()');
+    debugLog('[STOP/TASK][$opId] before Preferences.getStoppedByUser()');
     final stoppedByUser = await Preferences.getStoppedByUser();
-    debugPrint(
+    debugLog(
         '[STOP/TASK][$opId] after Preferences.getStoppedByUser() (${sw.elapsedMilliseconds}ms) value=$stoppedByUser');
-    debugPrint('[STOP/TASK][$opId] before sendDataToMain(service_stopped)');
+    debugLog('[STOP/TASK][$opId] before sendDataToMain(service_stopped)');
     FlutterForegroundTask.sendDataToMain({
       'type': 'service_stopped',
       'stoppedByUser': stoppedByUser,
     });
-    debugPrint(
+    debugLog(
         '[STOP/TASK][$opId] after sendDataToMain(service_stopped) (${sw.elapsedMilliseconds}ms)');
-    debugPrint('[STOP/TASK][$opId] before saveData(core_running=false)');
+    debugLog('[STOP/TASK][$opId] before saveData(core_running=false)');
     await FlutterForegroundTask.saveData(key: coreRunningKey, value: false);
-    debugPrint(
+    debugLog(
         '[STOP/TASK][$opId] onDestroy exit (${sw.elapsedMilliseconds}ms)');
   }
 
@@ -237,18 +238,18 @@ class BilirecTaskHandler extends TaskHandler {
     if (id == 'stop') {
       final opId = DateTime.now().microsecondsSinceEpoch;
       final sw = Stopwatch()..start();
-      debugPrint('[STOP/NOTI][$opId] stop button pressed');
-      debugPrint('[STOP/NOTI][$opId] before setStoppedByUser(true)');
+      debugLog('[STOP/NOTI][$opId] stop button pressed');
+      debugLog('[STOP/NOTI][$opId] before setStoppedByUser(true)');
       await Preferences.setStoppedByUser(true);
-      debugPrint(
+      debugLog(
           '[STOP/NOTI][$opId] after setStoppedByUser(true) (${sw.elapsedMilliseconds}ms)');
-      debugPrint('[STOP/NOTI][$opId] before setExpectedRunning(false)');
+      debugLog('[STOP/NOTI][$opId] before setExpectedRunning(false)');
       await Preferences.setExpectedRunning(false);
-      debugPrint(
+      debugLog(
           '[STOP/NOTI][$opId] after setExpectedRunning(false) (${sw.elapsedMilliseconds}ms)');
-      debugPrint('[STOP/NOTI][$opId] before FlutterForegroundTask.stopService()');
+      debugLog('[STOP/NOTI][$opId] before FlutterForegroundTask.stopService()');
       await FlutterForegroundTask.stopService();
-      debugPrint(
+      debugLog(
           '[STOP/NOTI][$opId] after FlutterForegroundTask.stopService() (${sw.elapsedMilliseconds}ms)');
     }
   }

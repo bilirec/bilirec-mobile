@@ -1,8 +1,9 @@
 import 'dart:io';
 
 import 'package:android_intent_plus/android_intent.dart';
-import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import 'package:bilirec/shared/debugger.dart';
 
 const String _chromePackageName = 'com.android.chrome';
 
@@ -30,14 +31,14 @@ Future<bool> openUrlPreferChrome(Uri uri) async {
         return true;
       }
     } catch (e) {
-      debugPrint('Failed to open Chrome intent: $e');
+      debugLog('Failed to open Chrome intent: $e');
     }
   }
 
   try {
     return await launchUrl(uri, mode: LaunchMode.externalApplication);
   } catch (e) {
-    debugPrint('Failed to open url externally: $e');
+    debugLog('Failed to open url externally: $e');
     return false;
   }
 }

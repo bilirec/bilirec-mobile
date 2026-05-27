@@ -9,6 +9,7 @@ import 'package:bilirec/app/widgets/service_status_row.dart';
 import 'package:bilirec/foreground/bilirec_task_handler.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
+import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -502,29 +503,29 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         final requestId = _newRequest(ServiceIntent.stopped);
         final stopOpId = DateTime.now().microsecondsSinceEpoch;
         final stopSw = Stopwatch()..start();
-        debugPrint('[STOP/UI][$stopOpId] requested (requestId=$requestId)');
+        debugLog('[STOP/UI][$stopOpId] requested (requestId=$requestId)');
         setState(() {
           _serviceUiState = ServiceUiState.stopping;
         });
 
-        debugPrint('[STOP/UI][$stopOpId] before _yieldToNextFrame');
+        debugLog('[STOP/UI][$stopOpId] before _yieldToNextFrame');
         await _yieldToNextFrame();
-        debugPrint(
+        debugLog(
             '[STOP/UI][$stopOpId] after _yieldToNextFrame (${stopSw.elapsedMilliseconds}ms)');
         if (!_isLatestRequest(requestId) || !mounted) return;
         await Future.delayed(const Duration(seconds: 1));
 
-        debugPrint('[STOP/UI][$stopOpId] before setStoppedByUser(true)');
+        debugLog('[STOP/UI][$stopOpId] before setStoppedByUser(true)');
         await Preferences.setStoppedByUser(true);
-        debugPrint(
+        debugLog(
             '[STOP/UI][$stopOpId] after setStoppedByUser(true) (${stopSw.elapsedMilliseconds}ms)');
-        debugPrint('[STOP/UI][$stopOpId] before setExpectedRunning(false)');
+        debugLog('[STOP/UI][$stopOpId] before setExpectedRunning(false)');
         await Preferences.setExpectedRunning(false);
-        debugPrint(
+        debugLog(
             '[STOP/UI][$stopOpId] after setExpectedRunning(false) (${stopSw.elapsedMilliseconds}ms)');
-        debugPrint('[STOP/UI][$stopOpId] before FlutterForegroundTask.stopService()');
+        debugLog('[STOP/UI][$stopOpId] before FlutterForegroundTask.stopService()');
         final stopped = await FlutterForegroundTask.stopService();
-        debugPrint(
+        debugLog(
             '[STOP/UI][$stopOpId] after FlutterForegroundTask.stopService() (${stopSw.elapsedMilliseconds}ms) result=$stopped');
         final ok = stopped is ServiceRequestSuccess;
         if (!_isLatestRequest(requestId) || !mounted) {
@@ -540,12 +541,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         if (!ok) {
           Preferences.setStoppedByUser(false);
         }
-        debugPrint(
+        debugLog(
             '[STOP/UI][$stopOpId] completed (ok=$ok, total=${stopSw.elapsedMilliseconds}ms)');
       }
     } catch (e, stackTrace) {
-      debugPrint('[STOP/UI] failed: $e');
-      debugPrint('$stackTrace');
+      debugLog('[STOP/UI] failed: $e');
+      debugLog('$stackTrace');
       setState(() {
         _serviceUiState = ServiceUiState.stopped;
         _desiredServiceState = ServiceIntent.stopped;

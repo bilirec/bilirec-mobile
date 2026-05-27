@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
+import 'package:bilirec/shared/debugger.dart';
 
 /// 專注於 BiliRec 本進程資源佔用計算的通用工具（純 Dart 實現）
 class ResourceMonitor {
@@ -52,7 +52,7 @@ class ResourceMonitor {
         }
       }
     } catch (_) {
-      debugPrint('無法讀取 /proc/self/status，改用 fallback 方法');
+      debugLog('無法讀取 /proc/self/status，改用 fallback 方法');
     }
 
     // 如果拿不到，再用 currentRss 兜底
