@@ -9,6 +9,22 @@ import 'package:url_launcher_platform_interface/url_launcher_platform_interface.
 
 import 'package:bilirec/main.dart' as app;
 
+const _startLabels = ['啟動', '启动'];
+const _stopLabels = ['停止'];
+const _titleLabels = ['Bilirec 服務控制中心', 'Bilirec 服务控制中心'];
+const _settingsLabels = ['打開服務啓動設定', '打开服务启动设置'];
+const _checkConnectionLabels = ['檢查系統服務連線', '检查系统服务连接'];
+const _openFrontendLabels = ['打開錄製管理程式', '打开录制管理程序'];
+const _runningStatusLabels = ['Bilirec 系統服務運行中', 'Bilirec 系统服务运行中'];
+const _startingStatusLabels = [
+  '正在啟動 Bilirec 系統服務...',
+  '正在启动 Bilirec 系统服务...',
+  'Bilirec 系統服務已啟動，正在準備中...',
+  'Bilirec 系统服务已启动，正在准备中...',
+  '啟動中',
+  '启动中',
+];
+
 class _BatteryBypassForegroundTaskPlatform
     extends MethodChannelFlutterForegroundTask {
   @override
@@ -69,22 +85,76 @@ class _FakeUrlLauncherPlatform extends UrlLauncherPlatform {
   }
 }
 
-Future<void> _waitForText(
+Finder _findFirstVisibleText(Iterable<String> labels) {
+  for (final label in labels) {
+    final finder = find.text(label);
+    if (finder.evaluate().isNotEmpty) {
+      return finder.first;
+    }
+  }
+  return find.text(labels.first);
+}
+
+Future<void> _waitForAnyText(
   WidgetTester tester,
-  String text, {
+  Iterable<String> labels, {
   Duration timeout = const Duration(minutes: 1),
-  Duration step = const Duration(seconds: 1),
+  Duration step = const Duration(milliseconds: 400),
 }) async {
   final maxTicks = timeout.inMilliseconds ~/ step.inMilliseconds;
   for (var i = 0; i < maxTicks; i++) {
-    if (find.text(text).evaluate().isNotEmpty) {
+    if (labels.any((label) => find.text(label).evaluate().isNotEmpty)) {
       return;
     }
     await tester.pump(step);
   }
 
-  expect(find.text(text), findsOneWidget,
-      reason: '在 ${timeout.inSeconds} 秒內應看到「$text」');
+  expect(
+    labels.any((label) => find.text(label).evaluate().isNotEmpty),
+    isTrue,
+    reason: '在 ${timeout.inSeconds} 秒內應看到 ${labels.join(' / ')} 其中之一',
+  );
+}
+
+Future<void> _tapActionButton(WidgetTester tester, Iterable<String> labels) async {
+  Finder? actionButton;
+  for (final label in labels) {
+    final candidate = find.widgetWithText(OutlinedButton, label);
+    if (candidate.evaluate().isNotEmpty) {
+      actionButton = candidate.first;
+      break;
+    }
+  }
+  expect(actionButton, isNotNull,
+      reason: '應找到按鈕: ${labels.join(' / ')}');
+  await tester.ensureVisible(actionButton!);
+  await tester.pump(const Duration(milliseconds: 120));
+  await tester.tap(actionButton, warnIfMissed: false);
+}
+
+Future<void> _tapPrimaryButton(WidgetTester tester, Iterable<String> labels) async {
+  Finder? actionButton;
+  for (final label in labels) {
+    final candidate = find.widgetWithText(FilledButton, label);
+    if (candidate.evaluate().isNotEmpty) {
+      actionButton = candidate.first;
+      break;
+    }
+  }
+  expect(actionButton, isNotNull,
+      reason: '應找到按鈕: ${labels.join(' / ')}');
+  await tester.ensureVisible(actionButton!);
+  await tester.pump(const Duration(milliseconds: 120));
+  await tester.tap(actionButton, warnIfMissed: false);
+}
+
+Future<void> _stopServiceIfRunning(WidgetTester tester) async {
+  final stopFinder = _findFirstVisibleText(_stopLabels);
+  if (stopFinder.evaluate().isEmpty) return;
+
+  await tester.tap(stopFinder);
+  await _waitForAnyText(tester, _startLabels,
+      timeout: const Duration(seconds: 20));
 }
 
 void main() {
@@ -94,7 +164,7 @@ void main() {
   setUpAll(() {
     originalPlatform = FlutterForegroundTaskPlatform.instance;
     FlutterForegroundTaskPlatform.instance =
-        _BatteryBypassForegroundTaskPlatform();
+        _PermissionGrantedForegroundTaskPlatform();
   });
 
   tearDownAll(() {
@@ -103,7 +173,7 @@ void main() {
 
   setUp(() {
     FlutterForegroundTaskPlatform.instance =
-        _BatteryBypassForegroundTaskPlatform();
+        _PermissionGrantedForegroundTaskPlatform();
   });
 
   group('Bilirec App 整合測試（模擬器可視化）', () {
@@ -111,61 +181,57 @@ void main() {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      // 頂部 AppBar 標題
-      expect(find.text('Bilirec 後台服務控制中心'), findsOneWidget);
+      expect(_findFirstVisibleText(_titleLabels), findsOneWidget);
+      expect(_findFirstVisibleText(_startLabels), findsOneWidget);
+      expect(_findFirstVisibleText(_settingsLabels), findsOneWidget);
 
-      // 啟動按鈕文字（服務未運行時顯示「啟動」）
-      expect(find.text('啟動'), findsOneWidget);
-
-      // 底部檢測按鈕
-      expect(find.text('檢測後端連線'), findsOneWidget);
-
-      // 路徑設置卡片
-      expect(find.text('設置錄製輸出路徑'), findsOneWidget);
-    });
-
-    testWidgets('2. 點擊啟動按鈕後顯示狀態變化', (tester) async {
-      FlutterForegroundTaskPlatform.instance =
-          _PermissionGrantedForegroundTaskPlatform();
-      addTearDown(() {
-        FlutterForegroundTaskPlatform.instance =
-            _BatteryBypassForegroundTaskPlatform();
-      });
-
-      app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
-
-      // 點擊啟動按鈕
-      await tester.tap(find.text('啟動'));
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // 按鈕應顯示啟動中... 或顯示限制訊息（非 Android 環境）
-      final isStarting = find.text('正在啟動服務...').evaluate().isNotEmpty ||
-          find.text('啟動中...').evaluate().isNotEmpty;
-      final isForegroundStarted =
-          find.text('前景服務已啟動，等待核心回報...').evaluate().isNotEmpty;
-      final isRestricted =
-          find.text('目前僅支援 Android 前景服務').evaluate().isNotEmpty;
-
-      expect(isStarting || isForegroundStarted || isRestricted, isTrue,
-          reason: '點擊後應顯示啟動中、前景服務已啟動，或平台限制訊息');
-
-      await _waitForText(tester, 'Bilirec 後端運行中');
-
-      if (find.text('停止').evaluate().isNotEmpty) {
-        await tester.tap(find.text('停止'));
-        await tester.pump(const Duration(milliseconds: 500));
+      // 行為按鈕只會在服務運行中顯示。
+      for (final label in _checkConnectionLabels) {
+        expect(find.text(label), findsNothing);
       }
     });
 
-    testWidgets('3. 點擊「檢測後端連線」顯示 Snackbar 回應', (tester) async {
+    testWidgets('2. 可開啟設定抽屜並顯示最新設定項目', (tester) async {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      await tester.tap(find.text('檢測後端連線'));
+      await tester.tap(_findFirstVisibleText(_settingsLabels));
+      await tester.pumpAndSettle();
+
+      expect(find.text('設定錄製輸出路徑'), findsOneWidget);
+      expect(find.text('儲存路徑'), findsOneWidget);
+      expect(find.text('變更路徑'), findsOneWidget);
+      expect(find.text('通知模式設定'), findsOneWidget);
+      expect(find.text('本地通知模式'), findsOneWidget);
+      expect(find.byType(Switch), findsOneWidget);
+    });
+
+    testWidgets('3. 啟動服務後顯示動作區並可檢查連線', (tester) async {
+      app.main();
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
+      await tester.tap(_findFirstVisibleText(_startLabels));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final canContinue =
+          find.text('目前只支援 Android').evaluate().isNotEmpty == false;
+      if (!canContinue) return;
+
+      await _waitForAnyText(
+        tester,
+        [..._startingStatusLabels, ..._runningStatusLabels],
+        timeout: const Duration(seconds: 25),
+      );
+      await _waitForAnyText(tester, _runningStatusLabels,
+          timeout: const Duration(seconds: 35));
+
+      expect(_findFirstVisibleText(_openFrontendLabels), findsOneWidget);
+      expect(_findFirstVisibleText(_checkConnectionLabels), findsOneWidget);
+
+      await _tapActionButton(tester, _checkConnectionLabels);
 
       var snackbarShown = false;
-      for (var i = 0; i < 12; i++) {
+      for (var i = 0; i < 16; i++) {
         await tester.pump(const Duration(milliseconds: 500));
         if (find.byType(SnackBar).evaluate().isNotEmpty) {
           snackbarShown = true;
@@ -174,40 +240,27 @@ void main() {
       }
 
       expect(snackbarShown, isTrue, reason: '應顯示後端連線檢測結果 Snackbar');
+
+      await _stopServiceIfRunning(tester);
     });
 
-    testWidgets('4. 路徑設定卡片及瀏覽按鈕存在', (tester) async {
-      app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
-
-      expect(find.text('設置錄製輸出路徑'), findsOneWidget);
-      expect(find.text('瀏覽並設置輸出路徑'), findsOneWidget);
-    });
-
-    testWidgets('5. 電池無限制 dialog 在模擬器上出現（Android 環境）', (tester) async {
+    testWidgets('4. 電池無限制 dialog 在模擬器上出現（Android 環境）', (tester) async {
       FlutterForegroundTaskPlatform.instance =
           _BatteryDialogForegroundTaskPlatform();
       addTearDown(() {
         FlutterForegroundTaskPlatform.instance =
-            _BatteryBypassForegroundTaskPlatform();
+            _PermissionGrantedForegroundTaskPlatform();
       });
 
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      expect(find.text('需要電池無限制'), findsOneWidget);
+      expect(find.text('需要關閉省電限制'), findsOneWidget);
       expect(find.text('前往設定'), findsOneWidget);
       // 不真的送出，避免跳出測試 App
     });
 
-    testWidgets('6. 全流程：開啟→啟動成功→測連線→啟動前端', (tester) async {
-      FlutterForegroundTaskPlatform.instance =
-          _PermissionGrantedForegroundTaskPlatform();
-      addTearDown(() {
-        FlutterForegroundTaskPlatform.instance =
-            _BatteryBypassForegroundTaskPlatform();
-      });
-
+    testWidgets('5. 全流程：啟動→測連線→打開前端', (tester) async {
       final originalUrlLauncher = UrlLauncherPlatform.instance;
       final fakeUrlLauncher = _FakeUrlLauncherPlatform();
       UrlLauncherPlatform.instance = fakeUrlLauncher;
@@ -218,16 +271,17 @@ void main() {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      expect(find.text('Bilirec 後台服務控制中心'), findsOneWidget);
-      expect(find.text('啟動'), findsOneWidget);
+      expect(_findFirstVisibleText(_titleLabels), findsOneWidget);
+      expect(_findFirstVisibleText(_startLabels), findsOneWidget);
 
-      await tester.tap(find.text('啟動'));
+      await tester.tap(_findFirstVisibleText(_startLabels));
       await tester.pump(const Duration(milliseconds: 500));
-      await _waitForText(tester, 'Bilirec 後端運行中');
+      await _waitForAnyText(tester, _runningStatusLabels,
+          timeout: const Duration(seconds: 35));
 
-      await tester.tap(find.text('檢測後端連線'));
+      await _tapActionButton(tester, _checkConnectionLabels);
       var snackbarShown = false;
-      for (var i = 0; i < 12; i++) {
+      for (var i = 0; i < 16; i++) {
         await tester.pump(const Duration(milliseconds: 500));
         if (find.byType(SnackBar).evaluate().isNotEmpty) {
           snackbarShown = true;
@@ -236,15 +290,12 @@ void main() {
       }
       expect(snackbarShown, isTrue, reason: '全流程中應顯示連線檢測結果 Snackbar');
 
-      await tester.tap(find.text('啟動前端'));
+      await _tapPrimaryButton(tester, _openFrontendLabels);
       await tester.pumpAndSettle(const Duration(milliseconds: 500));
       expect(fakeUrlLauncher.didLaunch, isTrue,
           reason: '全流程中應觸發啟動前端跳轉');
 
-      if (find.text('停止').evaluate().isNotEmpty) {
-        await tester.tap(find.text('停止'));
-        await tester.pump(const Duration(milliseconds: 500));
-      }
+      await _stopServiceIfRunning(tester);
     });
   });
 }

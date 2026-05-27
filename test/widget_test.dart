@@ -2,10 +2,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/main.dart';
 import 'package:bilirec/shared/preferences.dart';
+import 'test_support/in_memory_shared_preferences_async_platform.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -13,8 +15,20 @@ void main() {
   const foregroundChannel = MethodChannel('flutter_foreground_task/methods');
   const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+  final fakeAsyncPrefs = InMemorySharedPreferencesAsyncPlatform();
+  final originalAsyncPlatform = SharedPreferencesAsyncPlatform.instance;
+
+  setUpAll(() {
+    SharedPreferencesAsyncPlatform.instance = fakeAsyncPrefs;
+  });
+
+  tearDownAll(() {
+    SharedPreferencesAsyncPlatform.instance = originalAsyncPlatform;
+  });
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    fakeAsyncPrefs.reset();
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(foregroundChannel, (call) async {
@@ -61,12 +75,12 @@ void main() {
     expect(find.text('儲存路徑'), findsOneWidget);
     expect(find.text('目前尚未設定輸出路徑（使用預設）'), findsOneWidget);
     expect(find.text('變更路徑'), findsOneWidget);
-    expect(find.text('通知與背景防殺'), findsOneWidget);
-    expect(find.text('強效通知模式'), findsOneWidget);
+    expect(find.text('通知模式設定'), findsOneWidget);
+    expect(find.text('本地通知模式'), findsOneWidget);
     expect(find.byType(Switch), findsOneWidget);
     expect(
       find.text(
-        '如在中國大陸網絡環境下可能無法接收通知推送，可再嘗試啟用此模式。',
+        '如在中國大陸網絡環境下無法接收開播/錄製通知推送，可嘗試啟用此模式。',
       ),
       findsOneWidget,
     );
