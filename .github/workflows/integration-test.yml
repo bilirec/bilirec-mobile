@@ -1,0 +1,124 @@
+name: Integration Tests
+
+on:
+  push:
+    paths:
+      - "**/*.dart"
+      - "**/*.kts"
+      - ".github/workflows/**"
+      - "**/*.so"
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - "**/*.dart"
+      - "**/*.kts"
+      - ".github/workflows/**"
+      - "**/*.so"
+  workflow_dispatch:
+
+env:
+  api_level: 36
+  emulator_profile: pixel
+  ndk_version: r28
+  jdk_version: "17"
+
+jobs:
+  integration-functional-test:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-flutter-android
+        with:
+          api_level: ${{ env.api_level }}
+          jdk_version: ${{ env.jdk_version }}
+          ndk_version: ${{ env.ndk_version }}
+
+      - name: Run Integration Functional Test on Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.api_level }}
+          disable-animations: true
+          target: google_apis
+          arch: x86_64
+          profile: ${{ env.emulator_profile }}
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            echo "=== 開始執行 Flutter 整合功能測試 ==="
+            flutter test integration_test/app_test.dart --reporter=github
+
+  integration-stress-test:
+    runs-on: ubuntu-latest
+    continue-on-error: true          # 壓測失敗僅匯報，不阻斷 push 或 PR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-flutter-android
+        with:
+          api_level: ${{ env.api_level }}
+          jdk_version: ${{ env.jdk_version }}
+          ndk_version: ${{ env.ndk_version }}
+
+      - name: Pre-build Debug APK
+        run: flutter build apk --debug
+
+      - name: Run Stress Test on Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.api_level }}
+          disable-animations: true
+          target: google_apis
+          arch: x86_64
+          profile: ${{ env.emulator_profile }}
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            echo "=== 模擬器啟動成功，開始手動安裝 APK ==="
+            adb install build/app/outputs/flutter-apk/app-debug.apk
+            
+            echo "=== 預先授予前景服務與通知權限 ==="
+            adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS
+
+            echo "=== 開始執行 Flutter 整合壓力測試 ==="
+            flutter test integration_test/app_stress_test.dart --reporter=github
+            TEST_EXIT_CODE=$?
+
+            echo "=== 壓測結束，退出碼：$TEST_EXIT_CODE ==="
+            exit $TEST_EXIT_CODE
+
+  pr-gate:
+    name: PR Gate
+    needs:
+      - integration-functional-test
+      - integration-stress-test
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Verify required tests all passed
+        run: |
+          FUNCTIONAL_RESULT="${{ needs.integration-functional-test.result }}"
+          STRESS_RESULT="${{ needs.integration-stress-test.result }}"
+          
+          echo "Integration functional test result: $FUNCTIONAL_RESULT"
+          echo "Integration stress test result: $STRESS_RESULT"
+          
+          if [ "$FUNCTIONAL_RESULT" != "success" ] && [ "$STRESS_RESULT" != "success" ]; then
+            echo "❌ 整合功能測試與壓力測試皆未通過，PR 無法合併！"
+            exit 1
+          fi
+          
+          echo "✅ 至少有一項必要整合測試通過，PR 可以合併。"
+

@@ -12,6 +12,45 @@ on:
   workflow_dispatch:
 
 jobs:
+  widget-test:
+    name: Widget Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Android NDK r28
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r28
+          local-cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run widget tests
+        run: flutter test test/
+
   build-apk:
     runs-on: ubuntu-latest
 
@@ -28,13 +67,20 @@ jobs:
           java-version: "17"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
+      - name: Set up Android NDK r28
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r28
+          local-cache: true
 
       - name: Decode Keystore
         run: |
@@ -49,28 +95,7 @@ jobs:
           storeFile=release-key.jks
           EOF
 
-      - name: Inspect Active NDK Version
-        run: |
-          echo "=== 🔍 檢查環境變數中的 NDK 路徑 ==="
-          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
-          echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
-          echo "ANDROID_NDK_LATEST_HOME: $ANDROID_NDK_LATEST_HOME"
-          
-          echo "=== 📂 檢查 GitHub 虛擬機預裝的所有 NDK 版本 ==="
-          if [ -d "/usr/local/lib/android/sdk/ndk" ]; then
-            ls -la /usr/local/lib/android/sdk/ndk
-          else
-            echo "預設 SDK 路徑下沒有發現 ndk 資料夾"
-          fi
-          
-          echo "=== 🎯 檢查目前 Clang 編編譯器實際指向的版本 ==="
-          if [ ! -z "$ANDROID_NDK_HOME" ] && [ -f "$ANDROID_NDK_HOME/source.properties" ]; then
-            grep "Pkg.Revision" "$ANDROID_NDK_HOME/source.properties"
-          else
-            echo "無法從 ANDROID_NDK_HOME 讀取 source.properties"
-          fi
-
-      - name: Build release APK
+      - name: Build Release APK
         run: flutter build apk --release
 
       - name: Rename APK for artifact/release
@@ -101,4 +126,3 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/bilirec-release.apk
-

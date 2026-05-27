@@ -1,0 +1,69 @@
+name: 'Setup Flutter & Android Env'
+description: '配置 KVM、Java、Flutter、NDK 並處理 AVD 快取'
+inputs:
+  api_level:
+    description: 'Android API Level'
+    required: true
+  jdk_version:
+    description: 'JDK Version'
+    required: true
+  ndk_version:
+    description: 'NDK Version'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Enable KVM group perms
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.jdk_version }}
+
+    - name: Gradle cache
+      uses: gradle/actions/setup-gradle@v5
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        cache: true
+
+    - name: Set up Android NDK
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: ${{ inputs.ndk_version }}
+        local-cache: true
+
+    - name: AVD cache
+      uses: actions/cache@v5
+      id: avd-cache
+      with:
+        path: |
+          ~/.android/avd/*
+          ~/.android/adb*
+        key: avd-${{ inputs.api_level }}
+
+    - name: Create AVD and generate snapshot
+      if: steps.avd-cache.outputs.cache-hit != 'true'
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: ${{ inputs.api_level }}
+        disable-animations: false
+        target: google_apis
+        arch: x86_64
+        force-avd-creation: false
+        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        script: echo "Generated AVD snapshot for caching."
+
+    - name: Install Flutter Dependencies
+      shell: bash
+      run: flutter pub get
