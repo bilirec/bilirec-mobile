@@ -1,8 +1,10 @@
 import 'dart:ffi';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
+import 'package:flutter/material.dart';
 
 class StartConfig {
   const StartConfig({
@@ -83,26 +85,36 @@ class BilirecService {
   }
 
   /// 呼叫 Go 的 Start(configJson)
-  static int start(StartConfig config) {
-    _checkInitialized();
+  static Future<int> start(StartConfig config) async {
     final configJson = jsonEncode(config.toJson());
-    final configPtr = configJson.toNativeUtf8();
-    try {
-      return _startNative(configPtr);
-    } finally {
-      malloc.free(configPtr);
-    }
+    return await Isolate.run(() {
+      final lib = DynamicLibrary.open('libbilirec.so');
+      final startNative = lib
+          .lookup<NativeFunction<Int32 Function(Pointer<Utf8>)>>('Start')
+          .asFunction<int Function(Pointer<Utf8>)>();
+      final configPtr = configJson.toNativeUtf8();
+      try {
+        return startNative(configPtr);
+      } finally {
+        malloc.free(configPtr);
+      }
+    });
   }
 
   /// 呼叫 Go 的 Stop()
-  static int stop() {
-    _checkInitialized();
-    return _stopNative();
+  static Future<int> stop() async {
+    return await Isolate.run(() {
+      final lib = DynamicLibrary.open('libbilirec.so');
+      final stopNative = lib
+          .lookup<NativeFunction<Int32 Function()>>('Stop')
+          .asFunction<int Function()>();
+      return stopNative();
+    });
   }
 
   static void _checkInitialized() {
     if (!_isInitialized) {
-      throw StateError('BilirecService 尚未初始化，請先呼叫 initialize()');
+      initialize();
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/preferences.dart';
@@ -68,8 +69,7 @@ class BilirecTaskHandler extends TaskHandler {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_ppkAlertChannel);
 
-    BilirecService.initialize();
-    final result = BilirecService.start(
+    final result = await BilirecService.start(
       StartConfig(
         basePath: basePath,
         outputDir: outputDir,
@@ -197,7 +197,7 @@ class BilirecTaskHandler extends TaskHandler {
         '[STOP/TASK][$opId] after _sseHandler.stop() (${sw.elapsedMilliseconds}ms)');
     if (_nativeStarted) {
       debugPrint('[STOP/TASK][$opId] before BilirecService.stop()');
-      BilirecService.stop();
+      await BilirecService.stop();
       _nativeStarted = false;
       debugPrint(
           '[STOP/TASK][$opId] after BilirecService.stop() (${sw.elapsedMilliseconds}ms)');
@@ -246,15 +246,6 @@ class BilirecTaskHandler extends TaskHandler {
       await Preferences.setExpectedRunning(false);
       debugPrint(
           '[STOP/NOTI][$opId] after setExpectedRunning(false) (${sw.elapsedMilliseconds}ms)');
-
-      if (_nativeStarted) {
-        debugPrint('[STOP/NOTI][$opId] before BilirecService.stop()');
-        BilirecService.stop();
-        _nativeStarted = false;
-        debugPrint(
-            '[STOP/NOTI][$opId] after BilirecService.stop() (${sw.elapsedMilliseconds}ms)');
-      }
-
       debugPrint('[STOP/NOTI][$opId] before FlutterForegroundTask.stopService()');
       await FlutterForegroundTask.stopService();
       debugPrint(

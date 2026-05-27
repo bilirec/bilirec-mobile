@@ -13,30 +13,31 @@ const String coreRunningKey = 'core_running';
 
 sealed class Preferences {
 
-  static Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
+  static SharedPreferencesAsync get _prefs => SharedPreferencesAsync();
 
   static Future<void> setExpectedRunning(bool value) async {
-    final prefs = await _prefs;
+    final prefs = _prefs;
     await prefs.setBool(_expectedRunningKey, value);
   }
 
   static Future<bool> getExpectedRunning() async {
-    final prefs = await _prefs;
-    return prefs.getBool(_expectedRunningKey) ?? false;
+    final prefs = _prefs;
+    return await prefs.getBool(_expectedRunningKey) ?? false;
   }
 
   static Future<void> setStoppedByUser(bool value) async {
-    final prefs = await _prefs;
+    print('Preferences.setStoppedByUser: $value');
+    final prefs = _prefs;
     await prefs.setBool(_stoppedByUserKey, value);
   }
 
   static Future<bool> getStoppedByUser() async {
-    final prefs = await _prefs;
-    return prefs.getBool(_stoppedByUserKey) ?? false;
+    final prefs = _prefs;
+    return await prefs.getBool(_stoppedByUserKey) ?? false;
   }
 
   static Future<void> setLocaleCode(String? code) async {
-    final prefs = await _prefs;
+    final prefs = _prefs;
     if (code == null) {
       await prefs.remove(_localeCodeKey);
     } else {
@@ -45,12 +46,12 @@ sealed class Preferences {
   }
 
   static Future<String?> getLocaleCode() async {
-    final prefs = await _prefs;
+    final prefs = _prefs;
     return prefs.getString(_localeCodeKey);
   }
 
   static Future<void> setOutputDir(String? path) async {
-    final prefs = await _prefs;
+    final prefs = _prefs;
     if (path == null) {
       await prefs.remove(_outputDirKey);
     } else {
@@ -59,18 +60,18 @@ sealed class Preferences {
   }
 
   static Future<String?> getOutputDir() async {
-    final prefs = await _prefs;
+    final prefs = _prefs;
     return prefs.getString(_outputDirKey);
   }
 
   static Future<void> setEnableSsePush(bool value) async {
-    final prefs = await _prefs;
+    final prefs = _prefs;
     await prefs.setBool(_enableSsePushKey, value);
   }
 
   static Future<bool> getEnableSsePush() async {
-    final prefs = await _prefs;
-    return prefs.getBool(_enableSsePushKey) ?? false;
+    final prefs = _prefs;
+    return await prefs.getBool(_enableSsePushKey) ?? false;
   }
 
 }

@@ -75,7 +75,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   Future<void> _confirmRunning(int requestId) async {
     final epoch = ++_healthCheckEpoch;
-    final deadline = DateTime.now().add(const Duration(seconds: 12));
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
     while (DateTime.now().isBefore(deadline)) {
       if (!mounted ||
           !_isLatestRequest(requestId) ||
@@ -512,6 +512,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         debugPrint(
             '[STOP/UI][$stopOpId] after _yieldToNextFrame (${stopSw.elapsedMilliseconds}ms)');
         if (!_isLatestRequest(requestId) || !mounted) return;
+        await Future.delayed(const Duration(seconds: 1));
 
         debugPrint('[STOP/UI][$stopOpId] before setStoppedByUser(true)');
         await Preferences.setStoppedByUser(true);
@@ -531,10 +532,10 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         }
         setState(() {
           _serviceUiState =
-              ok ? ServiceUiState.stopped : ServiceUiState.running;
+              ok ? ServiceUiState.stopping : ServiceUiState.running;
           _desiredServiceState =
               ok ? ServiceIntent.stopped : ServiceIntent.running;
-          _setStatus(ok ? 'backendStopped' : 'stopServiceFailed');
+          _setStatus(ok ? 'foregroundStopWaitingCore' : 'stopServiceFailed');
         });
         if (!ok) {
           Preferences.setStoppedByUser(false);

@@ -5,6 +5,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 const AndroidNotificationChannel sseEventChannel = AndroidNotificationChannel(
@@ -122,7 +123,7 @@ class BilirecSseHandler {
 
     try {
       final uri = Uri.parse(
-        'http://127.0.0.1:8080/sse?token=${Uri.encodeQueryComponent(_token!)}',
+        'http://127.0.0.1:8080/notify/sse?token=${Uri.encodeQueryComponent(_token!)}',
       );
       final req = await client
           .getUrl(uri)
@@ -140,11 +141,15 @@ class BilirecSseHandler {
           .transform(const LineSplitter())
           .listen(
         _onLine,
-        onError: (_) => _scheduleReconnect(),
+        onError: (e) {
+          debugPrint('SSE 連線錯誤: $e');
+          _scheduleReconnect();
+        },
         onDone: _scheduleReconnect,
         cancelOnError: true,
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SSE 連線錯誤: $e');
       _scheduleReconnect();
     }
   }
@@ -161,6 +166,7 @@ class BilirecSseHandler {
 
     if (line.startsWith('data:')) {
       final data = line.substring(5).trimLeft();
+      debugPrint('接收 SSE 資料: $data');
       if (_dataBuffer.isNotEmpty) {
         _dataBuffer.write('\n');
       }
@@ -170,6 +176,7 @@ class BilirecSseHandler {
 
   void _scheduleReconnect() {
     if (!canRun() || _token == null) return;
+    debugPrint('SSE 連線中斷，5 秒後嘗試重新連線');
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(
       const Duration(seconds: 3),
@@ -226,6 +233,8 @@ class BilirecSseHandler {
         ),
       ),
     );
+
+    debugPrint('顯示通知: $title - $body (tag: $tag)');
   }
 
   String _buildBody(BilirecSseEvent event) {

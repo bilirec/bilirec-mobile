@@ -30,8 +30,10 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
   AnimationController? _pulseController;
   Animation<double>? _localPulseScale;
   Animation<double>? _localPulseOpacity;
+  Animation<double>? _localStopScale;
+  Animation<double>? _localStopOpacity;
 
-  bool get _shouldPulse => widget.isStarting;
+  bool get _shouldPulse => widget.isStarting || widget.isStopping;
 
   @override
   void initState() {
@@ -64,6 +66,10 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
     _pulseController = controller;
     _localPulseScale = Tween<double>(begin: 0.82, end: 1.16).animate(curved);
     _localPulseOpacity = Tween<double>(begin: 0.72, end: 1.0).animate(curved);
+
+    // Stopping animation: shrink and fade out
+    _localStopScale = Tween<double>(begin: 1.0, end: 0.7).animate(curved);
+    _localStopOpacity = Tween<double>(begin: 1.0, end: 0.5).animate(curved);
   }
 
   void _syncPulseAnimation() {
@@ -81,7 +87,7 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
 
   String _buildLabel(AppLocalizations l10n) {
     if (widget.actionInFlight) {
-      return widget.isStopping ? l10n.tr('stop') : l10n.tr('startingShort');
+      return widget.isStopping ? l10n.tr('stoppingShort') : l10n.tr('startingShort');
     }
     return widget.isServiceRunning ? l10n.tr('stop') : l10n.tr('start');
   }
@@ -151,11 +157,28 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
                                       ),
                                     ),
                                   )
-                                : const Icon(
-                                    Icons.power_settings_new,
-                                    size: 40,
-                                    color: Colors.white,
-                                  ),
+                                : widget.isStopping
+                                    ? FadeTransition(
+                                        opacity: _localStopOpacity ??
+                                            const AlwaysStoppedAnimation<double>(
+                                                1.0),
+                                        child: ScaleTransition(
+                                          scale: _localStopScale ??
+                                              const AlwaysStoppedAnimation<double>(
+                                                1.0,
+                                              ),
+                                          child: const Icon(
+                                            Icons.power_settings_new,
+                                            size: 40,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.power_settings_new,
+                                        size: 40,
+                                        color: Colors.white,
+                                      ),
                           ),
                         ),
                         const SizedBox(height: 6),
