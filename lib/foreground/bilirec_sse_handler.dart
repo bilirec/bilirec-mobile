@@ -6,7 +6,6 @@ import 'dart:typed_data';
 
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/debugger.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 const AndroidNotificationChannel sseEventChannel = AndroidNotificationChannel(
@@ -80,7 +79,8 @@ class BilirecSseHandler {
   Future<void> start(String token) async {
     _token = token;
     await notifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(sseEventChannel);
     await _ensureNotificationReady();
     await _connect();
@@ -126,9 +126,7 @@ class BilirecSseHandler {
       final uri = Uri.parse(
         'http://127.0.0.1:8080/notify/sse?token=${Uri.encodeQueryComponent(_token!)}',
       );
-      final req = await client
-          .getUrl(uri)
-          .timeout(const Duration(seconds: 8));
+      final req = await client.getUrl(uri).timeout(const Duration(seconds: 8));
       req.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
 
       final res = await req.close().timeout(const Duration(seconds: 8));
@@ -137,10 +135,8 @@ class BilirecSseHandler {
         return;
       }
 
-      _lineSubscription = res
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(
+      _lineSubscription =
+          res.transform(utf8.decoder).transform(const LineSplitter()).listen(
         _onLine,
         onError: (e) {
           debugLog('SSE 連線錯誤: $e');
@@ -240,7 +236,8 @@ class BilirecSseHandler {
 
   String _buildBody(BilirecSseEvent event) {
     final noTitleTypes = {'live_ended', 'live_record_stopped'};
-    if (!noTitleTypes.contains(event.type) && event.roomTitle.trim().isNotEmpty) {
+    if (!noTitleTypes.contains(event.type) &&
+        event.roomTitle.trim().isNotEmpty) {
       return _truncate(_singleLine(event.roomTitle.trim()), 60);
     }
 
@@ -267,6 +264,3 @@ class BilirecSseHandler {
     return '${text.substring(0, maxLen - 1)}...';
   }
 }
-
-
-

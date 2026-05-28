@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:bilirec/l10n/app_localizations.dart';
-import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/debugger.dart';
+import 'package:bilirec/shared/preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';

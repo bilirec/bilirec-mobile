@@ -26,7 +26,6 @@ sealed class Preferences {
   }
 
   static Future<void> setStoppedByUser(bool value) async {
-    print('Preferences.setStoppedByUser: $value');
     final prefs = _prefs;
     await prefs.setBool(_stoppedByUserKey, value);
   }
