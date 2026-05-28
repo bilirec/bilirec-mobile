@@ -1,4 +1,5 @@
 import 'package:bilirec/main.dart' as app;
+import 'package:bilirec/shared/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -140,16 +141,16 @@ void main() {
         labels: _checkConnectionLabels,
       );
 
-      var snackbarShown = false;
+      var toastShown = false;
       for (var i = 0; i < 16; i++) {
         await tester.pump(const Duration(milliseconds: 500));
-        if (find.byType(SnackBar).evaluate().isNotEmpty) {
-          snackbarShown = true;
+        if (find.byType(AppToast).evaluate().isNotEmpty) {
+          toastShown = true;
           break;
         }
       }
 
-      expect(snackbarShown, isTrue, reason: '應顯示後端連線檢測結果 Snackbar');
+      expect(toastShown, isTrue, reason: '應顯示後端連線檢測結果 toast');
 
       await _stopServiceIfRunning(tester);
     });
@@ -194,15 +195,15 @@ void main() {
         buttonType: OutlinedButton,
         labels: _checkConnectionLabels,
       );
-      var snackbarShown = false;
+      var toastShown = false;
       for (var i = 0; i < 16; i++) {
         await tester.pump(const Duration(milliseconds: 500));
-        if (find.byType(SnackBar).evaluate().isNotEmpty) {
-          snackbarShown = true;
+        if (find.byType(AppToast).evaluate().isNotEmpty) {
+          toastShown = true;
           break;
         }
       }
-      expect(snackbarShown, isTrue, reason: '全流程中應顯示連線檢測結果 Snackbar');
+      expect(toastShown, isTrue, reason: '全流程中應顯示連線檢測結果 toast');
 
       await tapButtonByLabels(
         tester,

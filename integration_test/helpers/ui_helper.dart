@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bilirec/shared/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task_platform_interface.dart';
@@ -199,7 +200,7 @@ Future<void> assertBackendConnectableFromUi(
   await tester.pump(const Duration(milliseconds: 150));
   await tester.tap(actionButton, warnIfMissed: false);
 
-  var snackbarShown = false;
+  var toastShown = false;
   for (var i = 0; i < 16; i++) {
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -207,14 +208,14 @@ Future<void> assertBackendConnectableFromUi(
       fail('檢查系統服務連線顯示無法連線/無回應，判定測試失敗');
     }
 
-    if (find.byType(SnackBar).evaluate().isNotEmpty) {
-      snackbarShown = true;
+    if (find.byType(AppToast).evaluate().isNotEmpty) {
+      toastShown = true;
       break;
     }
   }
 
-  if (failIfButtonMissing && !snackbarShown) {
-    fail('未在預期時間看到連線檢查結果 Snackbar');
+  if (failIfButtonMissing && !toastShown) {
+    fail('未在預期時間看到連線檢查結果 toast');
   }
 }
 

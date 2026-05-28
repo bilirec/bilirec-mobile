@@ -8,6 +8,7 @@ import 'package:bilirec/app/widgets/service_power_button_area.dart';
 import 'package:bilirec/app/widgets/service_status_row.dart';
 import 'package:bilirec/foreground/bilirec_task_handler.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/preferences.dart';
@@ -302,10 +303,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     if (!mounted) return;
     if (!opened) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-          SnackBar(content: Text(l10n.tr('cannotOpenFrontendBrowser'))));
+      showAppToast(context, l10n.tr('cannotOpenFrontendBrowser'));
     }
   }
 
@@ -557,6 +555,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   Future<void> _checkLocalhost8080() async {
     final client = HttpClient();
+    const toastAnimation = AppToastAnimation.slide;
+    const toastLocation = AppToastLocation.top;
+    const toastEdgeDistance = 80.0;
     try {
       final request = await client
           .getUrl(Uri.parse('http://127.0.0.1:8080/'))
@@ -566,22 +567,30 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       await response.drain<void>();
       if (!mounted) return;
       final healthy = response.statusCode < 500;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            healthy ? l10n.tr('backendHealthy') : l10n.tr('backendUnhealthy'),
-          ),
-        ),
+      showAppToast(
+        context,
+        healthy ? '✅ ${l10n.tr('backendHealthy')}' : '⚠️ ${l10n.tr('backendUnhealthy')}',
+        animation: toastAnimation,
+        location: toastLocation,
+        edgeDistance: toastEdgeDistance,
       );
     } on TimeoutException {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('backendNoResponseHint'))),
+      showAppToast(
+        context,
+        '⏱️ ${l10n.tr('backendNoResponseHint')}',
+        animation: toastAnimation,
+        location: toastLocation,
+        edgeDistance: toastEdgeDistance,
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('backendCannotConnect'))),
+      showAppToast(
+        context,
+        '❌ ${l10n.tr('backendCannotConnect')}',
+        animation: toastAnimation,
+        location: toastLocation,
+        edgeDistance: toastEdgeDistance,
       );
     } finally {
       client.close(force: true);
