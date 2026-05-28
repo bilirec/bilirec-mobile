@@ -177,13 +177,13 @@ init_cpu_source() {
 }
 
 read_cpu_from_dumpsys() {
-  cpu_raw="$(adb shell "dumpsys cpuinfo" 2>/dev/null | grep -F "$PKG_NAME" | awk '{gsub(/%/, "", $1); sum += $1} END {if (sum == "") print 0; else print sum}' || true)"
-  cpu_raw="$(normalize_number "$cpu_raw")"
-  if [ -z "$cpu_raw" ]; then
-    cpu_raw='0'
-  fi
-  cpu_percent="$(awk -v value="$cpu_raw" -v divisor="$CPU_COMPAT_DIVISOR" 'BEGIN { if (value == "" || value + 0 < 0 || divisor <= 0) { print 0; exit } normalized = (value + 0) / divisor; rounded = int(normalized + 0.5); if (rounded < 0) rounded = 0; if (rounded > 100) rounded = 100; print rounded }')"
-}
+   cpu_raw="$(adb shell "dumpsys cpuinfo" 2>/dev/null | grep -F "$PKG_NAME" | awk '{gsub(/%/, "", $1); sum += $1} END {if (sum == "") print 0; else print sum}' || true)"
+   cpu_raw="$(normalize_number "$cpu_raw")"
+   if [ -z "$cpu_raw" ]; then
+     cpu_raw='0'
+   fi
+   cpu_percent="$(awk -v value="$cpu_raw" -v divisor="$CPU_COMPAT_DIVISOR" 'BEGIN { if (value == "" || value + 0 < 0 || divisor <= 0) { printf "%.1f", 0; exit } normalized = (value + 0) / divisor; if (normalized < 0) normalized = 0; if (normalized > 100) normalized = 100; printf "%.1f", normalized }')"
+ }
 
 read_cpu_sample() {
   pid="$(adb shell "pidof '$PKG_NAME'" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
@@ -236,9 +236,9 @@ read_cpu_sample() {
     return
   fi
 
-  # Keep CPU semantics aligned with lib/foreground/resource_monitor.dart:
-  # process CPU over wall-clock, then divide by safe CPU core count.
-  cpu_percent="$(awk -v app="$delta_app_ms" -v wall="$delta_wall_ms" -v divisor="$CPU_COMPAT_DIVISOR" 'BEGIN { if (wall <= 0 || app <= 0 || divisor <= 0) { print 1; exit } value = (app / wall) * 100.0; value = value / divisor; rounded = int(value + 0.5); if (rounded < 0) rounded = 0; if (rounded > 100) rounded = 100; print rounded }')"
+   # Keep CPU semantics aligned with lib/foreground/resource_monitor.dart:
+   # process CPU over wall-clock, then divide by safe CPU core count.
+   cpu_percent="$(awk -v app="$delta_app_ms" -v wall="$delta_wall_ms" -v divisor="$CPU_COMPAT_DIVISOR" 'BEGIN { if (wall <= 0 || app <= 0 || divisor <= 0) { printf "%.1f", 1.0; exit } value = (app / wall) * 100.0; value = value / divisor; if (value < 0) value = 0; if (value > 100) value = 100; printf "%.1f", value }')"
 }
 
 # Read one memory sample and one CPU sample per interval.
@@ -248,47 +248,44 @@ read_sample() {
 
   # Parse meminfo output
   mem_kb="$(printf '%s' "$output" | awk '/TOTAL PSS:|TOTAL:/{print; exit}' | sed -E 's/.*TOTAL( PSS)?:[[:space:]]*([0-9]+).*/\2/' || true)"
-  mem_kb="$(normalize_number "$mem_kb")"
-  if [ -z "$mem_kb" ]; then
-    mem_kb='0'
-  fi
-  case "$mem_kb" in
-    ''|*[!0-9]*)
-      mem_kb='0'
-      ;;
-  esac
-  mem_mb=$((mem_kb / 1024))
-  if [ "$mem_mb" -lt 0 ]; then
-    mem_mb=0
-  fi
+   mem_kb="$(normalize_number "$mem_kb")"
+   if [ -z "$mem_kb" ]; then
+     mem_kb='0'
+   fi
+   case "$mem_kb" in
+     ''|*[!0-9]*)
+       mem_kb='0'
+       ;;
+   esac
+   mem_mb="$(awk -v kb="$mem_kb" 'BEGIN { mb = kb / 1024.0; if (mb < 0) mb = 0; printf "%.1f", mb }')"
 
   read_cpu_sample
 }
 
 record_sample() {
-  mem_mb="$1"
-  cpu_percent="$2"
-  now="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+   mem_mb="$1"
+   cpu_percent="$2"
+   now="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-  SAMPLE_COUNT=$((SAMPLE_COUNT + 1))
-  if [ "$mem_mb" -gt "$MAX_RAM_MB" ]; then
-    MAX_RAM_MB="$mem_mb"
-  fi
+   SAMPLE_COUNT=$((SAMPLE_COUNT + 1))
+   if awk -v current="$mem_mb" -v max="$MAX_RAM_MB" 'BEGIN { exit !(current > max) }'; then
+     MAX_RAM_MB="$mem_mb"
+   fi
 
-  if awk -v current="$cpu_percent" -v max="$MAX_CPU_PERCENT" 'BEGIN { exit !(current > max) }'; then
-    MAX_CPU_PERCENT="$cpu_percent"
-  fi
+   if awk -v current="$cpu_percent" -v max="$MAX_CPU_PERCENT" 'BEGIN { exit !(current > max) }'; then
+     MAX_CPU_PERCENT="$cpu_percent"
+   fi
 
-  mem_warn=0
-  cpu_warn=0
-  if [ "$mem_mb" -gt "$RAM_WARN_MB" ]; then
-    mem_warn=1
-    RAM_WARNING_COUNT=$((RAM_WARNING_COUNT + 1))
-  fi
-  if awk -v current="$cpu_percent" -v threshold="$CPU_WARN_PERCENT" 'BEGIN { exit !(current > threshold) }'; then
-    cpu_warn=1
-    CPU_WARNING_COUNT=$((CPU_WARNING_COUNT + 1))
-  fi
+   mem_warn=0
+   cpu_warn=0
+   if awk -v current="$mem_mb" -v threshold="$RAM_WARN_MB" 'BEGIN { exit !(current > threshold) }'; then
+     mem_warn=1
+     RAM_WARNING_COUNT=$((RAM_WARNING_COUNT + 1))
+   fi
+   if awk -v current="$cpu_percent" -v threshold="$CPU_WARN_PERCENT" 'BEGIN { exit !(current > threshold) }'; then
+     cpu_warn=1
+     CPU_WARNING_COUNT=$((CPU_WARNING_COUNT + 1))
+   fi
 
   if [ "$mem_warn" -eq 1 ] || [ "$cpu_warn" -eq 1 ]; then
     WARNING_COUNT=$((WARNING_COUNT + 1))

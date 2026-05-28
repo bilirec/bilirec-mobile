@@ -16,17 +16,17 @@ class ResourceMonitor {
     _lastSystemTime = DateTime.now().millisecondsSinceEpoch;
   }
 
-  (int, int) getUsage() {
+  (double, double) getUsage() {
     // 1. RAM 讀取 currentRss 安全無虞，繼續保留
     // final int ramUsage = (ProcessInfo.currentRss / (1024 * 1024)).round();
-    final int ramUsage = _getExactPrivateRam();
+    final double ramUsage = _getExactPrivateRam();
 
     // 2. 安全計算 CPU
-    final int cpuUsage = _calculatePureCpuUsage();
+    final double cpuUsage = _calculatePureCpuUsage();
     return (cpuUsage, ramUsage);
   }
 
-  int _getExactPrivateRam() {
+  double _getExactPrivateRam() {
     try {
       if (Platform.isAndroid || Platform.isLinux) {
         final file = File('/proc/self/status');
@@ -47,7 +47,7 @@ class ResourceMonitor {
           }
 
           if (rssAnon > 0) {
-            return (rssAnon / 1024).round(); // kB 轉成 MB
+            return rssAnon.toDouble() / 1024; // kB 轉成 MB
           }
         }
       }
@@ -56,10 +56,10 @@ class ResourceMonitor {
     }
 
     // 如果拿不到，再用 currentRss 兜底
-    return (ProcessInfo.currentRss / (1024 * 1024)).round();
+    return ProcessInfo.currentRss.toDouble() / (1024 * 1024);
   }
 
-  int _calculatePureCpuUsage() {
+  double _calculatePureCpuUsage() {
     final int currentAppTime = _getPureCpuTimeTicks();
     final int currentSystemTime = DateTime.now().millisecondsSinceEpoch;
 
@@ -69,16 +69,16 @@ class ResourceMonitor {
     _lastAppCpuTime = currentAppTime;
     _lastSystemTime = currentSystemTime;
 
-    if (timeDeltaMs <= 0 || appTimeDelta <= 0) return 1; // 兜底避免除以 0
+    if (timeDeltaMs <= 0 || appTimeDelta <= 0) return 0.0; // 兜底避免除以 0
 
     // 算本進程佔用單核心的百分比
-    double cpuPercent = (appTimeDelta / timeDeltaMs) * 100;
+    double cpuPercent = (appTimeDelta.toDouble() / timeDeltaMs.toDouble()) * 100;
 
     // 先嘗試抓系統可用核心數，若失敗或值異常則回退到硬編碼。
     final int cpuCores = _getSafeCpuCoreCount();
     cpuPercent = cpuPercent / cpuCores;
 
-    return cpuPercent.round().clamp(0, 100);
+    return cpuPercent.clamp(0.0, 100.0);
   }
 
   int _getSafeCpuCoreCount() {

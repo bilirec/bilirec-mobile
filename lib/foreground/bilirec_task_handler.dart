@@ -113,7 +113,7 @@ class BilirecTaskHandler extends TaskHandler {
 
     final (cpu, ram) = _monitor.getUsage();
     debugLog(
-        '資源使用 - CPU: ${cpu.toStringAsFixed(2)}%, RAM: ${ram.toStringAsFixed(2)}MB');
+        '資源使用 - CPU: ${cpu.toStringAsFixed(1)}%, RAM: ${ram.toStringAsFixed(1)}MB');
     final text = _l10n.tr('notificationTextRunning');
     final recordingLabel = _l10n.tr('recording');
     final isRecording = await _isRecording() ? '$recordingLabel • ' : '';
@@ -124,13 +124,13 @@ class BilirecTaskHandler extends TaskHandler {
   }
 
   // 建議的顯示格式轉換邏輯
-  String _formatMonitorData(int cpu, int ram) {
+  String _formatMonitorData(double cpu, double ram) {
     // 1. CPU 超過 50% 時標示為高負載，否則正常
-    String cpuDisplay = cpu > 50 ? "CPU: 🔥$cpu%" : "CPU: $cpu%";
+    String cpuDisplay = cpu > 50 ? "CPU: 🔥${cpu.toStringAsFixed(1)}%" : "CPU: ${cpu.toStringAsFixed(1)}%";
 
     // 2. RAM 簡單顯示 MB，若過大（例如超過 1000MB）可考慮自動轉換為 GB
     String ramDisplay =
-        ram > 1000 ? "${(ram / 1024).toStringAsFixed(1)}GB" : "${ram}MB";
+        ram > 1000 ? "${(ram / 1024).toStringAsFixed(1)}GB" : "${ram.toStringAsFixed(1)}MB";
 
     return "$cpuDisplay • RAM: $ramDisplay";
   }
