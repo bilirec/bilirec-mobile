@@ -265,11 +265,12 @@ void main() {
         );
         _log('STEP 6.1 done');
 
-        // 7) 處於運行中狀態等待三分鐘（觀察是否 panic）
-        _log('STEP 7: observe running for 3 minutes');
+        // 7) 處於運行中狀態等待3/15分鐘（觀察是否 panic）
+        final ci = isCiEnv();
+        _log('STEP 7: observe running for ${ci ? 15 : 3} minutes');
         await _observeRunningForDuration(
           tester,
-          const Duration(minutes: 3),
+          ci ? const Duration(minutes: 15) : const Duration(minutes: 3),
         );
         _log('STEP 7 done');
 
