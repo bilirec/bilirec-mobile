@@ -74,13 +74,27 @@ class ResourceMonitor {
     // 算本進程佔用單核心的百分比
     double cpuPercent = (appTimeDelta / timeDeltaMs) * 100;
 
-    // 💥 修正：不要呼叫 Platform.numberOfProcessors！
-    // 很多手機的 ROM 在讀取這個屬性時，底層會去踩 /sys/devices/system/cpu 或者是 /sys/module/metis
-    // 這在現代 Android 會直接觸發 SELinux AVC Denied！
-    // 我們直接寫死除以一個常規核心數（例如 8 核），或者乾脆不做跨核平均，直接顯示單核換算值。
-    cpuPercent = cpuPercent / 8;
+    // 先嘗試抓系統可用核心數，若失敗或值異常則回退到硬編碼。
+    final int cpuCores = _getSafeCpuCoreCount();
+    cpuPercent = cpuPercent / cpuCores;
 
     return cpuPercent.round().clamp(0, 100);
+  }
+
+  int _getSafeCpuCoreCount() {
+    const int fallbackCores = 8;
+
+    try {
+      final int cores = Platform.numberOfProcessors;
+      // 做基本邊界保護，避免 ROM 回傳異常值。
+      if (cores > 0 && cores <= 128) {
+        return cores;
+      }
+    } catch (_) {
+      debugLog('讀取系統核數失敗，改用 fallback 核數');
+    }
+
+    return fallbackCores;
   }
 
   int _getPureCpuTimeTicks() {
