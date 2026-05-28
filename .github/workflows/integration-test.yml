@@ -24,7 +24,7 @@ env:
   jdk_version: "17"
 
 jobs:
-  integration-functional-test:
+  integration-basic-functional-test:
     runs-on: ubuntu-latest
     continue-on-error: true
 
@@ -53,9 +53,9 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             echo "=== 開始執行 Flutter 整合功能測試 ==="
-            flutter test integration_test/app_test.dart --reporter=github
+            flutter test integration_test/basic_functional_test.dart --reporter=github --dart-define=CI=true
 
-  integration-stress-test:
+  integration-service-toggle-stress-test:
     runs-on: ubuntu-latest
     continue-on-error: true          # 壓測失敗僅匯報，不阻斷 push 或 PR
 
@@ -75,7 +75,7 @@ jobs:
       - name: Pre-build Debug APK
         run: flutter build apk --debug
 
-      - name: Run Stress Test on Android Emulator
+      - name: Run Service Toggle Stress Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ env.api_level }}
@@ -92,33 +92,80 @@ jobs:
             echo "=== 預先授予前景服務與通知權限 ==="
             adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS
 
-            echo "=== 開始執行 Flutter 整合壓力測試 ==="
-            flutter test integration_test/app_stress_test.dart --reporter=github
+            echo "=== 開始執行 Flutter 服務頻繁啟停壓力測試 ==="
+            flutter test integration_test/service_toggle_stress_test.dart --reporter=github --dart-define=CI=true
             TEST_EXIT_CODE=$?
 
-            echo "=== 壓測結束，退出碼：$TEST_EXIT_CODE ==="
+            echo "=== 服務頻繁啟停壓測結束，退出碼：$TEST_EXIT_CODE ==="
+            exit $TEST_EXIT_CODE
+
+  integration-multi-room-recording-stress-test:
+    runs-on: ubuntu-latest
+    continue-on-error: true          # 壓測失敗僅匯報，不阻斷 push 或 PR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-flutter-android
+        with:
+          api_level: ${{ env.api_level }}
+          jdk_version: ${{ env.jdk_version }}
+          ndk_version: ${{ env.ndk_version }}
+
+      - name: Pre-build Debug APK
+        run: flutter build apk --debug
+
+      - name: Run Multi-room Recording Stress Test on Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.api_level }}
+          disable-animations: true
+          target: google_apis
+          arch: x86_64
+          profile: ${{ env.emulator_profile }}
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            echo "=== 模擬器啟動成功，開始手動安裝 APK ==="
+            adb install build/app/outputs/flutter-apk/app-debug.apk
+
+            echo "=== 預先授予前景服務與通知權限 ==="
+            adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS
+
+            echo "=== 開始執行 Flutter 多房同錄壓力測試 ==="
+            flutter test integration_test/multi_room_recording_stress_test.dart --reporter=github --dart-define=CI=true
+            TEST_EXIT_CODE=$?
+
+            echo "=== 多房同錄壓測結束，退出碼：$TEST_EXIT_CODE ==="
             exit $TEST_EXIT_CODE
 
   pr-gate:
     name: PR Gate
     needs:
-      - integration-functional-test
-      - integration-stress-test
+      - integration-basic-functional-test
+      - integration-service-toggle-stress-test
+      - integration-multi-room-recording-stress-test
     runs-on: ubuntu-latest
     if: always() && github.event_name == 'pull_request'
     steps:
       - name: Verify required tests all passed
         run: |
-          FUNCTIONAL_RESULT="${{ needs.integration-functional-test.result }}"
-          STRESS_RESULT="${{ needs.integration-stress-test.result }}"
+          FUNCTIONAL_RESULT="${{ needs.integration-basic-functional-test.result }}"
+          TOGGLE_STRESS_RESULT="${{ needs.integration-service-toggle-stress-test.result }}"
+          RECORDING_STRESS_RESULT="${{ needs.integration-multi-room-recording-stress-test.result }}"
           
           echo "Integration functional test result: $FUNCTIONAL_RESULT"
-          echo "Integration stress test result: $STRESS_RESULT"
+          echo "Integration service-toggle stress test result: $TOGGLE_STRESS_RESULT"
+          echo "Integration multi-room recording stress test result: $RECORDING_STRESS_RESULT"
           
-          if [ "$FUNCTIONAL_RESULT" != "success" ] && [ "$STRESS_RESULT" != "success" ]; then
-            echo "❌ 整合功能測試與壓力測試皆未通過，PR 無法合併！"
+          if [ "$FUNCTIONAL_RESULT" != "success" ] || [ "$TOGGLE_STRESS_RESULT" != "success" ] || [ "$RECORDING_STRESS_RESULT" != "success" ]; then
+            echo "❌ 三項整合測試需全部通過（功能測試、頻繁啟停壓測、多房同錄壓測），PR 無法合併！"
             exit 1
           fi
           
-          echo "✅ 至少有一項必要整合測試通過，PR 可以合併。"
+          echo "✅ 三項整合測試全部通過，PR 可以合併。"
 

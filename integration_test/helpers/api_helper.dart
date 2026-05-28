@@ -1,0 +1,294 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+const defaultBackendBaseUrl = 'http://127.0.0.1:8080';
+const defaultBroadcastsEndpoint =
+    'https://api.livestats.top/api/v1/lives/broadcasts';
+
+class ApiCallResult {
+  const ApiCallResult({required this.statusCode, required this.body});
+
+  final int statusCode;
+  final String body;
+
+  String bodyPreview({int maxLength = 500}) {
+    final normalized = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= maxLength) {
+      return normalized;
+    }
+    return '${normalized.substring(0, maxLength)}...';
+  }
+}
+
+Future<Map<String, dynamic>> readJsonResponse(
+    HttpClientResponse response) async {
+  final body = await response.transform(utf8.decoder).join();
+  if (body.trim().isEmpty) {
+    return <String, dynamic>{};
+  }
+  final decoded = jsonDecode(body);
+  if (decoded is Map<String, dynamic>) {
+    return decoded;
+  }
+  return <String, dynamic>{'data': decoded};
+}
+
+Future<int> subscribeRoom(
+  int roomId, {
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  final client = HttpClient();
+  try {
+    final request =
+        await client.postUrl(Uri.parse('$baseUrl/room/$roomId')).timeout(
+              const Duration(seconds: 5),
+            );
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    final response = await request.close().timeout(const Duration(seconds: 8));
+    await response.drain<void>();
+    return response.statusCode;
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<int> updateRoomConfig(
+  int roomId, {
+  String baseUrl = defaultBackendBaseUrl,
+  Map<String, dynamic> payload = const {
+    'auto_record': false,
+    'notify': true,
+    'record_duration_minutes': 120,
+  },
+}) async {
+  final client = HttpClient();
+  try {
+    final request = await client
+        .putUrl(Uri.parse('$baseUrl/room/$roomId/config'))
+        .timeout(const Duration(seconds: 5));
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.headers.contentType = ContentType.json;
+    request.write(jsonEncode(payload));
+    final response = await request.close().timeout(const Duration(seconds: 8));
+    await response.drain<void>();
+    return response.statusCode;
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<List<int>> fetchLiveBroadcastRoomIDs({
+  String endpoint = defaultBroadcastsEndpoint,
+}) async {
+  final client = HttpClient();
+  try {
+    final request = await client
+        .getUrl(Uri.parse(endpoint))
+        .timeout(const Duration(seconds: 6));
+    final response = await request.close().timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != HttpStatus.ok) {
+      throw StateError('broadcast API status=${response.statusCode}');
+    }
+
+    final payload = await readJsonResponse(response);
+    if ((payload['code'] as num?)?.toInt() != 0) {
+      throw StateError('broadcast API code=${payload['code']}');
+    }
+
+    final data = payload['data'];
+    if (data is! List) {
+      throw StateError('broadcast API data is not a list');
+    }
+
+    final ids = <int>{};
+    for (final item in data) {
+      if (item is! Map) continue;
+      final raw = item['roomId'];
+      final id = raw is int ? raw : int.tryParse(raw?.toString() ?? '');
+      if (id != null && id > 0) {
+        ids.add(id);
+      }
+    }
+
+    return ids.toList(growable: false);
+  } finally {
+    client.close(force: true);
+  }
+}
+
+List<int> pickDistinctRoomIDs(
+  List<int> pool,
+  int count, {
+  Random? random,
+}) {
+  if (pool.length < count) {
+    throw StateError('live room ids less than $count');
+  }
+
+  final shuffled = List<int>.from(pool);
+  shuffled.shuffle(random ?? Random(DateTime.now().microsecondsSinceEpoch));
+  return shuffled.take(count).toList(growable: false);
+}
+
+Future<ApiCallResult> startRecording(
+  int roomId, {
+  required int durationMinutes,
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  final client = HttpClient();
+  try {
+    final uri = Uri.parse(
+      '$baseUrl/record/$roomId/start?duration_minutes=$durationMinutes',
+    );
+    final request =
+        await client.postUrl(uri).timeout(const Duration(seconds: 6));
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    final response = await request.close().timeout(const Duration(seconds: 12));
+    final body = await response.transform(utf8.decoder).join();
+    return ApiCallResult(statusCode: response.statusCode, body: body);
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<void> stopRecording(
+  int roomId, {
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  final client = HttpClient();
+  try {
+    final request = await client
+        .postUrl(Uri.parse('$baseUrl/record/$roomId/stop'))
+        .timeout(const Duration(seconds: 6));
+    final response = await request.close().timeout(const Duration(seconds: 10));
+    await response.drain<void>();
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<Map<int, String>> fetchRecordStatuses(
+  List<int> roomIds, {
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  final client = HttpClient();
+  try {
+    final request = await client
+        .postUrl(Uri.parse('$baseUrl/record/statuses'))
+        .timeout(const Duration(seconds: 6));
+    request.headers.contentType = ContentType.json;
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.write(jsonEncode({'roomIDs': roomIds}));
+    final response = await request.close().timeout(const Duration(seconds: 12));
+    final payload = await readJsonResponse(response);
+
+    final result = <int, String>{};
+    payload.forEach((key, value) {
+      final id = int.tryParse(key.toString());
+      if (id != null) {
+        result[id] = value.toString();
+      }
+    });
+    return result;
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<Map<int, Map<String, dynamic>>> fetchRecordStats(
+  List<int> roomIds, {
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  final client = HttpClient();
+  try {
+    final request = await client
+        .postUrl(Uri.parse('$baseUrl/record/stats'))
+        .timeout(const Duration(seconds: 6));
+    request.headers.contentType = ContentType.json;
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.write(jsonEncode({'roomIDs': roomIds}));
+    final response = await request.close().timeout(const Duration(seconds: 12));
+    final payload = await readJsonResponse(response);
+
+    final result = <int, Map<String, dynamic>>{};
+    payload.forEach((key, value) {
+      final id = int.tryParse(key.toString());
+      if (id != null && value is Map<String, dynamic>) {
+        result[id] = value;
+      }
+    });
+    return result;
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<List<Map<String, dynamic>>> browseFiles({
+  required String search,
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  return browseFilesAtPath(
+    browsePath: '',
+    search: search,
+    baseUrl: baseUrl,
+  );
+}
+
+Future<List<Map<String, dynamic>>> browseFilesAtPath({
+  required String browsePath,
+  String? search,
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  final client = HttpClient();
+  final normalizedPath = browsePath.trim();
+  final encodedPath = normalizedPath.isEmpty
+      ? ''
+      : normalizedPath
+          .split('/')
+          .where((segment) => segment.isNotEmpty)
+          .map(Uri.encodeComponent)
+          .join('/');
+
+  final query = <String, String>{
+    'offset': '0',
+    'limit': '200',
+    if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+  };
+
+  final uris = <Uri>[
+    Uri.parse('$baseUrl/files/browse/$encodedPath').replace(
+      queryParameters: query,
+    ),
+    Uri.parse('$baseUrl/files/browse/$encodedPath/').replace(
+      queryParameters: query,
+    ),
+  ];
+
+  try {
+    for (final uri in uris) {
+      final request =
+          await client.getUrl(uri).timeout(const Duration(seconds: 6));
+      final response =
+          await request.close().timeout(const Duration(seconds: 12));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        await response.drain<void>();
+        continue;
+      }
+
+      final payload = await readJsonResponse(response);
+      final items = payload['items'];
+      if (items is List) {
+        return items
+            .whereType<Map>()
+            .map((e) => e.map((k, v) => MapEntry(k.toString(), v)))
+            .toList(growable: false);
+      }
+    }
+  } finally {
+    client.close(force: true);
+  }
+
+  return const [];
+}
