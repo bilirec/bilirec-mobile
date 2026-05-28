@@ -10,6 +10,18 @@ inputs:
   ndk_version:
     description: 'NDK Version'
     required: true
+  profile:
+    description: 'Emulator profile for performance testing'
+    required: false
+    default: 'Nexus 6'
+  arch:
+    description: 'Target architecture for emulator (e.g., x86_64)'
+    required: false
+    default: 'x86_64'
+  target:
+    description: 'Emulator target (e.g., default, google_apis, google_apis_playstore)'
+    required: false
+    default: 'default'
 
 runs:
   using: "composite"
@@ -52,6 +64,13 @@ runs:
         ndk-version: ${{ inputs.ndk_version }}
         local-cache: true
 
+    - name: Format Profile Name for Cache Key
+      id: format-profile
+      shell: bash
+      run: |
+        PROFILE_SLUG=$(echo "${{ inputs.profile }}" | tr ' ' '_')
+        echo "slug=${PROFILE_SLUG}" >> $GITHUB_OUTPUT
+
     - name: AVD cache
       uses: actions/cache@v5
       id: avd-cache
@@ -59,7 +78,7 @@ runs:
         path: |
           ~/.android/avd/*
           ~/.android/adb*
-        key: avd-${{ inputs.api_level }}
+        key: avd-${{ inputs.api_level }}-${{ inputs.arch }}-${{ inputs.target }}-${{ steps.format-profile.outputs.slug }}-${{ runner.os }}-v1
 
     - name: Create AVD and generate snapshot
       if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -67,8 +86,9 @@ runs:
       with:
         api-level: ${{ inputs.api_level }}
         disable-animations: false
-        target: google_apis
-        arch: x86_64
+        profile: ${{ inputs.profile }}
+        target: ${{ inputs.target }}
+        arch: ${{ inputs.arch }}
         force-avd-creation: false
         emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
         script: echo "Generated AVD snapshot for caching."

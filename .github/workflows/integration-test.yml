@@ -45,6 +45,7 @@ jobs:
           api_level: ${{ matrix.api_level }}
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
+          profile: ${{ env.emulator_profile }}
 
       - name: Run Integration Functional Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
@@ -79,6 +80,7 @@ jobs:
           api_level: ${{ matrix.api_level }}
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
+          profile: ${{ env.emulator_profile }}
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
@@ -138,6 +140,7 @@ jobs:
           api_level: ${{ matrix.api_level }}
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
+          profile: ${{ env.emulator_profile }}
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
