@@ -237,11 +237,37 @@ void main() {
             for (final roomId in startedRoomIds) {
               final status = statusesMap[roomId]?.toLowerCase() ?? '';
               // Stream interruptions can temporarily enter recovering before recording resumes.
-              expect(
-                ['recording', 'starting', 'recovering'].contains(status),
-                isTrue,
-                reason: '錄製期間狀態異常: roomId=$roomId status=$status',
-              );
+              if (status == 'idle') {
+                // If the room becomes idle, check if the broadcast actually ended
+                try {
+                  final roomInfo = await fetchRoomInfo(roomId);
+                  final liveStatus = asInt(roomInfo['live_status']);
+                  _log(
+                    'room=$roomId status=idle liveStatus=$liveStatus; if liveStatus==1 then it\'s a service error',
+                  );
+                  // If live_status == 1, the broadcast is still live, which means this is a real error
+                  expect(
+                    liveStatus != 1,
+                    isTrue,
+                    reason:
+                        '錄製期間狀態異常: roomId=$roomId status=$status 但直播間仍在進行中 (live_status=$liveStatus)',
+                  );
+                  _log(
+                    'room=$roomId status=idle but broadcast ended (live_status=$liveStatus), acceptable',
+                  );
+                } catch (e) {
+                  _log(
+                    'failed to fetch room info for roomId=$roomId when status=idle, error=$e',
+                  );
+                  rethrow;
+                }
+              } else {
+                expect(
+                  ['recording', 'starting', 'recovering'].contains(status),
+                  isTrue,
+                  reason: '錄製期間狀態異常: roomId=$roomId status=$status',
+                );
+              }
 
               final stat = statsMap[roomId] ?? const <String, dynamic>{};
               final bytesWritten = asInt(stat['bytes_written']);

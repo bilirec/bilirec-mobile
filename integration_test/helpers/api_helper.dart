@@ -292,3 +292,21 @@ Future<List<Map<String, dynamic>>> browseFilesAtPath({
 
   return const [];
 }
+
+Future<Map<String, dynamic>> fetchRoomInfo(
+  int roomId, {
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  final client = HttpClient();
+  try {
+    final request = await client
+        .getUrl(Uri.parse('$baseUrl/room/$roomId/info'))
+        .timeout(const Duration(seconds: 6));
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    final response = await request.close().timeout(const Duration(seconds: 10));
+    final payload = await readJsonResponse(response);
+    return payload;
+  } finally {
+    client.close(force: true);
+  }
+}
