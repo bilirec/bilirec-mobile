@@ -14,6 +14,15 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Free Disk Space
+      continue-on-error: true
+      shell: bash
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo docker image prune --all --force || true
+
     - name: Enable KVM group perms
       shell: bash
       run: |
@@ -61,7 +70,7 @@ runs:
         target: google_apis
         arch: x86_64
         force-avd-creation: false
-        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
         script: echo "Generated AVD snapshot for caching."
 
     - name: Install Flutter Dependencies

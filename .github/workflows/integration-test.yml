@@ -5,7 +5,7 @@ on:
     paths:
       - "**/*.dart"
       - "**/*.kts"
-      - ".github/workflows/**"
+      - ".github/**"
       - "**/*.so"
   pull_request:
     branches:
@@ -13,20 +13,25 @@ on:
     paths:
       - "**/*.dart"
       - "**/*.kts"
-      - ".github/workflows/**"
+      - ".github/**"
       - "**/*.so"
   workflow_dispatch:
 
 env:
-  api_level: 36
-  emulator_profile: pixel
+  emulator_profile: Nexus 6
   ndk_version: r28
   jdk_version: "17"
+  perf_monitor_interval_seconds: 30
+  perf_monitor_ram_warn_mb: 700
+  perf_monitor_cpu_warn_percent: 50
 
 jobs:
   integration-basic-functional-test:
     runs-on: ubuntu-latest
     continue-on-error: true
+    strategy:
+      matrix: 
+        api_level: [34, 36]
 
     steps:
       - name: Checkout repository
@@ -37,27 +42,30 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-flutter-android
         with:
-          api_level: ${{ env.api_level }}
+          api_level: ${{ matrix.api_level }}
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
 
       - name: Run Integration Functional Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ env.api_level }}
+          api-level: ${{ matrix.api_level }}
           disable-animations: true
-          target: google_apis
+          target: default
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
             echo "=== 開始執行 Flutter 整合功能測試 ==="
-            flutter test integration_test/basic_functional_test.dart --reporter=github --dart-define=CI=true
+            flutter test integration_test/basic_functional_test.dart --reporter=expanded --dart-define=CI=true
 
   integration-service-toggle-stress-test:
     runs-on: ubuntu-latest
-    continue-on-error: true          # 壓測失敗僅匯報，不阻斷 push 或 PR
+    continue-on-error: true
+    strategy:
+      matrix:
+        api_level: [ 34, 36 ]
 
     steps:
       - name: Checkout repository
@@ -68,40 +76,55 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-flutter-android
         with:
-          api_level: ${{ env.api_level }}
+          api_level: ${{ matrix.api_level }}
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
+
+      - name: Prepare performance monitor workspace
+        run: mkdir -p .ci/perf-monitor
 
       - name: Run Service Toggle Stress Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ env.api_level }}
+          api-level: ${{ matrix.api_level }}
           disable-animations: true
-          target: google_apis
+          target: default
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
-            echo "=== 模擬器啟動成功，開始手動安裝 APK ==="
-            adb install build/app/outputs/flutter-apk/app-debug.apk
-            
-            echo "=== 預先授予前景服務與通知權限 ==="
-            adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS
+            sh ./.github/scripts/run_stress_with_monitor.sh integration_test/service_toggle_stress_test.dart service-toggle .ci/perf-monitor/service-toggle.log .ci/perf-monitor/service-toggle.summary ${{ env.perf_monitor_interval_seconds }} ${{ env.perf_monitor_ram_warn_mb }} ${{ env.perf_monitor_cpu_warn_percent }} true
 
-            echo "=== 開始執行 Flutter 服務頻繁啟停壓力測試 ==="
-            flutter test integration_test/service_toggle_stress_test.dart --reporter=github --dart-define=CI=true
-            TEST_EXIT_CODE=$?
+      - name: Publish Service Toggle Perf Summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f .ci/perf-monitor/service-toggle.summary ]; then
+            {
+              echo "### Service Toggle Stress Test Perf Monitor"
+              echo ''
+              cat .ci/perf-monitor/service-toggle.summary
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
-            echo "=== 服務頻繁啟停壓測結束，退出碼：$TEST_EXIT_CODE ==="
-            exit $TEST_EXIT_CODE
+      - name: Upload Service Toggle Perf Monitor Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-toggle-perf-monitor
+          path: .ci/perf-monitor/service-toggle.*
+          if-no-files-found: warn
 
   integration-multi-room-recording-stress-test:
     runs-on: ubuntu-latest
-    continue-on-error: true          # 壓測失敗僅匯報，不阻斷 push 或 PR
+    continue-on-error: true
+    strategy:
+      matrix:
+        api_level: [ 34, 36 ]
 
     steps:
       - name: Checkout repository
@@ -112,36 +135,48 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-flutter-android
         with:
-          api_level: ${{ env.api_level }}
+          api_level: ${{ matrix.api_level }}
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
 
+      - name: Prepare performance monitor workspace
+        run: mkdir -p .ci/perf-monitor
+
       - name: Run Multi-room Recording Stress Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ env.api_level }}
+          api-level: ${{ matrix.api_level }}
           disable-animations: true
-          target: google_apis
+          target: default
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
-            echo "=== 模擬器啟動成功，開始手動安裝 APK ==="
-            adb install build/app/outputs/flutter-apk/app-debug.apk
+            sh ./.github/scripts/run_stress_with_monitor.sh integration_test/multi_room_recording_stress_test.dart multi-room-recording .ci/perf-monitor/multi-room-recording.log .ci/perf-monitor/multi-room-recording.summary ${{ env.perf_monitor_interval_seconds }} ${{ env.perf_monitor_ram_warn_mb }} ${{ env.perf_monitor_cpu_warn_percent }} true
 
-            echo "=== 預先授予前景服務與通知權限 ==="
-            adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS
+      - name: Publish Multi-room Perf Summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f .ci/perf-monitor/multi-room-recording.summary ]; then
+            {
+              echo "### Multi-room Recording Stress Test Perf Monitor"
+              echo ''
+              cat .ci/perf-monitor/multi-room-recording.summary
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
-            echo "=== 開始執行 Flutter 多房同錄壓力測試 ==="
-            flutter test integration_test/multi_room_recording_stress_test.dart --reporter=github --dart-define=CI=true
-            TEST_EXIT_CODE=$?
-
-            echo "=== 多房同錄壓測結束，退出碼：$TEST_EXIT_CODE ==="
-            exit $TEST_EXIT_CODE
+      - name: Upload Multi-room Perf Monitor Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-room-recording-perf-monitor
+          path: .ci/perf-monitor/multi-room-recording.*
+          if-no-files-found: warn
 
   pr-gate:
     name: PR Gate
