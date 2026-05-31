@@ -67,27 +67,60 @@ void main() {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('打開服務啓動設定'), findsOneWidget);
+    expect(find.text('打開服務啓動前設定'), findsOneWidget);
 
-    await tester.tap(find.text('打開服務啓動設定'));
+    await tester.tap(find.text('打開服務啓動前設定'));
     await tester.pumpAndSettle();
 
+    expect(find.text('一般設定'), findsOneWidget);
     expect(find.text('儲存路徑'), findsOneWidget);
     expect(find.text('目前尚未設定輸出路徑（使用預設）'), findsOneWidget);
     expect(find.text('變更路徑'), findsOneWidget);
-    expect(find.text('通知模式設定'), findsOneWidget);
     expect(find.text('本地通知模式'), findsOneWidget);
-    expect(find.byType(Switch), findsOneWidget);
+    expect(find.byType(Switch), findsNWidgets(2));
     expect(
       find.text(
         '如在中國大陸網絡環境下無法接收開播/錄製通知推送，可嘗試啟用此模式。',
       ),
       findsOneWidget,
     );
-    expect(find.text('將於啟動服務後生效'), findsOneWidget);
+    expect(find.text('啓用後，點擊通知將無法直接跳轉到錄製管理程式'), findsOneWidget);
+    expect(find.text('開發者選項'), findsOneWidget);
+    expect(find.text('環境參數設定'), findsOneWidget);
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('output_dir'), isNull);
+  });
+
+  testWidgets('可透過 dialog 新增環境參數並持久化', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('打開服務啓動前設定'));
+    await tester.pumpAndSettle();
+
+    final addEnvironmentButton = find.widgetWithIcon(OutlinedButton, Icons.add);
+    await tester.ensureVisible(addEnvironmentButton);
+    await tester.tap(addEnvironmentButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('新增環境參數'), findsNWidgets(2));
+    expect(find.text('儲存環境參數'), findsOneWidget);
+    expect(find.byKey(const Key('env_key_input')), findsOneWidget);
+    expect(find.byKey(const Key('env_value_input')), findsOneWidget);
+
+    await tester.enterText(
+        find.byKey(const Key('env_key_input')), 'BILIREC_ENV');
+    await tester.enterText(find.byKey(const Key('env_value_input')), 'staging');
+
+    await tester.tap(find.widgetWithText(FilledButton, '儲存環境參數'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('BILIREC_ENV'), findsOneWidget);
+    expect(find.text('staging'), findsOneWidget);
+
+    final envSettings = await Preferences.getEnvironmentSettings();
+    expect(envSettings['BILIREC_ENV'], 'staging');
   });
 
   testWidgets('服務啟動後設定按鈕會被禁用', (tester) async {

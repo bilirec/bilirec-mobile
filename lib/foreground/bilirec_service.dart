@@ -14,6 +14,7 @@ class StartConfig {
     this.username,
     this.password,
     this.sseToken,
+    this.env,
   });
 
   final String basePath;
@@ -24,6 +25,7 @@ class StartConfig {
   final String? username;
   final String? password;
   final String? sseToken;
+  final Map<String, String>? env;
 
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{'basePath': basePath};
@@ -43,6 +45,9 @@ class StartConfig {
     }
     if (sseToken != null && sseToken!.isNotEmpty) {
       map['sseToken'] = sseToken;
+    }
+    if (env != null && env!.isNotEmpty) {
+      map['env'] = env;
     }
     return map;
   }

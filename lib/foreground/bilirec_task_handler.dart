@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bilirec/foreground/network_lock_service.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/preferences.dart';
@@ -27,13 +28,16 @@ const AndroidNotificationChannel _ppkAlertChannel = AndroidNotificationChannel(
 class BilirecTaskHandler extends TaskHandler {
   late final ResourceMonitor _monitor;
   late final BilirecSseHandler _sseHandler;
+  late final NetworkLockService _networkLockService;
   late final AppLocalizations _l10n;
 
   bool _nativeStarted = false;
   bool _backendWasAlive = false;
   bool _sseEnabled = false;
   bool _destroyed = false;
+  bool _antiSleepEnabled = false;
   String? _sseToken;
+  Map<String, String> _environmentSettings = const {};
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -48,6 +52,8 @@ class BilirecTaskHandler extends TaskHandler {
       outputDir = saved.isNotEmpty ? saved : null;
       _sseEnabled = await Preferences.getEnableSsePush();
       _sseToken = _sseEnabled ? generateSseToken() : null;
+      _antiSleepEnabled = await Preferences.getEnableAntiSleep();
+      _environmentSettings = await Preferences.getEnvironmentSettings();
       await Preferences.setStoppedByUser(false);
     } catch (_) {}
 
@@ -64,6 +70,12 @@ class BilirecTaskHandler extends TaskHandler {
       l10n: _l10n,
     );
 
+    if (_antiSleepEnabled) {
+      _networkLockService = NetworkLockService();
+      await _networkLockService.start();
+      debugLog('激進防休眠模式已啓用，網路鎖定服務已啓動');
+    }
+
     await _localNotifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
@@ -74,6 +86,7 @@ class BilirecTaskHandler extends TaskHandler {
         basePath: basePath,
         outputDir: outputDir,
         sseToken: _sseToken,
+        env: _environmentSettings,
       ),
     );
 
@@ -113,10 +126,24 @@ class BilirecTaskHandler extends TaskHandler {
     final (cpu, ram) = _monitor.getUsage();
     debugLog(
         '資源使用 - CPU: ${cpu.toStringAsFixed(1)}%, RAM: ${ram.toStringAsFixed(1)}MB');
+    var title = _l10n.tr('notificationTitleRunning');
+    if (_antiSleepEnabled) {
+      final status = await _networkLockService.getStatus();
+      debugLog(
+          'lock status: wifi=${status?.isWifiLocked}, cellular=${status?.isCellularLocked}');
+      if (status != null) {
+        if (status.isWifiLocked) {
+          title = '$title ⚡🛜';
+        } else if (status.isCellularLocked) {
+          title = '$title ⚡🌐';
+        }
+      }
+    }
     final text = _l10n.tr('notificationTextRunning');
     final recordingLabel = _l10n.tr('recording');
     final isRecording = await _isRecording() ? '$recordingLabel • ' : '';
     await FlutterForegroundTask.updateService(
+      notificationTitle: title,
       notificationText:
           '$text\n[ $isRecording${_formatMonitorData(cpu, ram)} ]',
     );
@@ -125,11 +152,14 @@ class BilirecTaskHandler extends TaskHandler {
   // 建議的顯示格式轉換邏輯
   String _formatMonitorData(double cpu, double ram) {
     // 1. CPU 超過 50% 時標示為高負載，否則正常
-    String cpuDisplay = cpu > 50 ? "CPU: 🔥${cpu.toStringAsFixed(1)}%" : "CPU: ${cpu.toStringAsFixed(1)}%";
+    String cpuDisplay = cpu > 50
+        ? "CPU: 🔥${cpu.toStringAsFixed(1)}%"
+        : "CPU: ${cpu.toStringAsFixed(1)}%";
 
     // 2. RAM 簡單顯示 MB，若過大（例如超過 1000MB）可考慮自動轉換為 GB
-    String ramDisplay =
-        ram > 1000 ? "${(ram / 1024).toStringAsFixed(1)}GB" : "${ram.toStringAsFixed(1)}MB";
+    String ramDisplay = ram > 1000
+        ? "${(ram / 1024).toStringAsFixed(1)}GB"
+        : "${ram.toStringAsFixed(1)}MB";
 
     return "$cpuDisplay • RAM: $ramDisplay";
   }
@@ -202,6 +232,12 @@ class BilirecTaskHandler extends TaskHandler {
       debugLog(
           '[STOP/TASK][$opId] after BilirecService.stop() (${sw.elapsedMilliseconds}ms)');
     }
+    if (_antiSleepEnabled) {
+      debugLog('[STOP/TASK][$opId] before _networkLockService.stop()');
+      await _networkLockService.stop();
+      debugLog(
+          '[STOP/TASK][$opId] after _networkLockService.stop() (${sw.elapsedMilliseconds}ms)');
+    }
     debugLog('[STOP/TASK][$opId] before Preferences.getStoppedByUser()');
     final stoppedByUser = await Preferences.getStoppedByUser();
     debugLog(
@@ -215,8 +251,7 @@ class BilirecTaskHandler extends TaskHandler {
         '[STOP/TASK][$opId] after sendDataToMain(service_stopped) (${sw.elapsedMilliseconds}ms)');
     debugLog('[STOP/TASK][$opId] before saveData(core_running=false)');
     await FlutterForegroundTask.saveData(key: coreRunningKey, value: false);
-    debugLog(
-        '[STOP/TASK][$opId] onDestroy exit (${sw.elapsedMilliseconds}ms)');
+    debugLog('[STOP/TASK][$opId] onDestroy exit (${sw.elapsedMilliseconds}ms)');
   }
 
   @override

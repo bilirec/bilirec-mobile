@@ -308,33 +308,30 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
     await showModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: false,
-      backgroundColor: Colors.transparent,
+      isScrollControlled: true, // 必須為 true
+      backgroundColor: Colors.transparent, // 保持透明，因為我們會自己控制圓角
       builder: (sheetContext) {
-        final mediaQuery = MediaQuery.of(sheetContext);
-        final topInset = mediaQuery.padding.top + 32;
-        return Padding(
-          padding: EdgeInsets.only(top: topInset),
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(32),
+        return DraggableScrollableSheet(
+          initialChildSize: 0.95,
+          minChildSize: 0.6, // 這是你的「安全區域」，小於此處會彈回
+          maxChildSize: 0.95,
+          snap: true,
+          snapSizes: [0.6, 0.95],
+          shouldCloseOnMinExtent: true, // 關鍵：允許拖曳到 minChildSize 以下
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
               ),
-              child: Material(
-                color: Theme.of(sheetContext).colorScheme.surface,
-                child: SizedBox(
-                  height: mediaQuery.size.height - topInset,
-                  child: SettingsDrawerSheet(
-                    controlsEnabled:
-                        !(_isOperationInFlight || _isServiceRunning),
-                    onClose: () => Navigator.of(sheetContext).pop(),
-                  ),
-                ),
+              child: SettingsDrawerSheet(
+                scrollController: scrollController,
+                controlsEnabled: !(_isOperationInFlight || _isServiceRunning),
+                onClose: () => Navigator.of(sheetContext).pop(),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -434,6 +431,31 @@ class _BilirecHomePageState extends State<BilirecHomePage>
             return;
           }
         }
+
+        final usingAntiSleep = await Preferences.getEnableAntiSleep();
+
+        FlutterForegroundTask.init(
+          androidNotificationOptions: AndroidNotificationOptions(
+            channelId: 'bilirec_service_channel',
+            channelName: 'Bilirec 服務狀態',
+            channelDescription: '顯示 Bilirec 服務目前是否運作中',
+            channelImportance: NotificationChannelImportance.LOW,
+            priority: NotificationPriority.LOW,
+            onlyAlertOnce: true,
+            playSound: false,
+          ),
+          iosNotificationOptions: const IOSNotificationOptions(
+            showNotification: true,
+            playSound: false,
+          ),
+          foregroundTaskOptions: ForegroundTaskOptions(
+            eventAction: ForegroundTaskEventAction.repeat(15000),
+            autoRunOnBoot: false,
+            autoRunOnMyPackageReplaced: true,
+            allowWakeLock: true,
+            allowWifiLock: !usingAntiSleep, // 如果啟用了防止休眠，則不使用普通的 Wi-Fi 鎖定，避免與高性能 Wi-Fi 鎖定衝突
+          ),
+        );
 
         final started = await FlutterForegroundTask.startService(
           serviceId: 2026,

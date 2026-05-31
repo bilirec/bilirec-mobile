@@ -1,7 +1,6 @@
-
+import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
-
 
 const String _expectedRunningKey = 'expected_service_running';
 const String _outputDirKey = 'output_dir';
@@ -9,11 +8,11 @@ const String _stoppedByUserKey = 'stopped_by_user';
 const String _localeCodeKey = 'locale_code';
 const String _enableSsePushKey = 'enable_sse_push';
 const String _enableAntiSleepKey = 'enable_antisleep';
+const String _environmentSettingsKey = 'environment_settings';
 
 const String coreRunningKey = 'core_running';
 
 sealed class Preferences {
-
   static SharedPreferencesAsync get _prefs => SharedPreferencesAsync();
 
   static Future<void> setExpectedRunning(bool value) async {
@@ -84,4 +83,33 @@ sealed class Preferences {
     return await prefs.getBool(_enableAntiSleepKey) ?? false;
   }
 
+  static Future<void> setEnvironmentSettings(
+      Map<String, String>? settings) async {
+    final prefs = _prefs;
+    if (settings == null || settings.isEmpty) {
+      await prefs.remove(_environmentSettingsKey);
+      return;
+    }
+    await prefs.setString(_environmentSettingsKey, jsonEncode(settings));
+  }
+
+  static Future<Map<String, String>> getEnvironmentSettings() async {
+    final prefs = _prefs;
+    final raw = await prefs.getString(_environmentSettingsKey);
+    if (raw == null || raw.isEmpty) {
+      return <String, String>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, String>{};
+      }
+      return decoded.map<String, String>((key, value) {
+        return MapEntry(key.toString(), value?.toString() ?? '');
+      });
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
 }
