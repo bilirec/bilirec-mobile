@@ -216,7 +216,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       _loading = false;
     });
 
-    _ensureBatteryDialog();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureBatteryDialog());
   }
 
   void _onTaskData(Object data) {
@@ -336,6 +336,10 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   }
 
   Future<void> _openSettingsSheet() async {
+    if (!_isIgnoringBatteryOptimizations) {
+      debugLog('跳過設定頁面，因為尚未獲得電池優化豁免');
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -386,8 +390,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     if (ignoring && _batteryDialogVisible) {
       _batteryDialogVisible = false;
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+      final nav = Navigator.of(context, rootNavigator: true);
+      if (mounted && nav.canPop()) {
+        nav.pop();
       }
       return;
     }
@@ -423,9 +428,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     );
 
     _batteryDialogVisible = false;
-    if (!_isIgnoringBatteryOptimizations && mounted) {
-      _refreshBatteryOptimizationState();
-    }
   }
 
   Future<void> _toggleService(bool enable) async {
@@ -442,6 +444,10 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
     try {
       if (enable) {
+        if (!_isIgnoringBatteryOptimizations) {
+          debugLog('跳過服務啟動，因為尚未獲得電池優化豁免');
+          return;
+        }
         final requestId = _newRequest(ServiceIntent.running);
         setState(() {
           _serviceUiState = ServiceUiState.starting;
@@ -605,8 +611,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     if (!granted) {
       await FlutterForegroundTask.openIgnoreBatteryOptimizationSettings();
     }
-
-    await _refreshBatteryOptimizationState();
   }
 
   Future<void> _yieldToNextFrame() {
