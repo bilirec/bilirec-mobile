@@ -2,17 +2,16 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bilirec/app/widgets/home_page_language_menu.dart';
-import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/app/widgets/service_action_section.dart';
 import 'package:bilirec/app/widgets/service_power_button_area.dart';
 import 'package:bilirec/app/widgets/service_status_row.dart';
+import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/foreground/bilirec_task_handler.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/preferences.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
@@ -48,10 +47,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   bool _isIgnoringBatteryOptimizations = false;
   bool _loading = true;
   bool _batteryDialogVisible = false;
-  bool _useSsePush = false;
   String _statusKey = 'initializing';
   Map<String, String> _statusParams = const {};
-  final TextEditingController _outputDirController = TextEditingController();
 
   AppLocalizations get l10n => AppLocalizations.of(context);
 
@@ -152,7 +149,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     FlutterForegroundTask.removeTaskDataCallback(_onTaskData);
-    _outputDirController.dispose();
     super.dispose();
   }
 
@@ -193,8 +189,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   Future<void> _bootstrap() async {
     final expectedRunning = await Preferences.getExpectedRunning();
-    _outputDirController.text = await Preferences.getOutputDir() ?? '';
-    _useSsePush = await Preferences.getEnableSsePush();
     final running = await _isServiceCoreRunning();
     final ignoringOptimization = Platform.isAndroid
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
@@ -307,34 +301,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
   }
 
-  Future<String?> _browseBasePath() async {
-    final currentDir = _outputDirController.text.trim();
-    final initialDir = currentDir.isNotEmpty ? currentDir : null;
-
-    final selected = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: l10n.tr('selectOutputPath'),
-      initialDirectory: initialDir,
-    );
-
-    if (selected == null || !mounted) return null;
-
-    setState(() {
-      _outputDirController.text = selected;
-    });
-
-    await Preferences.setOutputDir(selected);
-    if (!mounted) return null;
-    return selected;
-  }
-
-  Future<void> _setSsePushEnabled(bool enabled) async {
-    await Preferences.setEnableSsePush(enabled);
-    if (!mounted) return;
-    setState(() {
-      _useSsePush = enabled;
-    });
-  }
-
   Future<void> _openSettingsSheet() async {
     if (!_isIgnoringBatteryOptimizations) {
       debugLog('跳過設定頁面，因為尚未獲得電池優化豁免');
@@ -361,12 +327,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                 child: SizedBox(
                   height: mediaQuery.size.height - topInset,
                   child: SettingsDrawerSheet(
-                    outputPath: _outputDirController.text,
-                    useSsePush: _useSsePush,
                     controlsEnabled:
                         !(_isOperationInFlight || _isServiceRunning),
-                    onBrowse: _browseBasePath,
-                    onSsePushChanged: _setSsePushEnabled,
                     onClose: () => Navigator.of(sheetContext).pop(),
                   ),
                 ),

@@ -1,4 +1,6 @@
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/preferences.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 class SettingsCard extends StatelessWidget {
@@ -33,20 +35,12 @@ class SettingsCard extends StatelessWidget {
 
 class SettingsDrawerSheet extends StatefulWidget {
   const SettingsDrawerSheet({
-    required this.outputPath,
-    required this.useSsePush,
     required this.controlsEnabled,
-    required this.onBrowse,
-    required this.onSsePushChanged,
     required this.onClose,
     super.key,
   });
 
-  final String outputPath;
-  final bool useSsePush;
   final bool controlsEnabled;
-  final Future<String?> Function() onBrowse;
-  final Future<void> Function(bool) onSsePushChanged;
   final VoidCallback onClose;
 
   @override
@@ -54,46 +48,76 @@ class SettingsDrawerSheet extends StatefulWidget {
 }
 
 class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
-  late String _outputPath;
-  late bool _useSsePush;
+  bool _useSsePush = false;
+  bool _useAntiSleep = false;
+
+  final TextEditingController _outputDirController = TextEditingController();
+
+  AppLocalizations get l10n => AppLocalizations.of(context);
 
   @override
   void initState() {
     super.initState();
-    _outputPath = widget.outputPath;
-    _useSsePush = widget.useSsePush;
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    final outputPath = await Preferences.getOutputDir() ?? '';
+    final useSsePush = await Preferences.getEnableSsePush();
+    final useAntiSleep = await Preferences.getEnableAntiSleep();
+    if (!mounted) return;
+    _outputDirController.text = outputPath;
+    setState(() {
+      _useSsePush = useSsePush;
+      _useAntiSleep = useAntiSleep;
+    });
   }
 
   @override
-  void didUpdateWidget(covariant SettingsDrawerSheet oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.outputPath != widget.outputPath) {
-      _outputPath = widget.outputPath;
-    }
-    if (oldWidget.useSsePush != widget.useSsePush) {
-      _useSsePush = widget.useSsePush;
-    }
+  void dispose() {
+    _outputDirController.dispose();
+    super.dispose();
   }
 
-  Future<void> _handleBrowse() async {
-    final selected = await widget.onBrowse();
-    if (!mounted || selected == null) return;
+  Future<String?> _browseBasePath() async {
+    final currentDir = _outputDirController.text.trim();
+    final initialDir = currentDir.isNotEmpty ? currentDir : null;
+
+    final selected = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: l10n.tr('selectOutputPath'),
+      initialDirectory: initialDir,
+    );
+
+    if (selected == null || !mounted) return null;
+
     setState(() {
-      _outputPath = selected;
+      _outputDirController.text = selected;
+    });
+
+    await Preferences.setOutputDir(selected);
+    if (!mounted) return null;
+    return selected;
+  }
+
+  Future<void> _setSsePushEnabled(bool enabled) async {
+    await Preferences.setEnableSsePush(enabled);
+    if (!mounted) return;
+    setState(() {
+      _useSsePush = enabled;
     });
   }
 
-  Future<void> _handleSsePushChanged(bool value) async {
+  Future<void> _setAntiSleepEnabled(bool enabled) async {
+    await Preferences.setEnableAntiSleep(enabled);
+    if (!mounted) return;
     setState(() {
-      _useSsePush = value;
+      _useAntiSleep = enabled;
     });
-    await widget.onSsePushChanged(value);
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final trimmedOutputPath = _outputPath.trim();
+    final trimmedOutputPath = _outputDirController.text.trim();
     final outputPathText = trimmedOutputPath.isEmpty
         ? l10n.tr('outputPathUnset')
         : trimmedOutputPath;
@@ -123,7 +147,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    l10n.tr('setOutputPathTitle'),
+                    l10n.tr('serviceStartupSettingsTitle'),
                     style: theme.textTheme.titleMedium,
                   ),
                   const SizedBox(height: 12),
@@ -157,7 +181,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                           const SizedBox(height: 12),
                           OutlinedButton(
                             onPressed:
-                                widget.controlsEnabled ? _handleBrowse : null,
+                                widget.controlsEnabled ? _browseBasePath : null,
                             child: Text(l10n.tr('changePath')),
                           ),
                         ],
@@ -165,11 +189,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    l10n.tr('notificationModeTitle'),
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       border: Border.all(color: colorScheme.outlineVariant),
@@ -203,7 +222,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                               Switch.adaptive(
                                 value: _useSsePush,
                                 onChanged: widget.controlsEnabled
-                                    ? _handleSsePushChanged
+                                    ? _setSsePushEnabled
                                     : null,
                               ),
                             ],
@@ -220,9 +239,70 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  _useSsePush
-                                      ? l10n.tr('ssePushEnabledHint')
-                                      : l10n.tr('ssePushDisabledHint'),
+                                  l10n.tr('ssePushHint'),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: colorScheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      l10n.tr('antiSleepTitle'),
+                                      style: theme.textTheme.titleMedium,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      l10n.tr('antiSleepDescription'),
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Switch.adaptive(
+                                value: _useAntiSleep,
+                                onChanged: widget.controlsEnabled
+                                    ? _setAntiSleepEnabled
+                                    : null,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  l10n.tr('antiSleepHint'),
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
                                   ),

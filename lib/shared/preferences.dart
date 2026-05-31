@@ -8,6 +8,7 @@ const String _outputDirKey = 'output_dir';
 const String _stoppedByUserKey = 'stopped_by_user';
 const String _localeCodeKey = 'locale_code';
 const String _enableSsePushKey = 'enable_sse_push';
+const String _enableAntiSleepKey = 'enable_antisleep';
 
 const String coreRunningKey = 'core_running';
 
@@ -71,6 +72,16 @@ sealed class Preferences {
   static Future<bool> getEnableSsePush() async {
     final prefs = _prefs;
     return await prefs.getBool(_enableSsePushKey) ?? false;
+  }
+
+  static Future<void> setEnableAntiSleep(bool value) async {
+    final prefs = _prefs;
+    await prefs.setBool(_enableAntiSleepKey, value);
+  }
+
+  static Future<bool> getEnableAntiSleep() async {
+    final prefs = _prefs;
+    return await prefs.getBool(_enableAntiSleepKey) ?? false;
   }
 
 }
