@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 class SettingsCard extends StatelessWidget {
   const SettingsCard({
@@ -52,11 +56,25 @@ class SettingsDrawerSheet extends StatefulWidget {
 class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   bool _useSsePush = false;
   bool _useAntiSleep = false;
+  bool _downloadingBootstrapLog = false;
   Map<String, String> _environmentSettings = <String, String>{};
 
   final TextEditingController _outputDirController = TextEditingController();
 
   AppLocalizations get l10n => AppLocalizations.of(context);
+
+  void _showToast(
+    String message, {
+    AppToastLocation location = AppToastLocation.top,
+  }) {
+    showAppToast(
+      context,
+      message,
+      animation: AppToastAnimation.fade,
+      location: location,
+      edgeDistance: 72,
+    );
+  }
 
   @override
   void initState() {
@@ -129,9 +147,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     final normalizedValue = value.trim();
     if (normalizedKey.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('environmentKeyRequired'))),
-      );
+      _showToast(l10n.tr('environmentKeyRequired'));
       return;
     }
 
@@ -237,6 +253,69 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     setState(() {
       _environmentSettings = updated;
     });
+  }
+
+  Future<void> _downloadBootstrapLog() async {
+    if (_downloadingBootstrapLog) return;
+    setState(() {
+      _downloadingBootstrapLog = true;
+    });
+
+    try {
+      final appSupport = await getApplicationSupportDirectory();
+      final sourcePath =
+          '${appSupport.path}${Platform.pathSeparator}bootstrap.log';
+      final sourceFile = File(sourcePath);
+
+      if (!await sourceFile.exists()) {
+        if (!mounted) return;
+        _showToast(
+          '⚠️ ${l10n.tr('downloadBootstrapLogNotFound')}',
+          location: AppToastLocation.bottom,
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      final selectedDir = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: l10n.tr('selectLogDownloadPath'),
+      );
+      if (selectedDir == null || selectedDir.trim().isEmpty) {
+        return;
+      }
+
+      final now = DateTime.now();
+      final timestamp =
+          '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+      final targetPath =
+          '$selectedDir${Platform.pathSeparator}bootstrap_$timestamp.log';
+
+      await sourceFile.copy(targetPath);
+
+      if (!mounted) return;
+      _showToast(
+        l10n.tr(
+          'downloadBootstrapLogSuccess',
+          params: {'path': targetPath},
+        ),
+        location: AppToastLocation.bottom,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(
+        l10n.tr(
+          'downloadBootstrapLogFailed',
+          params: {'error': '$e'},
+        ),
+        location: AppToastLocation.bottom,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingBootstrapLog = false;
+        });
+      }
+    }
   }
 
   @override
@@ -547,6 +626,58 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                                   ),
                                 );
                               }),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: colorScheme.outlineVariant),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.description_outlined),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    l10n.tr('bootstrapLogTitle'),
+                                    style: theme.textTheme.titleMedium,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              l10n.tr('bootstrapLogDescription'),
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.tonalIcon(
+                              onPressed: _downloadingBootstrapLog
+                                  ? null
+                                  : _downloadBootstrapLog,
+                              icon: _downloadingBootstrapLog
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.download_rounded),
+                              label: Text(
+                                _downloadingBootstrapLog
+                                    ? l10n.tr('downloadingLog')
+                                    : l10n.tr('downloadBootstrapLog'),
+                              ),
+                            ),
                           ],
                         ),
                       ),
