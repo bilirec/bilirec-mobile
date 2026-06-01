@@ -446,34 +446,61 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text(
-                      l10n.tr('developerSettingsTitle'),
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: colorScheme.outlineVariant),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.code_outlined),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    l10n.tr('environmentSettingsTitle'),
-                                    style: theme.textTheme.titleMedium,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
+                     Text(
+                       l10n.tr('developerSettingsTitle'),
+                       style: theme.textTheme.titleMedium,
+                     ),
+                     const SizedBox(height: 4),
+                     Text(
+                       l10n.tr('developerSectionDescription'),
+                       style: theme.textTheme.bodySmall?.copyWith(
+                         color: colorScheme.onSurfaceVariant,
+                       ),
+                     ),
+                     const SizedBox(height: 12),
+                     DecoratedBox(
+                       decoration: BoxDecoration(
+                         border: Border.all(color: colorScheme.outlineVariant),
+                         borderRadius: BorderRadius.circular(18),
+                       ),
+                       child: Padding(
+                         padding: const EdgeInsets.all(16),
+                         child: Column(
+                           crossAxisAlignment: CrossAxisAlignment.start,
+                           children: [
+                             Row(
+                               children: [
+                                 const Icon(Icons.code_outlined),
+                                 const SizedBox(width: 8),
+                                 Expanded(
+                                   child: Text(
+                                     l10n.tr('environmentSettingsTitle'),
+                                     style: theme.textTheme.titleMedium,
+                                   ),
+                                 ),
+                               ],
+                             ),
+                             const SizedBox(height: 8),
+                             Row(
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 Icon(
+                                   Icons.warning_amber_rounded,
+                                   size: 16,
+                                   color: colorScheme.error,
+                                 ),
+                                 const SizedBox(width: 6),
+                                 Expanded(
+                                   child: Text(
+                                     l10n.tr('environmentSettingsWarning'),
+                                     style: theme.textTheme.bodySmall?.copyWith(
+                                       color: colorScheme.error,
+                                     ),
+                                   ),
+                                 ),
+                               ],
+                             ),
+                             const SizedBox(height: 12),
                             OutlinedButton.icon(
                               onPressed: widget.controlsEnabled
                                   ? () => _showEnvironmentSettingDialog()
