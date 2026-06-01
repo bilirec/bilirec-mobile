@@ -21,6 +21,16 @@ Finder _findFirstVisibleText(Iterable<String> labels) {
   return find.text(labels.first);
 }
 
+Finder _findFirstVisibleContainingText(Iterable<String> labels) {
+  for (final label in labels) {
+    final finder = find.textContaining(label);
+    if (finder.evaluate().isNotEmpty) {
+      return finder;
+    }
+  }
+  return find.textContaining(labels.first);
+}
+
 Finder _findFirstWidgetWithText(Type widgetType, Iterable<String> labels) {
   for (final label in labels) {
     final finder = find.widgetWithText(widgetType, label);
@@ -42,10 +52,17 @@ final _changePathLabels = labelsForKey('changePath');
 final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
 final _ssePushDescriptionLabels = labelsForKey('ssePushDescription');
 final _ssePushHintLabels = labelsForKey('ssePushHint');
+final _antiSleepDisabledHintLabels = labelsForKey('antiSleepDisabledHint');
 final _developerSettingsTitleLabels = labelsForKey('developerSettingsTitle');
+final _developerSectionDescriptionLabels =
+    labelsForKey('developerSectionDescription');
 final _environmentSettingsTitleLabels = labelsForKey('environmentSettingsTitle');
+final _environmentSettingsWarningLabels = labelsForKey('environmentSettingsWarning');
 final _addEnvironmentSettingLabels = labelsForKey('addEnvironmentSetting');
 final _saveEnvironmentSettingLabels = labelsForKey('saveEnvironmentSetting');
+final _bootstrapLogTitleLabels = labelsForKey('bootstrapLogTitle');
+final _bootstrapLogDescriptionLabels = labelsForKey('bootstrapLogDescription');
+final _downloadBootstrapLogLabels = labelsForKey('downloadBootstrapLog');
 final _androidOnlyLabels = labelsForKey('androidOnly');
 final _languageTraditionalLabels = labelsForKey('languageTraditional');
 final _languageSimplifiedLabels = labelsForKey('languageSimplified');
@@ -129,11 +146,45 @@ void main() {
     expect(find.byType(Switch), findsNWidgets(2));
     expect(_findFirstVisibleText(_ssePushDescriptionLabels), findsOneWidget);
     expect(_findFirstVisibleText(_ssePushHintLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_antiSleepDisabledHintLabels), findsOneWidget);
     expect(_findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
+    expect(
+      _findFirstVisibleText(_developerSectionDescriptionLabels),
+      findsOneWidget,
+    );
     expect(_findFirstVisibleText(_environmentSettingsTitleLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_environmentSettingsWarningLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_bootstrapLogTitleLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_bootstrapLogDescriptionLabels), findsOneWidget);
+    expect(
+      _findFirstWidgetWithText(FilledButton, _downloadBootstrapLogLabels),
+      findsOneWidget,
+    );
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('output_dir'), isNull);
+  });
+
+  testWidgets('bootstrap log 下載按鈕可點擊', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+
+    final downloadButton =
+        _findFirstWidgetWithText(FilledButton, _downloadBootstrapLogLabels);
+    await tester.scrollUntilVisible(
+      downloadButton,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(downloadButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('可透過 dialog 新增環境參數並持久化', (tester) async {
