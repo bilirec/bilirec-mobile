@@ -8,22 +8,29 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'test_helper.dart';
 
-String visibleLabelsSummary(Iterable<String> labels) {
-  final visible =
-      labels.where((label) => find.text(label).evaluate().isNotEmpty).toList();
+Finder _findText(String label, {bool contains = false}) {
+  return contains ? find.textContaining(label) : find.text(label);
+}
+
+String visibleLabelsSummary(Iterable<String> labels, {bool contains = false}) {
+  final visible = labels
+      .where((label) => _findText(label, contains: contains).evaluate().isNotEmpty)
+      .toList();
   return visible.isEmpty ? '<none>' : visible.join(' | ');
 }
 
-bool isAnyLabelVisible(Iterable<String> labels) {
-  return labels.any((label) => find.text(label).evaluate().isNotEmpty);
+bool isAnyLabelVisible(Iterable<String> labels, {bool contains = false}) {
+  return labels.any(
+      (label) => _findText(label, contains: contains).evaluate().isNotEmpty);
 }
 
 Finder findFirstVisibleText(
   Iterable<String> labels, {
   String? logTag,
+  bool contains = false,
 }) {
   for (final label in labels) {
-    final finder = find.text(label);
+    final finder = _findText(label, contains: contains);
     if (finder.evaluate().isNotEmpty) {
       if (logTag != null) {
         testLog(logTag, 'find text success: "$label"');
@@ -34,7 +41,7 @@ Finder findFirstVisibleText(
   if (logTag != null) {
     testLog(logTag, 'find text fallback to first label: "${labels.first}"');
   }
-  return find.text(labels.first);
+  return _findText(labels.first, contains: contains);
 }
 
 Future<void> waitForAnyText(
@@ -43,6 +50,7 @@ Future<void> waitForAnyText(
   Duration timeout = const Duration(seconds: 30),
   Duration step = const Duration(milliseconds: 400),
   String? logTag,
+  bool contains = false,
 }) async {
   if (logTag != null) {
     testLog(
@@ -53,10 +61,12 @@ Future<void> waitForAnyText(
 
   final maxTicks = timeout.inMilliseconds ~/ step.inMilliseconds;
   for (var i = 0; i < maxTicks; i++) {
-    if (isAnyLabelVisible(labels)) {
+    if (isAnyLabelVisible(labels, contains: contains)) {
       if (logTag != null) {
-        testLog(logTag,
-            'wait any text done: visible=${visibleLabelsSummary(labels)}');
+        testLog(
+          logTag,
+          'wait any text done: visible=${visibleLabelsSummary(labels, contains: contains)}',
+        );
       }
       return;
     }
@@ -64,7 +74,7 @@ Future<void> waitForAnyText(
   }
 
   expect(
-    isAnyLabelVisible(labels),
+    isAnyLabelVisible(labels, contains: contains),
     isTrue,
     reason: '在 ${timeout.inSeconds} 秒內應看到 ${labels.join(' / ')} 其中之一',
   );
@@ -174,7 +184,7 @@ Future<void> assertBackendConnectableFromUi(
   bool failIfButtonMissing = false,
   String? logTag,
 }) async {
-  if (isAnyLabelVisible(connectionFailedLabels)) {
+  if (isAnyLabelVisible(connectionFailedLabels, contains: true)) {
     fail('檢查系統服務連線顯示無法連線/無回應，判定測試失敗');
   }
 
@@ -204,7 +214,7 @@ Future<void> assertBackendConnectableFromUi(
   for (var i = 0; i < 16; i++) {
     await tester.pump(const Duration(milliseconds: 500));
 
-    if (isAnyLabelVisible(connectionFailedLabels)) {
+    if (isAnyLabelVisible(connectionFailedLabels, contains: true)) {
       fail('檢查系統服務連線顯示無法連線/無回應，判定測試失敗');
     }
 

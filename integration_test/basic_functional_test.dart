@@ -7,25 +7,36 @@ import 'package:integration_test/integration_test.dart';
 import 'package:url_launcher_platform_interface/link.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
+import 'helpers/l10n_helper.dart';
 import 'helpers/test_helper.dart';
 import 'helpers/ui_helper.dart';
 
-const _startLabels = ['啟動', '启动'];
-const _stopLabels = ['停止'];
-const _titleLabels = ['Bilirec 服務控制中心', 'Bilirec 服务控制中心'];
-const _settingsLabels = ['打開服務啓動設定', '打开服务启动设置'];
-const _checkConnectionLabels = ['檢查系統服務連線', '检查系统服务连接'];
-const _openFrontendLabels = ['打開錄製管理程式', '打开录制管理程序'];
-const _runningStatusLabels = ['Bilirec 系統服務運行中', 'Bilirec 系统服务运行中'];
-const _inFlightPowerLabels = ['啟動中', '启动中', '停止中'];
-const _startingStatusLabels = [
-  '正在啟動 Bilirec 系統服務...',
-  '正在启动 Bilirec 系统服务...',
-  'Bilirec 系統服務已啟動，正在準備中...',
-  'Bilirec 系统服务已启动，正在准备中...',
-  '啟動中',
-  '启动中',
-];
+final _startLabels = labelsForKey('start');
+final _stopLabels = labelsForKey('stop');
+final _titleLabels = labelsForKey('controlCenterTitle');
+final _settingsLabels = labelsForKey('settings');
+final _checkConnectionLabels = labelsForKey('checkBackendConnection');
+final _openFrontendLabels = labelsForKey('openFrontend');
+final _runningStatusLabels = labelsForKey('backendRunning');
+final _inFlightPowerLabels = labelsForKeys(['startingShort', 'stoppingShort']);
+final _startingStatusLabels = labelsForKeys([
+  'startingService',
+  'foregroundStartWaitingCore',
+  'startingShort',
+]);
+final _androidOnlyLabels = labelsForKey('androidOnly');
+final _generalSettingsTitleLabels = labelsForKey('generalSettingsTitle');
+final _storagePathTitleLabels = labelsForKey('storagePathTitle');
+final _changePathLabels = labelsForKey('changePath');
+final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
+final _antiSleepTitleLabels = labelsForKey('antiSleepTitle');
+final _developerSettingsTitleLabels = labelsForKey('developerSettingsTitle');
+final _environmentSettingsTitleLabels = labelsForKey('environmentSettingsTitle');
+final _addEnvironmentSettingLabels = labelsForKey('addEnvironmentSetting');
+final _savedEnvironmentSettingsTitleLabels =
+    labelsForKey('savedEnvironmentSettingsTitle');
+final _batteryDialogTitleLabels = labelsForKey('batteryDialogTitle');
+final _goToSettingsLabels = labelsForKey('goToSettings');
 
 class _FakeUrlLauncherPlatform extends UrlLauncherPlatform {
   bool didLaunch = false;
@@ -102,12 +113,19 @@ void main() {
       await tester.tap(findFirstVisibleText(_settingsLabels));
       await tester.pumpAndSettle();
 
-      expect(find.text('設定錄製輸出路徑'), findsOneWidget);
-      expect(find.text('儲存路徑'), findsOneWidget);
-      expect(find.text('變更路徑'), findsOneWidget);
-      expect(find.text('通知模式設定'), findsOneWidget);
-      expect(find.text('本地通知模式'), findsOneWidget);
-      expect(find.byType(Switch), findsOneWidget);
+      expect(findFirstVisibleText(_generalSettingsTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_storagePathTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_changePathLabels), findsOneWidget);
+      expect(findFirstVisibleText(_ssePushSwitchTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_antiSleepTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_environmentSettingsTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_addEnvironmentSettingLabels), findsOneWidget);
+      expect(
+        findFirstVisibleText(_savedEnvironmentSettingsTitleLabels),
+        findsOneWidget,
+      );
+      expect(find.byType(Switch), findsNWidgets(2));
     });
 
     testWidgets('3. 啟動服務後顯示動作區並可檢查連線', (tester) async {
@@ -117,8 +135,7 @@ void main() {
       await tester.tap(findFirstVisibleText(_startLabels));
       await tester.pump(const Duration(milliseconds: 500));
 
-      final canContinue =
-          find.text('目前只支援 Android').evaluate().isNotEmpty == false;
+      final canContinue = !isAnyLabelVisible(_androidOnlyLabels);
       if (!canContinue) {
         markTestSkipped('目前只支援 Android，跳過此整合測試案例');
         return;
@@ -166,8 +183,8 @@ void main() {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      expect(find.text('需要關閉省電限制'), findsOneWidget);
-      expect(find.text('前往設定'), findsOneWidget);
+      expect(findFirstVisibleText(_batteryDialogTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_goToSettingsLabels), findsOneWidget);
       // 不真的送出，避免跳出測試 App
     });
 

@@ -6,26 +6,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'helpers/api_helper.dart';
+import 'helpers/l10n_helper.dart';
 import 'helpers/test_helper.dart';
 import 'helpers/ui_helper.dart';
 
-const _startLabels = ['啟動', '启动'];
-const _stopLabels = ['停止'];
-const _inFlightPowerLabels = ['啟動中', '启动中', '停止中'];
-const _backendRunningLabels = [
-  'Bilirec 系統服務運行中',
-  'Bilirec 系统服务运行中',
-  'Bilirec 後端運行中',
-];
-const _checkConnectionLabels = ['檢查系統服務連線', '检查系统服务连接', '檢測後端連線'];
-const _connectionFailedLabels = [
-  'Bilirec 系統服務沒有回應，請確認已啟動',
-  'Bilirec 系统服务没有响应，请确认已启动',
-  '目前無法連線到 Bilirec 系統服務，請確認已啟動',
-  '目前无法连接到 Bilirec 系统服务，请确认已启动',
-];
-const _settingsLabels = ['設置錄製輸出路徑', '设置录制输出路径', '打開服務啓動設定', '打开服务启动设置'];
-const _localModeLabels = ['本地通知模式', '本地通知模式'];
+final _startLabels = labelsForKey('start');
+final _stopLabels = labelsForKey('stop');
+final _inFlightPowerLabels = labelsForKeys(['startingShort', 'stoppingShort']);
+final _backendRunningLabels = labelsForKey('backendRunning');
+final _checkConnectionLabels = labelsForKey('checkBackendConnection');
+final _connectionFailedLabels =
+    labelsForKeys(['backendNoResponseHint', 'backendCannotConnect']);
+final _settingsLabels = labelsForKey('settings');
+final _localModeLabels = labelsForKey('ssePushSwitchTitle');
 
 const _logTag = 'SERVICE_TOGGLE_STRESS_TEST';
 
