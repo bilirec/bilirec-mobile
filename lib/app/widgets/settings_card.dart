@@ -263,11 +263,9 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
     try {
       final appSupport = await getApplicationSupportDirectory();
-      final sourcePath =
-          '${appSupport.path}${Platform.pathSeparator}bootstrap.log';
-      final sourceFile = File(sourcePath);
+      final sourceDir = Directory(appSupport.path);
 
-      if (!await sourceFile.exists()) {
+      if (!await sourceDir.exists()) {
         if (!mounted) return;
         _showToast(
           '⚠️ ${l10n.tr('downloadBootstrapLogNotFound')}',
@@ -275,6 +273,31 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         );
         return;
       }
+
+      // 找出所有 bootstrap*.log 分片（lumberjack 輪轉後產生的歷史片段 + 當前主日誌）
+      final entities = await sourceDir.list().toList();
+      final logFiles = entities
+          .whereType<File>()
+          .where((f) {
+            final name = f.uri.pathSegments.last;
+            // 只抓 bootstrap*.log，排除 .gz 或其他無關檔案
+            return name.startsWith('bootstrap') && name.endsWith('.log');
+          })
+          .toList();
+
+      if (logFiles.isEmpty) {
+        if (!mounted) return;
+        _showToast(
+          '⚠️ ${l10n.tr('downloadBootstrapLogNotFound')}',
+          location: AppToastLocation.bottom,
+        );
+        return;
+      }
+
+      // 依檔名排序：lumberjack 歷史檔帶 `-YYYY-MM-DD` 時間戳，
+      // ASCII '-'(45) < '.'(46)，所以 bootstrap-2026-... 排在 bootstrap.log 之前，
+      // 結果即「由舊到新」，當前主日誌永遠排最後。
+      logFiles.sort((a, b) => a.path.compareTo(b.path));
 
       if (!mounted) return;
       final selectedDir = await FilePicker.platform.getDirectoryPath(
@@ -290,13 +313,27 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       final targetPath =
           '$selectedDir${Platform.pathSeparator}bootstrap_$timestamp.log';
 
-      await sourceFile.copy(targetPath);
+      // 串流合併：逐一將每個分片寫入目標檔案，避免一次性讀入記憶體
+      final targetFile = File(targetPath);
+      final sink = targetFile.openWrite(mode: FileMode.write);
+      try {
+        for (final file in logFiles) {
+          await sink.addStream(file.openRead());
+          // 確保每個分片接縫有換行，防止最後一行與下一片黏連
+          sink.writeln();
+        }
+      } finally {
+        await sink.close();
+      }
 
       if (!mounted) return;
       _showToast(
         l10n.tr(
           'downloadBootstrapLogSuccess',
-          params: {'path': targetPath},
+          params: {
+            'path': targetPath,
+            'count': '${logFiles.length}',
+          },
         ),
         location: AppToastLocation.bottom,
       );
