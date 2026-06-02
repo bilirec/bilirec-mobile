@@ -46,8 +46,8 @@
 - 绑定原生符号：
   - `Start(char* configJson)`
   - `Stop()`
-- 使用 JSON 传递启动参数（如 `basePath`、`outputDir`）。
-- 启用 SSE 推送时，启动会生成随机 `sseToken` 传给核心，并连接 `GET /sse?token=...` 监听事件。
+- 使用 JSON 传递启动参数：`basePath` + `env`（例如 `OUTPUT_DIR`、`NOTIFY_SSE_TOKEN`）。
+- 启用 SSE 推送时，启动会生成随机 token，通过 `env.NOTIFY_SSE_TOKEN` 传给核心，并连接 `GET /sse?token=...` 监听事件。
 
 ### 3) 资源监控（`lib/resource_monitor.dart`）
 

@@ -81,12 +81,20 @@ class BilirecTaskHandler extends TaskHandler {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_ppkAlertChannel);
 
+    final startEnv = <String, String>{};
+    if (outputDir != null && outputDir.isNotEmpty) {
+      startEnv['OUTPUT_DIR'] = outputDir;
+    }
+    if (_sseToken != null && _sseToken!.isNotEmpty) {
+      startEnv['NOTIFY_SSE_TOKEN'] = _sseToken!;
+    }
+    // Developer options should have higher priority than regular settings.
+    startEnv.addAll(_environmentSettings);
+
     final result = await BilirecService.start(
       StartConfig(
         basePath: basePath,
-        outputDir: outputDir,
-        sseToken: _sseToken,
-        env: _environmentSettings,
+        env: startEnv.isEmpty ? null : startEnv,
       ),
     );
 
