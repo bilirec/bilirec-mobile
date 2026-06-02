@@ -36,6 +36,7 @@ class BilirecTaskHandler extends TaskHandler {
   bool _sseEnabled = false;
   bool _destroyed = false;
   bool _antiSleepEnabled = false;
+  bool _networkLockRequested = false;
   String? _sseToken;
   Map<String, String> _environmentSettings = const {};
 
@@ -72,8 +73,7 @@ class BilirecTaskHandler extends TaskHandler {
 
     if (_antiSleepEnabled) {
       _networkLockService = NetworkLockService();
-      await _networkLockService.start();
-      debugLog('激進防休眠模式已啓用，網路鎖定服務已啓動');
+      debugLog('激進防休眠模式已啓用，將在錄製時動態啓停網路鎖定服務');
     }
 
     await _localNotifications
@@ -134,27 +134,57 @@ class BilirecTaskHandler extends TaskHandler {
     final (cpu, ram) = _monitor.getUsage();
     debugLog(
         '資源使用 - CPU: ${cpu.toStringAsFixed(1)}%, RAM: ${ram.toStringAsFixed(1)}MB');
+    final isRecordingNow = await _isRecording();
+
     var title = _l10n.tr('notificationTitleRunning');
     if (_antiSleepEnabled) {
+      final currentStatus = await _networkLockService.getStatus();
+      final isNativeLockActive = _isNetworkLockActive(currentStatus);
+      await _syncNetworkLockWithRecording(
+        isRecording: isRecordingNow,
+        isNativeLockActive: isNativeLockActive,
+      );
+
       final status = await _networkLockService.getStatus();
       debugLog(
-          'lock status: wifi=${status?.isWifiLocked}, cellular=${status?.isCellularLocked}');
-      if (status != null) {
-        if (status.isWifiLocked) {
-          title = '$title ⚡🛜';
-        } else if (status.isCellularLocked) {
-          title = '$title ⚡🌐';
-        }
+          'lock status: requested=$_networkLockRequested, wifi=${status?.isWifiLocked}, cellular=${status?.isCellularLocked}');
+      if (status?.isWifiLocked == true) {
+        title = '$title ⚡🛜';
+      } else if (status?.isCellularLocked == true) {
+        title = '$title ⚡🌐';
       }
     }
     final text = _l10n.tr('notificationTextRunning');
     final recordingLabel = _l10n.tr('recording');
-    final isRecording = await _isRecording() ? '$recordingLabel • ' : '';
+    final isRecording = isRecordingNow ? '$recordingLabel • ' : '';
     await FlutterForegroundTask.updateService(
       notificationTitle: title,
       notificationText:
           '$text\n[ $isRecording${_formatMonitorData(cpu, ram)} ]',
     );
+  }
+
+  Future<void> _syncNetworkLockWithRecording({
+    required bool isRecording,
+    required bool isNativeLockActive,
+  }) async {
+    if (isRecording && !_networkLockRequested) {
+      final started = await _networkLockService.start();
+      _networkLockRequested = started;
+      debugLog('recording=true，請求啓用網路鎖定服務: $started');
+      return;
+    }
+
+    // If recording is stopped, release lock even when local requested state drifts.
+    if (!isRecording && (_networkLockRequested || isNativeLockActive)) {
+      final stopped = await _networkLockService.stop();
+      _networkLockRequested = false;
+      debugLog('recording=false，請求停用網路鎖定服務: $stopped');
+    }
+  }
+
+  bool _isNetworkLockActive(NetworkLockStatus? status) {
+    return status?.isWifiLocked == true || status?.isCellularLocked == true;
   }
 
   // 建議的顯示格式轉換邏輯
@@ -242,9 +272,10 @@ class BilirecTaskHandler extends TaskHandler {
     }
     if (_antiSleepEnabled) {
       debugLog('[STOP/TASK][$opId] before _networkLockService.stop()');
-      await _networkLockService.stop();
+      final stopped = await _networkLockService.stop();
+      _networkLockRequested = false;
       debugLog(
-          '[STOP/TASK][$opId] after _networkLockService.stop() (${sw.elapsedMilliseconds}ms)');
+          '[STOP/TASK][$opId] after _networkLockService.stop() (${sw.elapsedMilliseconds}ms) result=$stopped');
     }
     debugLog('[STOP/TASK][$opId] before Preferences.getStoppedByUser()');
     final stoppedByUser = await Preferences.getStoppedByUser();
