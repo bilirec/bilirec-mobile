@@ -54,9 +54,29 @@ class SettingsDrawerSheet extends StatefulWidget {
 }
 
 class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
+  static const int _bytesPerGb = 1024 * 1024 * 1024;
+  static const List<int> _diskSpaceOptionsGb = <int>[2, 5, 10];
+  static const List<int> _retryMinuteOptions = <int>[5, 10, 15, 20, 25, 30];
+  static const List<int> _maxConcurrentRecordingOptions = <int>[3, 4, 5, 6];
+  static const Set<String> _managedEnvironmentKeys = <String>{
+    'MAX_RECORDING_HOURS',
+    'MIN_DISK_SPACE_BYTES',
+    'MAX_RETRY_MINUTES',
+    'MAX_CONCURRENT_RECORDINGS',
+  };
+
+  static const int _defaultMaxRecordingHours = 5;
+  static const int _defaultMinDiskSpaceGb = 5;
+  static const int _defaultMaxRetryMinutes = 10;
+  static const int _defaultMaxConcurrentRecordings = 3;
+
   bool _useSsePush = false;
   bool _useAntiSleep = false;
   bool _downloadingBootstrapLog = false;
+  int _maxRecordingHours = _defaultMaxRecordingHours;
+  int _minDiskSpaceGb = _defaultMinDiskSpaceGb;
+  int _maxRetryMinutes = _defaultMaxRetryMinutes;
+  int _maxConcurrentRecordings = _defaultMaxConcurrentRecordings;
   Map<String, String> _environmentSettings = <String, String>{};
 
   final TextEditingController _outputDirController = TextEditingController();
@@ -93,6 +113,11 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       _useSsePush = useSsePush;
       _useAntiSleep = useAntiSleep;
       _environmentSettings = environmentSettings;
+      _maxRecordingHours = _readMaxRecordingHours(environmentSettings);
+      _minDiskSpaceGb = _readMinDiskSpaceGb(environmentSettings);
+      _maxRetryMinutes = _readMaxRetryMinutes(environmentSettings);
+      _maxConcurrentRecordings =
+          _readMaxConcurrentRecordings(environmentSettings);
     });
   }
 
@@ -138,6 +163,131 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     });
   }
 
+  int _readBoundedIntFromEnv(
+    Map<String, String> env,
+    String key, {
+    required int fallback,
+    required int min,
+    required int max,
+  }) {
+    final parsed = int.tryParse(env[key] ?? '');
+    if (parsed == null) return fallback;
+    return parsed.clamp(min, max);
+  }
+
+  int _readMaxRecordingHours(Map<String, String> env) {
+    return _readBoundedIntFromEnv(
+      env,
+      'MAX_RECORDING_HOURS',
+      fallback: _defaultMaxRecordingHours,
+      min: 0,
+      max: 12,
+    );
+  }
+
+  int _readMaxRetryMinutes(Map<String, String> env) {
+    final fallback = _defaultMaxRetryMinutes;
+    final parsed = int.tryParse(env['MAX_RETRY_MINUTES'] ?? '');
+    if (parsed == null) return fallback;
+
+    final stepped = ((parsed / 5).round() * 5).clamp(5, 30);
+    if (_retryMinuteOptions.contains(stepped)) {
+      return stepped;
+    }
+    return fallback;
+  }
+
+  int _readMaxConcurrentRecordings(Map<String, String> env) {
+    final value = _readBoundedIntFromEnv(
+      env,
+      'MAX_CONCURRENT_RECORDINGS',
+      fallback: _defaultMaxConcurrentRecordings,
+      min: _maxConcurrentRecordingOptions.first,
+      max: _maxConcurrentRecordingOptions.last,
+    );
+    if (_maxConcurrentRecordingOptions.contains(value)) {
+      return value;
+    }
+    return _defaultMaxConcurrentRecordings;
+  }
+
+  int _readMinDiskSpaceGb(Map<String, String> env) {
+    final bytes = int.tryParse(env['MIN_DISK_SPACE_BYTES'] ?? '');
+    if (bytes == null || bytes <= 0) {
+      return _defaultMinDiskSpaceGb;
+    }
+
+    var best = _diskSpaceOptionsGb.first;
+    var bestDiff = (bytes - (best * _bytesPerGb)).abs();
+    for (final option in _diskSpaceOptionsGb.skip(1)) {
+      final diff = (bytes - (option * _bytesPerGb)).abs();
+      if (diff < bestDiff) {
+        best = option;
+        bestDiff = diff;
+      }
+    }
+    return best;
+  }
+
+  Future<void> _setManagedEnvironmentSetting(
+    String key,
+    String value,
+  ) async {
+    final updated = <String, String>{..._environmentSettings, key: value};
+    await Preferences.setEnvironmentSettings(updated);
+    if (!mounted) return;
+    setState(() {
+      _environmentSettings = updated;
+    });
+  }
+
+  Future<void> _setMaxRecordingHours(int value) async {
+    final next = value.clamp(0, 12);
+    await _setManagedEnvironmentSetting('MAX_RECORDING_HOURS', '$next');
+    if (!mounted) return;
+    setState(() {
+      _maxRecordingHours = next;
+    });
+  }
+
+  Future<void> _setMinDiskSpaceGb(int value) async {
+    if (!_diskSpaceOptionsGb.contains(value)) return;
+    final bytes = value * _bytesPerGb;
+    await _setManagedEnvironmentSetting('MIN_DISK_SPACE_BYTES', '$bytes');
+    if (!mounted) return;
+    setState(() {
+      _minDiskSpaceGb = value;
+    });
+  }
+
+  Future<void> _setMaxRetryMinutes(int value) async {
+    if (!_retryMinuteOptions.contains(value)) return;
+    await _setManagedEnvironmentSetting('MAX_RETRY_MINUTES', '$value');
+    if (!mounted) return;
+    setState(() {
+      _maxRetryMinutes = value;
+    });
+  }
+
+  Future<void> _setMaxConcurrentRecordings(int value) async {
+    if (!_maxConcurrentRecordingOptions.contains(value)) return;
+    await _setManagedEnvironmentSetting('MAX_CONCURRENT_RECORDINGS', '$value');
+    if (!mounted) return;
+    setState(() {
+      _maxConcurrentRecordings = value;
+    });
+  }
+
+  int _optionFromSlider(List<int> options, double sliderValue) {
+    final index = sliderValue.round().clamp(0, options.length - 1);
+    return options[index];
+  }
+
+  double _sliderFromOption(List<int> options, int value) {
+    final index = options.indexOf(value);
+    return (index >= 0 ? index : 0).toDouble();
+  }
+
   Future<void> _upsertEnvironmentSetting({
     required String key,
     required String value,
@@ -160,6 +310,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     if (!mounted) return;
     setState(() {
       _environmentSettings = updated;
+      _maxRecordingHours = _readMaxRecordingHours(updated);
+      _minDiskSpaceGb = _readMinDiskSpaceGb(updated);
+      _maxRetryMinutes = _readMaxRetryMinutes(updated);
+      _maxConcurrentRecordings = _readMaxConcurrentRecordings(updated);
     });
   }
 
@@ -252,6 +406,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     if (!mounted) return;
     setState(() {
       _environmentSettings = updated;
+      _maxRecordingHours = _readMaxRecordingHours(updated);
+      _minDiskSpaceGb = _readMinDiskSpaceGb(updated);
+      _maxRetryMinutes = _readMaxRetryMinutes(updated);
+      _maxConcurrentRecordings = _readMaxConcurrentRecordings(updated);
     });
   }
 
@@ -363,6 +521,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         : trimmedOutputPath;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final customEnvironmentEntries = _environmentSettings.entries
+        .where((entry) => !_managedEnvironmentKeys.contains(entry.key))
+        .toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
 
     return SafeArea(
       top: false,
@@ -562,6 +724,273 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: colorScheme.outlineVariant),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.tune_rounded),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    l10n.tr('recordingPolicyTitle'),
+                                    style: theme.textTheme.titleMedium,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              l10n.tr('recordingPolicyDescription'),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              l10n.tr('maxRecordingHoursTitle'),
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.tr('maxRecordingHoursDescription'),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _maxRecordingHours == 0
+                                  ? l10n.tr('hoursUnlimitedOption')
+                                  : l10n.tr(
+                                      'hoursOption',
+                                      params: {'value': '$_maxRecordingHours'},
+                                    ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              // Keep line metrics stable between different label texts.
+                              strutStyle: StrutStyle(
+                                fontSize: theme.textTheme.bodySmall?.fontSize,
+                                height: 1.25,
+                                forceStrutHeight: true,
+                              ),
+                            ),
+                            Slider(
+                              value: _maxRecordingHours.toDouble(),
+                              min: 0,
+                              max: 12,
+                              divisions: 12,
+                              label: _maxRecordingHours == 0
+                                  ? l10n.tr('hoursUnlimitedOption')
+                                  : l10n.tr(
+                                      'hoursOption',
+                                      params: {'value': '$_maxRecordingHours'},
+                                    ),
+                              onChanged: widget.controlsEnabled
+                                  ? (value) {
+                                      setState(() {
+                                        _maxRecordingHours = value.round();
+                                      });
+                                    }
+                                  : null,
+                              onChangeEnd: widget.controlsEnabled
+                                  ? (value) {
+                                      _setMaxRecordingHours(value.round());
+                                    }
+                                  : null,
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              l10n.tr('minDiskSpaceTitle'),
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.tr('minDiskSpaceDescription'),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.tr(
+                                'diskSpaceOption',
+                                params: {'value': '$_minDiskSpaceGb'},
+                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            Slider(
+                              value: _sliderFromOption(
+                                _diskSpaceOptionsGb,
+                                _minDiskSpaceGb,
+                              ),
+                              min: 0,
+                              max: (_diskSpaceOptionsGb.length - 1).toDouble(),
+                              divisions: _diskSpaceOptionsGb.length - 1,
+                              label: l10n.tr(
+                                'diskSpaceOption',
+                                params: {'value': '$_minDiskSpaceGb'},
+                              ),
+                              onChanged: widget.controlsEnabled
+                                  ? (value) {
+                                      setState(() {
+                                        _minDiskSpaceGb = _optionFromSlider(
+                                          _diskSpaceOptionsGb,
+                                          value,
+                                        );
+                                      });
+                                    }
+                                  : null,
+                              onChangeEnd: widget.controlsEnabled
+                                  ? (value) {
+                                      _setMinDiskSpaceGb(
+                                        _optionFromSlider(
+                                          _diskSpaceOptionsGb,
+                                          value,
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              l10n.tr('maxRetryMinutesTitle'),
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.tr('maxRetryMinutesDescription'),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.tr(
+                                'minutesOption',
+                                params: {'value': '$_maxRetryMinutes'},
+                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            Slider(
+                              value: _sliderFromOption(
+                                _retryMinuteOptions,
+                                _maxRetryMinutes,
+                              ),
+                              min: 0,
+                              max: (_retryMinuteOptions.length - 1).toDouble(),
+                              divisions: _retryMinuteOptions.length - 1,
+                              label: l10n.tr(
+                                'minutesOption',
+                                params: {'value': '$_maxRetryMinutes'},
+                              ),
+                              onChanged: widget.controlsEnabled
+                                  ? (value) {
+                                      setState(() {
+                                        _maxRetryMinutes = _optionFromSlider(
+                                          _retryMinuteOptions,
+                                          value,
+                                        );
+                                      });
+                                    }
+                                  : null,
+                              onChangeEnd: widget.controlsEnabled
+                                  ? (value) {
+                                      _setMaxRetryMinutes(
+                                        _optionFromSlider(
+                                          _retryMinuteOptions,
+                                          value,
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              l10n.tr('maxConcurrentRecordingsTitle'),
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.tr('maxConcurrentRecordingsDescription'),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 16,
+                                  color: Colors.amber.shade700,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    l10n.tr('maxConcurrentRecordingsWarning'),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: Colors.amber.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.tr(
+                                'concurrentRecordingOption',
+                                params: {'value': '$_maxConcurrentRecordings'},
+                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            Slider(
+                              value: _sliderFromOption(
+                                _maxConcurrentRecordingOptions,
+                                _maxConcurrentRecordings,
+                              ),
+                              min: 0,
+                              max: (_maxConcurrentRecordingOptions.length - 1)
+                                  .toDouble(),
+                              divisions: _maxConcurrentRecordingOptions.length - 1,
+                              label: l10n.tr(
+                                'concurrentRecordingOption',
+                                params: {'value': '$_maxConcurrentRecordings'},
+                              ),
+                              onChanged: widget.controlsEnabled
+                                  ? (value) {
+                                      setState(() {
+                                        _maxConcurrentRecordings =
+                                            _optionFromSlider(
+                                          _maxConcurrentRecordingOptions,
+                                          value,
+                                        );
+                                      });
+                                    }
+                                  : null,
+                              onChangeEnd: widget.controlsEnabled
+                                  ? (value) {
+                                      _setMaxConcurrentRecordings(
+                                        _optionFromSlider(
+                                          _maxConcurrentRecordingOptions,
+                                          value,
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                      Text(
                        l10n.tr('developerSettingsTitle'),
                        style: theme.textTheme.titleMedium,
@@ -630,13 +1059,13 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                               style: theme.textTheme.titleSmall,
                             ),
                             const SizedBox(height: 8),
-                            if (_environmentSettings.isEmpty)
+                            if (customEnvironmentEntries.isEmpty)
                               Text(
                                 l10n.tr('environmentSettingsEmpty'),
                                 style: theme.textTheme.bodySmall,
                               )
                             else
-                              ..._environmentSettings.entries.map((entry) {
+                              ...customEnvironmentEntries.map((entry) {
                                 // 在這裡包上 Material
                                 return Material(
                                   color: Colors.transparent, // 保持透明，露出底下的 DecoratedBox 顏色

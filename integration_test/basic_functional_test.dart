@@ -1,4 +1,5 @@
 import 'package:bilirec/main.dart' as app;
+import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task_platform_interface.dart';
@@ -37,6 +38,43 @@ final _savedEnvironmentSettingsTitleLabels =
     labelsForKey('savedEnvironmentSettingsTitle');
 final _batteryDialogTitleLabels = labelsForKey('batteryDialogTitle');
 final _goToSettingsLabels = labelsForKey('goToSettings');
+
+Future<void> _openSettingsSheet(WidgetTester tester) async {
+  final settingsFinder = findFirstVisibleText(_settingsLabels).first;
+  await tester.ensureVisible(settingsFinder);
+  await tester.pump(const Duration(milliseconds: 120));
+  await tester.tap(settingsFinder, warnIfMissed: false);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _closeSettingsSheet(WidgetTester tester) async {
+  final sheetFinder = find.byType(BottomSheet);
+  if (sheetFinder.evaluate().isEmpty) {
+    return;
+  }
+  final context = tester.element(sheetFinder.first);
+  Navigator.of(context).pop();
+  await tester.pumpAndSettle(const Duration(milliseconds: 200));
+}
+
+Future<void> _setRecordingPolicyValues(WidgetTester tester) async {
+  final sliders = tester.widgetList<Slider>(find.byType(Slider)).toList();
+  expect(sliders.length, greaterThanOrEqualTo(4), reason: '應至少有 4 個錄製策略滑動條');
+
+  // 順序：時長上限、啟動前可用空間、斷線等待、同時錄製上限。
+  sliders[0].onChanged?.call(0);
+  sliders[0].onChangeEnd?.call(0);
+  await tester.pumpAndSettle();
+  sliders[1].onChanged?.call(2);
+  sliders[1].onChangeEnd?.call(2);
+  await tester.pumpAndSettle();
+  sliders[2].onChanged?.call(5);
+  sliders[2].onChangeEnd?.call(5);
+  await tester.pumpAndSettle();
+  sliders[3].onChanged?.call(1);
+  sliders[3].onChangeEnd?.call(1);
+  await tester.pumpAndSettle();
+}
 
 class _FakeUrlLauncherPlatform extends UrlLauncherPlatform {
   bool didLaunch = false;
@@ -229,6 +267,62 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(milliseconds: 500));
       expect(fakeUrlLauncher.didLaunch, isTrue, reason: '全流程中應觸發啟動前端跳轉');
+
+      await _stopServiceIfRunning(tester);
+    });
+
+    testWidgets('6. 錄製策略設定可持久化並在重開後回填', (tester) async {
+      app.main();
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
+      await _openSettingsSheet(tester);
+
+      final initialSliders =
+          tester.widgetList<Slider>(find.byType(Slider)).toList(growable: false);
+      expect(initialSliders.length, greaterThanOrEqualTo(4));
+      expect(initialSliders[0].value, 5);
+      expect(initialSliders[1].value, 1);
+      expect(initialSliders[2].value, 1);
+      expect(initialSliders[3].value, 0);
+
+      await _setRecordingPolicyValues(tester);
+
+      final envAfterUpdate = await Preferences.getEnvironmentSettings();
+      expect(envAfterUpdate['MAX_RECORDING_HOURS'], '0');
+      expect(
+        envAfterUpdate['MIN_DISK_SPACE_BYTES'],
+        '${10 * 1024 * 1024 * 1024}',
+      );
+      expect(envAfterUpdate['MAX_RETRY_MINUTES'], '30');
+      expect(envAfterUpdate['MAX_CONCURRENT_RECORDINGS'], '4');
+
+      app.main();
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
+      await _openSettingsSheet(tester);
+      final slidersAfterRestart =
+          tester.widgetList<Slider>(find.byType(Slider)).toList(growable: false);
+      expect(slidersAfterRestart.length, greaterThanOrEqualTo(4));
+      expect(slidersAfterRestart[0].value, 0);
+      expect(slidersAfterRestart[1].value, 2);
+      expect(slidersAfterRestart[2].value, 5);
+      expect(slidersAfterRestart[3].value, 1);
+
+      await _closeSettingsSheet(tester);
+
+      await tester.tap(findFirstVisibleText(_startLabels));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      if (isAnyLabelVisible(_androidOnlyLabels)) {
+        markTestSkipped('目前只支援 Android，跳過此整合測試案例');
+        return;
+      }
+
+      await waitForAnyText(
+        tester,
+        [..._startingStatusLabels, ..._runningStatusLabels],
+        timeout: const Duration(seconds: 25),
+      );
 
       await _stopServiceIfRunning(tester);
     });

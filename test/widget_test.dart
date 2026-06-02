@@ -53,6 +53,16 @@ final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
 final _ssePushDescriptionLabels = labelsForKey('ssePushDescription');
 final _ssePushHintLabels = labelsForKey('ssePushHint');
 final _antiSleepDisabledHintLabels = labelsForKey('antiSleepDisabledHint');
+final _recordingPolicyTitleLabels = labelsForKey('recordingPolicyTitle');
+final _recordingPolicyDescriptionLabels =
+    labelsForKey('recordingPolicyDescription');
+final _maxRecordingHoursTitleLabels = labelsForKey('maxRecordingHoursTitle');
+final _minDiskSpaceTitleLabels = labelsForKey('minDiskSpaceTitle');
+final _maxRetryMinutesTitleLabels = labelsForKey('maxRetryMinutesTitle');
+final _maxConcurrentRecordingsTitleLabels =
+    labelsForKey('maxConcurrentRecordingsTitle');
+final _maxConcurrentRecordingsWarningLabels =
+    labelsForKey('maxConcurrentRecordingsWarning');
 final _developerSettingsTitleLabels = labelsForKey('developerSettingsTitle');
 final _developerSectionDescriptionLabels =
     labelsForKey('developerSectionDescription');
@@ -147,6 +157,23 @@ void main() {
     expect(_findFirstVisibleText(_ssePushDescriptionLabels), findsOneWidget);
     expect(_findFirstVisibleText(_ssePushHintLabels), findsOneWidget);
     expect(_findFirstVisibleText(_antiSleepDisabledHintLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_recordingPolicyTitleLabels), findsOneWidget);
+    expect(
+      _findFirstVisibleText(_recordingPolicyDescriptionLabels),
+      findsOneWidget,
+    );
+    expect(_findFirstVisibleText(_maxRecordingHoursTitleLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_minDiskSpaceTitleLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_maxRetryMinutesTitleLabels), findsOneWidget);
+    expect(
+      _findFirstVisibleText(_maxConcurrentRecordingsTitleLabels),
+      findsOneWidget,
+    );
+    expect(
+      _findFirstVisibleText(_maxConcurrentRecordingsWarningLabels),
+      findsOneWidget,
+    );
+    expect(find.byType(Slider), findsNWidgets(4));
     expect(_findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
     expect(
       _findFirstVisibleText(_developerSectionDescriptionLabels),
@@ -218,6 +245,39 @@ void main() {
 
     final envSettings = await Preferences.getEnvironmentSettings();
     expect(envSettings['BILIREC_ENV'], 'staging');
+  });
+
+  testWidgets('錄製策略設定變更會更新環境參數', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+
+    final sliders = tester.widgetList<Slider>(find.byType(Slider));
+
+    // 設定順序：時長上限、啟動前可用空間、斷線等待、同時錄製上限。
+    sliders.elementAt(0).onChanged?.call(12);
+    sliders.elementAt(0).onChangeEnd?.call(12);
+    await tester.pumpAndSettle();
+    sliders.elementAt(1).onChanged?.call(2); // 2GB,5GB,10GB -> index 2
+    sliders.elementAt(1).onChangeEnd?.call(2);
+    await tester.pumpAndSettle();
+    sliders.elementAt(2).onChanged?.call(5); // 5,10,15,20,25,30 -> index 5
+    sliders.elementAt(2).onChangeEnd?.call(5);
+    await tester.pumpAndSettle();
+    sliders.elementAt(3).onChanged?.call(3); // 3,4,5,6 -> index 3
+    sliders.elementAt(3).onChangeEnd?.call(3);
+    await tester.pumpAndSettle();
+
+    final envSettings = await Preferences.getEnvironmentSettings();
+    expect(envSettings['MAX_RECORDING_HOURS'], '12');
+    expect(
+      envSettings['MIN_DISK_SPACE_BYTES'],
+      '${10 * 1024 * 1024 * 1024}',
+    );
+    expect(envSettings['MAX_RETRY_MINUTES'], '30');
+    expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
   });
 
   testWidgets('服務啟動後設定按鈕會被禁用', (tester) async {
