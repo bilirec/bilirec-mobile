@@ -31,6 +31,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        ndk {
+            abiFilters.clear()
+        }
     }
 
     signingConfigs {
@@ -47,8 +51,24 @@ android {
     }
 
     buildTypes {
+
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+
+            ndk {
+                // libbilirec.so only provides these two architectures
+                // x86_64 for android emulator, arm64-v8a for real devices
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
+        }
+
         release {
             signingConfig = signingConfigs.getByName("release")
+
+            ndk {
+                //noinspection ChromeOsAbiSupport
+                abiFilters += listOf("arm64-v8a") // x86_64 已經被淘汰
+            }
         }
     }
 }
