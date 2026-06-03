@@ -63,6 +63,11 @@ final _maxConcurrentRecordingsTitleLabels =
     labelsForKey('maxConcurrentRecordingsTitle');
 final _maxConcurrentRecordingsWarningLabels =
     labelsForKey('maxConcurrentRecordingsWarning');
+final _fileConversionTitleLabels = labelsForKey('fileConversionTitle');
+final _convertToMp4TitleLabels = labelsForKey('convertToMp4Title');
+final _convertToMp4DescriptionLabels = labelsForKey('convertToMp4Description');
+final _deleteSourceAfterConvertTitleLabels =
+    labelsForKey('deleteSourceAfterConvertTitle');
 final _developerSettingsTitleLabels = labelsForKey('developerSettingsTitle');
 final _developerSectionDescriptionLabels =
     labelsForKey('developerSectionDescription');
@@ -153,7 +158,7 @@ void main() {
     expect(_findFirstVisibleText(_outputPathUnsetLabels), findsOneWidget);
     expect(_findFirstVisibleText(_changePathLabels), findsOneWidget);
     expect(_findFirstVisibleText(_ssePushSwitchTitleLabels), findsOneWidget);
-    expect(find.byType(Switch), findsNWidgets(2));
+    expect(find.byType(Switch), findsNWidgets(5));
     expect(_findFirstVisibleText(_ssePushDescriptionLabels), findsOneWidget);
     expect(_findFirstVisibleText(_ssePushHintLabels), findsOneWidget);
     expect(_findFirstVisibleText(_antiSleepDisabledHintLabels), findsOneWidget);
@@ -173,7 +178,17 @@ void main() {
       _findFirstVisibleText(_maxConcurrentRecordingsWarningLabels),
       findsOneWidget,
     );
-    expect(find.byType(Slider), findsNWidgets(4));
+    expect(_findFirstVisibleText(_fileConversionTitleLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_convertToMp4TitleLabels), findsOneWidget);
+    expect(
+      _findFirstVisibleText(_convertToMp4DescriptionLabels),
+      findsOneWidget,
+    );
+    expect(
+      _findFirstVisibleText(_deleteSourceAfterConvertTitleLabels),
+      findsOneWidget,
+    );
+    expect(find.byType(Slider), findsNWidgets(5));
     expect(_findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
     expect(
       _findFirstVisibleText(_developerSectionDescriptionLabels),
@@ -243,7 +258,7 @@ void main() {
     expect(find.text('BILIREC_ENV'), findsOneWidget);
     expect(find.text('staging'), findsOneWidget);
 
-    final envSettings = await Preferences.getEnvironmentSettings();
+    final envSettings = await Preferences.getDevelopEnvironmentSettings();
     expect(envSettings['BILIREC_ENV'], 'staging');
   });
 
@@ -270,7 +285,16 @@ void main() {
     sliders.elementAt(3).onChangeEnd?.call(3);
     await tester.pumpAndSettle();
 
-    final envSettings = await Preferences.getEnvironmentSettings();
+    final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
+    switches.elementAt(2).onChanged?.call(true);
+    await tester.pumpAndSettle();
+
+    final switchesAfterConvertEnabled =
+        tester.widgetList<Switch>(find.byType(Switch)).toList();
+    switchesAfterConvertEnabled.elementAt(3).onChanged?.call(true);
+    await tester.pumpAndSettle();
+
+    final envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['MAX_RECORDING_HOURS'], '12');
     expect(
       envSettings['MIN_DISK_SPACE_BYTES'],
@@ -278,6 +302,8 @@ void main() {
     );
     expect(envSettings['MAX_RETRY_MINUTES'], '30');
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
+    expect(envSettings['CONVERT_TO_MP4'], 'true');
+    expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
   });
 
   testWidgets('服務啟動後設定按鈕會被禁用', (tester) async {

@@ -9,6 +9,8 @@ const String _localeCodeKey = 'locale_code';
 const String _enableSsePushKey = 'enable_sse_push';
 const String _enableAntiSleepKey = 'enable_antisleep';
 const String _environmentSettingsKey = 'environment_settings';
+const String _managedEnvironmentSettingsKey = 'managed_environment_settings';
+const String _developEnvironmentSettingsKey = 'develop_environment_settings';
 
 const String coreRunningKey = 'core_running';
 
@@ -96,6 +98,66 @@ sealed class Preferences {
   static Future<Map<String, String>> getEnvironmentSettings() async {
     final prefs = _prefs;
     final raw = await prefs.getString(_environmentSettingsKey);
+    if (raw == null || raw.isEmpty) {
+      return <String, String>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, String>{};
+      }
+      return decoded.map<String, String>((key, value) {
+        return MapEntry(key.toString(), value?.toString() ?? '');
+      });
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
+
+  static Future<void> setManagedEnvironmentSettings(
+      Map<String, String>? settings) async {
+    final prefs = _prefs;
+    if (settings == null || settings.isEmpty) {
+      await prefs.remove(_managedEnvironmentSettingsKey);
+      return;
+    }
+    await prefs.setString(_managedEnvironmentSettingsKey, jsonEncode(settings));
+  }
+
+  static Future<Map<String, String>> getManagedEnvironmentSettings() async {
+    final prefs = _prefs;
+    final raw = await prefs.getString(_managedEnvironmentSettingsKey);
+    if (raw == null || raw.isEmpty) {
+      return <String, String>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, String>{};
+      }
+      return decoded.map<String, String>((key, value) {
+        return MapEntry(key.toString(), value?.toString() ?? '');
+      });
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
+
+  static Future<void> setDevelopEnvironmentSettings(
+      Map<String, String>? settings) async {
+    final prefs = _prefs;
+    if (settings == null || settings.isEmpty) {
+      await prefs.remove(_developEnvironmentSettingsKey);
+      return;
+    }
+    await prefs.setString(_developEnvironmentSettingsKey, jsonEncode(settings));
+  }
+
+  static Future<Map<String, String>> getDevelopEnvironmentSettings() async {
+    final prefs = _prefs;
+    final raw = await prefs.getString(_developEnvironmentSettingsKey);
     if (raw == null || raw.isEmpty) {
       return <String, String>{};
     }

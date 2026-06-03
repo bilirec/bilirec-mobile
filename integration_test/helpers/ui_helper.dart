@@ -240,6 +240,11 @@ Future<void> ensureForegroundNotificationPermissionGranted({
     return;
   }
 
+  if (logTag != null) {
+    testLog(logTag,
+        'foreground notification permission not granted, requesting permission...');
+  }
+
   NotificationPermission granted;
   try {
     granted = await FlutterForegroundTaskPlatform.instance
