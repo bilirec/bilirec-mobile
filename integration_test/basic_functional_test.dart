@@ -38,6 +38,7 @@ final _savedEnvironmentSettingsTitleLabels =
     labelsForKey('savedEnvironmentSettingsTitle');
 final _batteryDialogTitleLabels = labelsForKey('batteryDialogTitle');
 final _goToSettingsLabels = labelsForKey('goToSettings');
+const _logTag = 'BASIC_FUNCTIONAL_TEST';
 
 Future<void> _openSettingsSheet(WidgetTester tester) async {
   final settingsFinder = findFirstVisibleText(_settingsLabels).first;
@@ -169,48 +170,58 @@ void main() {
     });
 
     testWidgets('3. 啟動服務後顯示動作區並可檢查連線', (tester) async {
-      app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      try {
+        app.main();
+        await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      await tester.tap(findFirstVisibleText(_startLabels));
-      await tester.pump(const Duration(milliseconds: 500));
-
-      final canContinue = !isAnyLabelVisible(_androidOnlyLabels);
-      if (!canContinue) {
-        markTestSkipped('目前只支援 Android，跳過此整合測試案例');
-        return;
-      }
-
-      await waitForAnyText(
-        tester,
-        [..._startingStatusLabels, ..._runningStatusLabels],
-        timeout: const Duration(seconds: 25),
-      );
-      await waitForAnyText(tester, _runningStatusLabels,
-          timeout: const Duration(seconds: 60));
-
-      expect(findFirstVisibleText(_openFrontendLabels), findsOneWidget);
-      expect(findFirstVisibleText(_checkConnectionLabels), findsOneWidget);
-
-      await tapButtonByLabels(
-        tester,
-        buttonType: OutlinedButton,
-        labels: _checkConnectionLabels,
-      );
-
-      // 等待連線檢測結果 toast（最多 12 秒）
-      var toastShown = false;
-      for (var i = 0; i < 24; i++) {
+        await tester.tap(findFirstVisibleText(_startLabels));
         await tester.pump(const Duration(milliseconds: 500));
-        if (find.byType(AppToast).evaluate().isNotEmpty) {
-          toastShown = true;
-          break;
+
+        final canContinue = !isAnyLabelVisible(_androidOnlyLabels);
+        if (!canContinue) {
+          markTestSkipped('目前只支援 Android，跳過此整合測試案例');
+          return;
         }
+
+        await waitForAnyText(
+          tester,
+          [..._startingStatusLabels, ..._runningStatusLabels],
+          timeout: const Duration(seconds: 25),
+        );
+        await waitForAnyText(tester, _runningStatusLabels,
+            timeout: const Duration(seconds: 60));
+
+        expect(findFirstVisibleText(_openFrontendLabels), findsOneWidget);
+        expect(findFirstVisibleText(_checkConnectionLabels), findsOneWidget);
+
+        await tapButtonByLabels(
+          tester,
+          buttonType: OutlinedButton,
+          labels: _checkConnectionLabels,
+        );
+
+        // 等待連線檢測結果 toast（最多 12 秒）
+        var toastShown = false;
+        for (var i = 0; i < 24; i++) {
+          await tester.pump(const Duration(milliseconds: 500));
+          if (find.byType(AppToast).evaluate().isNotEmpty) {
+            toastShown = true;
+            break;
+          }
+        }
+
+        expect(toastShown, isTrue, reason: '應顯示後端連線檢測結果 toast');
+
+        await _stopServiceIfRunning(tester);
+      } catch (e, st) {
+        testLog(_logTag, 'basic functional test failed: $e');
+        testLog(_logTag, '$st');
+        await printBootstrapLogsIfAny(
+          scenario: 'Basic functional test failed',
+          logTag: _logTag,
+        );
+        rethrow;
       }
-
-      expect(toastShown, isTrue, reason: '應顯示後端連線檢測結果 toast');
-
-      await _stopServiceIfRunning(tester);
     });
 
     testWidgets('4. 電池無限制 dialog 在模擬器上出現（Android 環境）', (tester) async {
