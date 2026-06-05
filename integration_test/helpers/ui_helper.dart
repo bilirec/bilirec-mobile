@@ -44,6 +44,24 @@ Finder findFirstVisibleText(
   return _findText(labels.first, contains: contains);
 }
 
+enum WaitMode { ui, realtime }
+
+Future<void> _tickWait(
+  WidgetTester tester,
+  Duration duration,
+  WaitMode mode,
+) async {
+  switch (mode) {
+    case WaitMode.ui:
+      await tester.pump(duration);
+      break;
+    case WaitMode.realtime:
+      await Future<void>.delayed(duration);
+      await tester.pump();
+      break;
+  }
+}
+
 Future<void> waitForAnyText(
   WidgetTester tester,
   Iterable<String> labels, {
@@ -51,6 +69,7 @@ Future<void> waitForAnyText(
   Duration step = const Duration(milliseconds: 400),
   String? logTag,
   bool contains = false,
+  WaitMode waitMode = WaitMode.ui,
 }) async {
   if (logTag != null) {
     testLog(
@@ -70,7 +89,7 @@ Future<void> waitForAnyText(
       }
       return;
     }
-    await tester.pump(step);
+    await _tickWait(tester, step, waitMode);
   }
 
   expect(
@@ -78,6 +97,30 @@ Future<void> waitForAnyText(
     isTrue,
     reason: '在 ${timeout.inSeconds} 秒內應看到 ${labels.join(' / ')} 其中之一',
   );
+}
+
+Future<bool> waitForCondition(
+  WidgetTester tester, {
+  required bool Function() condition,
+  Duration timeout = const Duration(seconds: 20),
+  Duration step = const Duration(milliseconds: 400),
+  String? logTag,
+  String? description,
+  WaitMode waitMode = WaitMode.ui,
+}) async {
+  final maxTicks = timeout.inMilliseconds ~/ step.inMilliseconds;
+  for (var i = 0; i < maxTicks; i++) {
+    if (condition()) {
+      return true;
+    }
+    await _tickWait(tester, step, waitMode);
+  }
+
+  if (logTag != null && description != null) {
+    testLog(logTag, 'wait condition timeout: $description');
+  }
+
+  return condition();
 }
 
 Future<void> tapButtonByLabels(
@@ -132,6 +175,7 @@ Future<void> waitUntilPowerButtonStable(
   required Iterable<String> stopLabels,
   Duration timeout = const Duration(seconds: 40),
   String? logTag,
+  WaitMode waitMode = WaitMode.ui,
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (DateTime.now().isBefore(deadline)) {
@@ -141,7 +185,7 @@ Future<void> waitUntilPowerButtonStable(
     if (!hasInFlight && hasStable) {
       return;
     }
-    await tester.pump(const Duration(milliseconds: 300));
+    await _tickWait(tester, const Duration(milliseconds: 300), waitMode);
   }
 
   if (logTag != null) testLog(logTag, 'wait power stable timeout');
@@ -193,7 +237,7 @@ Future<void> assertBackendConnectableFromUi(
     actionButton =
         findConnectionCheckButton(checkConnectionLabels, logTag: logTag);
     if (actionButton != null) break;
-    await tester.pump(const Duration(milliseconds: 300));
+    await _tickWait(tester, const Duration(milliseconds: 300), WaitMode.ui);
   }
 
   if (actionButton == null) {
@@ -210,19 +254,20 @@ Future<void> assertBackendConnectableFromUi(
   await tester.pump(const Duration(milliseconds: 150));
   await tester.tap(actionButton, warnIfMissed: false);
 
-  var toastShown = false;
-  for (var i = 0; i < 16; i++) {
-    await tester.pump(const Duration(milliseconds: 500));
-
-    if (isAnyLabelVisible(connectionFailedLabels, contains: true)) {
-      fail('檢查系統服務連線顯示無法連線/無回應，判定測試失敗');
-    }
-
-    if (find.byType(AppToast).evaluate().isNotEmpty) {
-      toastShown = true;
-      break;
-    }
-  }
+  final toastShown = await waitForCondition(
+    tester,
+    timeout: const Duration(seconds: 10),
+    step: const Duration(milliseconds: 500),
+    logTag: logTag,
+    description: 'connection check toast',
+    waitMode: WaitMode.realtime,
+    condition: () {
+      if (isAnyLabelVisible(connectionFailedLabels, contains: true)) {
+        fail('檢查系統服務連線顯示無法連線/無回應，判定測試失敗');
+      }
+      return find.byType(AppToast).evaluate().isNotEmpty;
+    },
+  );
 
   if (failIfButtonMissing && !toastShown) {
     fail('未在預期時間看到連線檢查結果 toast');

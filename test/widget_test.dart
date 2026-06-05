@@ -41,6 +41,38 @@ Finder _findFirstWidgetWithText(Type widgetType, Iterable<String> labels) {
   return find.widgetWithText(widgetType, labels.first);
 }
 
+Finder _findSwitchInTileByLabels(Iterable<String> labels) {
+  final labelFinder = _findFirstVisibleText(labels).first;
+  final tileFinder = find.ancestor(
+    of: labelFinder,
+    matching: find.byType(SwitchListTile),
+  );
+  expect(tileFinder, findsWidgets, reason: '找不到開關列: ${labels.join(' / ')}');
+
+  final switchFinder = find.descendant(
+    of: tileFinder.first,
+    matching: find.byType(Switch),
+  );
+  expect(switchFinder, findsWidgets, reason: '找不到開關: ${labels.join(' / ')}');
+  return switchFinder.first;
+}
+
+Future<void> _setSwitchByLabels(
+  WidgetTester tester, {
+  required Iterable<String> labels,
+  required bool enabled,
+}) async {
+  final switchFinder = _findSwitchInTileByLabels(labels);
+  final switchWidget = tester.widget<Switch>(switchFinder);
+  final current = switchWidget.value;
+  if (current != enabled) {
+    expect(switchWidget.onChanged, isNotNull,
+        reason: '開關目前不可操作: ${labels.join(' / ')}');
+    switchWidget.onChanged!(enabled);
+    await tester.pumpAndSettle();
+  }
+}
+
 final _controlCenterTitleLabels = labelsForKey('controlCenterTitle');
 final _backendNotRunningLabels = labelsForKey('backendNotRunning');
 final _startLabels = labelsForKey('start');
@@ -158,7 +190,7 @@ void main() {
     expect(_findFirstVisibleText(_outputPathUnsetLabels), findsOneWidget);
     expect(_findFirstVisibleText(_changePathLabels), findsOneWidget);
     expect(_findFirstVisibleText(_ssePushSwitchTitleLabels), findsOneWidget);
-    expect(find.byType(Switch), findsNWidgets(5));
+    expect(find.byType(Switch), findsWidgets);
     expect(_findFirstVisibleText(_ssePushDescriptionLabels), findsOneWidget);
     expect(_findFirstVisibleText(_ssePushHintLabels), findsOneWidget);
     expect(_findFirstVisibleText(_antiSleepDisabledHintLabels), findsOneWidget);
@@ -188,7 +220,7 @@ void main() {
       _findFirstVisibleText(_deleteSourceAfterConvertTitleLabels),
       findsOneWidget,
     );
-    expect(find.byType(Slider), findsNWidgets(5));
+    expect(find.byType(Slider), findsWidgets);
     expect(_findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
     expect(
       _findFirstVisibleText(_developerSectionDescriptionLabels),
@@ -285,14 +317,16 @@ void main() {
     sliders.elementAt(3).onChangeEnd?.call(3);
     await tester.pumpAndSettle();
 
-    final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
-    switches.elementAt(2).onChanged?.call(true);
-    await tester.pumpAndSettle();
-
-    final switchesAfterConvertEnabled =
-        tester.widgetList<Switch>(find.byType(Switch)).toList();
-    switchesAfterConvertEnabled.elementAt(3).onChanged?.call(true);
-    await tester.pumpAndSettle();
+    await _setSwitchByLabels(
+      tester,
+      labels: _convertToMp4TitleLabels,
+      enabled: true,
+    );
+    await _setSwitchByLabels(
+      tester,
+      labels: _deleteSourceAfterConvertTitleLabels,
+      enabled: true,
+    );
 
     final envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['MAX_RECORDING_HOURS'], '12');

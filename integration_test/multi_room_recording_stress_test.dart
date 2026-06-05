@@ -25,10 +25,13 @@ final _connectionFailedLabels =
     labelsForKeys(['backendNoResponseHint', 'backendCannotConnect']);
 const _targetRecordingRooms = 3;
 const _maxStartCandidates = 12;
+const _idleNearAutoStopGrace = Duration(seconds: 30);
 
 bool _isRecordMediaFile(String fileName) {
   final lower = fileName.toLowerCase();
-  return lower.endsWith('.flv') || lower.endsWith('.ts') || lower.endsWith('.fmp4');
+  return lower.endsWith('.flv') ||
+      lower.endsWith('.ts') ||
+      lower.endsWith('.fmp4');
 }
 
 int? _segmentIndexFromName(String fileName) {
@@ -68,7 +71,8 @@ Future<void> _waitUntilAllNotRecording(
     if (allStopped) {
       return;
     }
-    await tester.pump(poll);
+    await Future<void>.delayed(poll);
+    await tester.pump();
   }
   fail('錄製時間已到，但仍有房間未停止錄製');
 }
@@ -146,7 +150,8 @@ Future<void> _assertOutputFilesForRooms(
     expect(
       roomTotalBytes,
       greaterThan(_minValidRecordBytes),
-      reason: '房間 $roomId 錄製總大小不足: total=$roomTotalBytes bytes (<$_minValidRecordBytes)',
+      reason:
+          '房間 $roomId 錄製總大小不足: total=$roomTotalBytes bytes (<$_minValidRecordBytes)',
     );
 
     expect(
@@ -189,7 +194,12 @@ void main() {
 
           _log('STEP 0: launch app.main()');
           app.main();
-          await tester.pumpAndSettle(const Duration(seconds: 3));
+          await waitForAnyText(
+            tester,
+            _startLabels,
+            timeout: const Duration(seconds: 30),
+            logTag: _logTag,
+          );
 
           _log('STEP 0.5: ensure notification permission');
           await ensureForegroundNotificationPermissionGranted(logTag: _logTag);
@@ -202,7 +212,12 @@ void main() {
             logTag: _logTag,
           );
           await tester.pump(const Duration(milliseconds: 500));
-          await waitForAnyText(tester, _backendRunningLabels, logTag: _logTag);
+          await waitForAnyText(
+            tester,
+            _backendRunningLabels,
+            logTag: _logTag,
+            waitMode: WaitMode.realtime,
+          );
 
           _log('STEP 2: check backend connection from UI');
           await assertBackendConnectableFromUi(
@@ -228,6 +243,7 @@ void main() {
           _log('picked candidate room ids: $candidateRoomIds');
 
           final startedRoomIds = <int>[];
+          final startedAtByRoom = <int, DateTime>{};
           final skippedBadRequestReasons = <String>[];
           try {
             _log('STEP 4: start recording with 400-skip fallback');
@@ -236,14 +252,15 @@ void main() {
                 break;
               }
 
-              final result =
-                  await startRecording(roomId, durationMinutes: durationMinutes);
+              final result = await startRecording(roomId,
+                  durationMinutes: durationMinutes);
               final code = result.statusCode;
               final accepted = [200, 201, 202, 204, 409].contains(code);
               final preview = result.bodyPreview();
 
               if (accepted) {
                 startedRoomIds.add(roomId);
+                startedAtByRoom[roomId] = DateTime.now();
                 _log('start recording success roomId=$roomId statusCode=$code');
                 continue;
               }
@@ -272,6 +289,9 @@ void main() {
             _log('STEP 5: monitor recording status during target duration');
             final poll = const Duration(seconds: 10);
             final rounds = duration.inMilliseconds ~/ poll.inMilliseconds;
+            final idleNearAutoStopThreshold = duration > _idleNearAutoStopGrace
+                ? duration - _idleNearAutoStopGrace
+                : Duration.zero;
             for (var i = 0; i < rounds; i++) {
               assertAppAlive(
                 controlLabels: [
@@ -288,6 +308,20 @@ void main() {
                 final status = statusesMap[roomId]?.toLowerCase() ?? '';
                 // Stream interruptions can temporarily enter recovering before recording resumes.
                 if (status == 'idle') {
+                  final startedAt = startedAtByRoom[roomId];
+                  final elapsed = startedAt == null
+                      ? null
+                      : DateTime.now().difference(startedAt);
+                  final nearAutoStopBoundary =
+                      elapsed != null && elapsed >= idleNearAutoStopThreshold;
+
+                  if (nearAutoStopBoundary) {
+                    _log(
+                      'room=$roomId status=idle near auto-stop boundary; elapsed=${elapsed.inSeconds}s threshold=${idleNearAutoStopThreshold.inSeconds}s duration=${duration.inSeconds}s',
+                    );
+                    continue;
+                  }
+
                   // If the room becomes idle, check if the broadcast actually ended
                   try {
                     final roomInfo = await fetchRoomInfo(roomId);
@@ -322,16 +356,19 @@ void main() {
                 final stat = statsMap[roomId] ?? const <String, dynamic>{};
                 final bytesWritten = asInt(stat['bytes_written']);
                 expect(bytesWritten, greaterThanOrEqualTo(0),
-                    reason: '錄製統計異常: roomId=$roomId bytes_written=$bytesWritten');
+                    reason:
+                        '錄製統計異常: roomId=$roomId bytes_written=$bytesWritten');
               }
 
-              await tester.pump(poll);
+              await Future<void>.delayed(poll);
+              await tester.pump();
             }
 
             _log('STEP 6: wait recordings auto-stop after duration');
             await _waitUntilAllNotRecording(tester, startedRoomIds);
 
-            _log('STEP 7: verify output files by room total size and rotation limit');
+            _log(
+                'STEP 7: verify output files by room total size and rotation limit');
             await _assertOutputFilesForRooms(
               startedRoomIds,
               durationMinutes: durationMinutes,

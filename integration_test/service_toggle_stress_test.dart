@@ -34,6 +34,7 @@ Future<void> _waitForRunningState(
     _backendRunningLabels,
     timeout: timeout,
     logTag: _logTag,
+    waitMode: WaitMode.realtime,
   );
   _log('wait running state done');
 }
@@ -47,7 +48,8 @@ Future<void> _observeRunningForDuration(
       'observe running start: duration=${duration.inSeconds}s, tick=${tick.inSeconds}s');
   final maxTicks = duration.inMilliseconds ~/ tick.inMilliseconds;
   for (var i = 0; i < maxTicks; i++) {
-    await tester.pump(tick);
+    await Future<void>.delayed(tick);
+    await tester.pump();
     final stillRunning = isAnyLabelVisible(_backendRunningLabels);
     _log('observe running tick=${i + 1}/$maxTicks, stillRunning=$stillRunning');
     expect(stillRunning, isTrue, reason: '觀察期間應維持運行中（tick=${i + 1}/$maxTicks）');
@@ -128,13 +130,17 @@ void main() {
 
           _log('STEP 0: launch app.main()');
           app.main();
-          await tester.pumpAndSettle(const Duration(seconds: 3));
+          await waitForAnyText(
+            tester,
+            _startLabels,
+            timeout: const Duration(seconds: 30),
+            logTag: _logTag,
+          );
           _log('STEP 0 done');
 
           // Ensure foreground notification permission is granted before proceeding
           _log('STEP 0.5: verify foreground notification permission');
           await ensureForegroundNotificationPermissionGranted(logTag: _logTag);
-          _log('STEP 0.5 done');
 
           // 1) 先啟動服務
           _log('STEP 1: start service');
@@ -146,7 +152,12 @@ void main() {
           );
           // Permission dialog handling: on desktop/CI, it's usually auto-granted or bypassed
           await tester.pump(const Duration(milliseconds: 500));
-          await waitForAnyText(tester, _backendRunningLabels, logTag: _logTag);
+          await waitForAnyText(
+            tester,
+            _backendRunningLabels,
+            logTag: _logTag,
+            waitMode: WaitMode.realtime,
+          );
           _log('STEP 1 done');
 
           // 2) POST /room/479592 訂閱一個房間
@@ -183,6 +194,7 @@ void main() {
             startLabels: _startLabels,
             stopLabels: _stopLabels,
             logTag: _logTag,
+            waitMode: WaitMode.realtime,
           );
           _log('STEP 3 done');
 
@@ -192,7 +204,7 @@ void main() {
           _log('STEP 4 done');
 
           // 5) 開始頻繁啟停（啟動中/停止中結束後立刻再按）
-          const rounds = 24;
+          final rounds = isCiEnv() ? 24 : 12;
           _log('STEP 5: rapid start/stop rounds=$rounds');
           for (var i = 0; i < rounds; i++) {
             _log('STEP 5 round ${i + 1}/$rounds begin');
@@ -208,6 +220,7 @@ void main() {
               startLabels: _startLabels,
               stopLabels: _stopLabels,
               logTag: _logTag,
+              waitMode: WaitMode.realtime,
             );
             _log('STEP 5 round ${i + 1}/$rounds end');
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'dart:io';
@@ -33,6 +34,34 @@ typedef _FfmpegExecuteDart = int Function(
 );
 
 void _log(String message) => testLog(_logTag, message);
+
+Future<void> _waitForHomeReady(
+  WidgetTester tester,
+  Iterable<String> startLabels,
+) async {
+  await waitForAnyText(
+    tester,
+    startLabels,
+    timeout: const Duration(seconds: 30),
+    logTag: _logTag,
+  );
+}
+
+Future<void> _waitForFfmpegCoreLogGrowth({
+  required int baselineCount,
+  Duration timeout = const Duration(seconds: 30),
+}) async {
+  const poll = Duration(seconds: 2);
+  final rounds = timeout.inMilliseconds ~/ poll.inMilliseconds;
+  for (var i = 0; i < rounds; i++) {
+    final lines = await _loadFfmpegCoreLinesFromBootstrapLogOnce();
+    if (lines.length > baselineCount) {
+      return;
+    }
+    await Future<void>.delayed(poll);
+  }
+  _log('ffmpeg_core log growth not observed within ${timeout.inSeconds}s');
+}
 
 String _fileNameFromPath(String path) {
   final parts = path.split(RegExp(r'[\\/]+'));
@@ -246,7 +275,7 @@ int _executeFfmpeg(List<String> args) {
     return exitCode;
   } finally {
     for (final ptr in allocatedUtf8) {
-      calloc.free(ptr);
+      malloc.free(ptr);
     }
     calloc.free(argv);
 
@@ -723,29 +752,54 @@ Future<bool> _setConvertToMp4FromSettings(
   }
   await tester.pumpAndSettle(const Duration(milliseconds: 200));
 
-  // Prefer a ScrollView scoped to the sheet; fall back to any visible one.
+  await waitForCondition(
+    tester,
+    timeout: const Duration(seconds: 8),
+    step: sheetPollInterval,
+    logTag: _logTag,
+    description: 'SettingsDrawerSheet or target label',
+    condition: () {
+      final sheetFinder = find.byType(SettingsDrawerSheet);
+      if (sheetFinder.evaluate().isNotEmpty) {
+        return true;
+      }
+      return convertToMp4Labels.any(
+        (label) => find.text(label).evaluate().isNotEmpty,
+      );
+    },
+  );
+
+  Finder? scrollableFinder;
   final sheetFinder = find.byType(SettingsDrawerSheet);
-  final Finder scrollViewFinder;
   if (sheetFinder.evaluate().isNotEmpty) {
-    scrollViewFinder = find.descendant(
+    final sheetScrollable = find.descendant(
       of: sheetFinder,
-      matching: find.byType(SingleChildScrollView),
+      matching: find.byType(Scrollable),
     );
-  } else {
-    _log('WARNING: SettingsDrawerSheet not in tree, falling back to global SingleChildScrollView search');
-    scrollViewFinder = find.byType(SingleChildScrollView);
+    if (sheetScrollable.evaluate().isNotEmpty) {
+      scrollableFinder = sheetScrollable;
+    }
   }
-  expect(scrollViewFinder, findsWidgets, reason: '找不到設定面板的 ScrollView');
+
+  scrollableFinder ??= find.byType(Scrollable).evaluate().isNotEmpty
+      ? find.byType(Scrollable)
+      : null;
+
+  if (scrollableFinder == null) {
+    _log('WARNING: no Scrollable found in settings sheet; continuing without drag');
+  }
 
   final targetLabel = convertToMp4Labels.first;
   final labelFinder = find.text(targetLabel);
 
-  await tester.dragUntilVisible(
-    labelFinder,
-    scrollViewFinder.first,
-    const Offset(0, -120),
-  );
-  await tester.pumpAndSettle(const Duration(milliseconds: 200));
+  if (scrollableFinder != null && labelFinder.evaluate().isEmpty) {
+    await tester.dragUntilVisible(
+      labelFinder,
+      scrollableFinder.first,
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 200));
+  }
 
   await waitForAnyText(tester, convertToMp4Labels, logTag: _logTag);
 
@@ -907,7 +961,7 @@ void main() {
         final backendRunningLabels = labelsForKey('backendRunning');
 
         app.main();
-        await tester.pumpAndSettle(const Duration(seconds: 3));
+        await _waitForHomeReady(tester, startLabels);
 
         await ensureForegroundNotificationPermissionGranted(logTag: _logTag);
 
@@ -917,13 +971,19 @@ void main() {
           stopLabels: stopLabels,
           logTag: _logTag,
         );
-        await waitForAnyText(tester, backendRunningLabels, logTag: _logTag);
+        await waitForAnyText(
+          tester,
+          backendRunningLabels,
+          logTag: _logTag,
+          waitMode: WaitMode.realtime,
+        );
         await waitUntilPowerButtonStable(
           tester,
           inFlightLabels: inFlightPowerLabels,
           startLabels: startLabels,
           stopLabels: stopLabels,
           logTag: _logTag,
+          waitMode: WaitMode.realtime,
         );
 
         File? stagedFile;
@@ -966,7 +1026,10 @@ void main() {
               reason: '轉檔完成後找不到對應輸出檔，source=$sourcePath');
           _log('convert success source=$sourcePath output=$convertedPath');
 
-          await tester.pump(const Duration(seconds: 2));
+          await _waitForFfmpegCoreLogGrowth(
+            baselineCount: ffmpegCoreLogBaseline,
+            timeout: const Duration(seconds: 30),
+          );
 
           await _expectAndPrintNewFfmpegCoreBootstrapLogs(
             baselineCount: ffmpegCoreLogBaseline,
@@ -1026,7 +1089,7 @@ void main() {
         final convertToMp4Labels = labelsForKey('convertToMp4Title');
 
         app.main();
-        await tester.pumpAndSettle(const Duration(seconds: 3));
+        await _waitForHomeReady(tester, startLabels);
 
         await _cleanupRecordsFoldersIfCi();
 
@@ -1045,13 +1108,19 @@ void main() {
           stopLabels: stopLabels,
           logTag: _logTag,
         );
-        await waitForAnyText(tester, backendRunningLabels, logTag: _logTag);
+        await waitForAnyText(
+          tester,
+          backendRunningLabels,
+          logTag: _logTag,
+          waitMode: WaitMode.realtime,
+        );
         await waitUntilPowerButtonStable(
           tester,
           inFlightLabels: inFlightPowerLabels,
           startLabels: startLabels,
           stopLabels: stopLabels,
           logTag: _logTag,
+          waitMode: WaitMode.realtime,
         );
 
         final liveRoomPool = await fetchLiveBroadcastRoomIDs();
@@ -1075,8 +1144,46 @@ void main() {
               .where((path) => path.isNotEmpty)
               .toSet();
 
-          final startResult =
-              await startRecording(roomId, durationMinutes: recordDurationMinutes);
+          ApiCallResult? startResult;
+          Object? transientError;
+          const startAttemptLimit = 2;
+          for (var attempt = 1; attempt <= startAttemptLimit; attempt++) {
+            try {
+              startResult = await startRecording(
+                roomId,
+                durationMinutes: recordDurationMinutes,
+              );
+              break;
+            } on TimeoutException catch (e) {
+              transientError = e;
+              _log(
+                'start recording timeout roomId=$roomId attempt=$attempt/$startAttemptLimit',
+              );
+            } on SocketException catch (e) {
+              transientError = e;
+              _log(
+                'start recording socket error roomId=$roomId attempt=$attempt/$startAttemptLimit error=$e',
+              );
+            } on HttpException catch (e) {
+              transientError = e;
+              _log(
+                'start recording http error roomId=$roomId attempt=$attempt/$startAttemptLimit error=$e',
+              );
+            }
+
+            if (attempt < startAttemptLimit) {
+              await Future<void>.delayed(const Duration(seconds: 2));
+            }
+          }
+
+          if (startResult == null) {
+            final reason =
+                'roomId=$roomId startRecording transient failure=${transientError ?? 'unknown'}';
+            skippedReasons.add(reason);
+            _log('skip candidate: $reason');
+            continue;
+          }
+
           final code = startResult.statusCode;
           final preview = startResult.bodyPreview();
 
@@ -1158,7 +1265,10 @@ void main() {
               reason: '轉檔完成後找不到對應輸出檔，source=$recordedPath');
           _log('auto convert success source=$recordedPath output=$convertedPath');
 
-          await tester.pump(const Duration(seconds: 5)); // add delay to ensure all ffmpeg logs are flushed
+          await _waitForFfmpegCoreLogGrowth(
+            baselineCount: ffmpegCoreLogBaseline,
+            timeout: const Duration(seconds: 30),
+          );
 
           final requireNewLines = ffmpegCoreLogBaseline == 0;
           await _expectAndPrintNewFfmpegCoreBootstrapLogs(

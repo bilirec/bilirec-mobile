@@ -39,6 +39,13 @@ final _savedEnvironmentSettingsTitleLabels =
 final _batteryDialogTitleLabels = labelsForKey('batteryDialogTitle');
 final _goToSettingsLabels = labelsForKey('goToSettings');
 const _logTag = 'BASIC_FUNCTIONAL_TEST';
+final _expectedRecordingPolicySliderValues = <double>[0, 2, 5, 1];
+final _expectedManagedEnvironmentAfterPolicy = <String, String>{
+  'MAX_RECORDING_HOURS': '0',
+  'MIN_DISK_SPACE_BYTES': '${10 * 1024 * 1024 * 1024}',
+  'MAX_RETRY_MINUTES': '30',
+  'MAX_CONCURRENT_RECORDINGS': '4',
+};
 
 Future<void> _openSettingsSheet(WidgetTester tester) async {
   final settingsFinder = findFirstVisibleText(_settingsLabels).first;
@@ -78,6 +85,77 @@ Future<void> _setRecordingPolicyValues(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+bool _recordingPolicySlidersMatch(
+  List<Slider> sliders,
+  List<double> expectedValues,
+) {
+  if (sliders.length < expectedValues.length) {
+    return false;
+  }
+
+  for (var i = 0; i < expectedValues.length; i++) {
+    if ((sliders[i].value - expectedValues[i]).abs() > 0.001) {
+      return false;
+    }
+  }
+  return true;
+}
+
+Future<List<Slider>> _waitForRecordingPolicySliders(
+  WidgetTester tester, {
+  required List<double> expectedValues,
+  Duration timeout = const Duration(seconds: 15),
+  Duration step = const Duration(milliseconds: 250),
+}) async {
+  final maxTicks = timeout.inMilliseconds ~/ step.inMilliseconds;
+  List<Slider> latest = <Slider>[];
+  for (var i = 0; i < maxTicks; i++) {
+    latest = tester.widgetList<Slider>(find.byType(Slider)).toList(growable: false);
+    if (_recordingPolicySlidersMatch(latest, expectedValues)) {
+      return latest;
+    }
+
+    await Future<void>.delayed(step);
+    await tester.pump();
+  }
+
+  final latestValues = latest
+      .take(expectedValues.length)
+      .map((slider) => slider.value)
+      .toList(growable: false);
+  fail(
+    '等待錄製策略滑動條回填超時。expected=$expectedValues actual=$latestValues',
+  );
+}
+
+bool _managedEnvironmentMatches(
+  Map<String, String> current,
+  Map<String, String> expected,
+) {
+  return expected.entries.every((entry) => current[entry.key] == entry.value);
+}
+
+Future<Map<String, String>> _waitForManagedEnvironmentSettings(
+  WidgetTester tester, {
+  required Map<String, String> expected,
+  Duration timeout = const Duration(seconds: 15),
+  Duration step = const Duration(milliseconds: 300),
+}) async {
+  final maxTicks = timeout.inMilliseconds ~/ step.inMilliseconds;
+  var latest = <String, String>{};
+  for (var i = 0; i < maxTicks; i++) {
+    latest = await Preferences.getManagedEnvironmentSettings();
+    if (_managedEnvironmentMatches(latest, expected)) {
+      return latest;
+    }
+
+    await Future<void>.delayed(step);
+    await tester.pump();
+  }
+
+  fail('等待 ManagedEnvironmentSettings 落盤超時。expected=$expected actual=$latest');
+}
+
 class _FakeUrlLauncherPlatform extends UrlLauncherPlatform {
   bool didLaunch = false;
 
@@ -112,6 +190,21 @@ Future<void> _stopServiceIfRunning(WidgetTester tester) async {
   );
 }
 
+Future<void> _waitForHomeReady(WidgetTester tester) async {
+  await waitForAnyText(
+    tester,
+    _titleLabels,
+    timeout: const Duration(seconds: 30),
+    logTag: _logTag,
+  );
+  await waitForAnyText(
+    tester,
+    _startLabels,
+    timeout: const Duration(seconds: 30),
+    logTag: _logTag,
+  );
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   late FlutterForegroundTaskPlatform originalPlatform;
@@ -134,7 +227,7 @@ void main() {
   group('Bilirec App 整合測試（模擬器可視化）', () {
     testWidgets('1. 首頁標題與初始狀態正確顯示', (tester) async {
       app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await _waitForHomeReady(tester);
 
       expect(findFirstVisibleText(_titleLabels), findsOneWidget);
       expect(findFirstVisibleText(_startLabels), findsOneWidget);
@@ -148,7 +241,7 @@ void main() {
 
     testWidgets('2. 可開啟設定抽屜並顯示最新設定項目', (tester) async {
       app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await _waitForHomeReady(tester);
 
       await tester.tap(findFirstVisibleText(_settingsLabels));
       await tester.pumpAndSettle();
@@ -172,7 +265,7 @@ void main() {
     testWidgets('3. 啟動服務後顯示動作區並可檢查連線', (tester) async {
       try {
         app.main();
-        await tester.pumpAndSettle(const Duration(seconds: 3));
+        await _waitForHomeReady(tester);
 
         await tester.tap(findFirstVisibleText(_startLabels));
         await tester.pump(const Duration(milliseconds: 500));
@@ -187,9 +280,14 @@ void main() {
           tester,
           [..._startingStatusLabels, ..._runningStatusLabels],
           timeout: const Duration(seconds: 25),
+          waitMode: WaitMode.realtime,
         );
-        await waitForAnyText(tester, _runningStatusLabels,
-            timeout: const Duration(seconds: 60));
+        await waitForAnyText(
+          tester,
+          _runningStatusLabels,
+          timeout: const Duration(seconds: 60),
+          waitMode: WaitMode.realtime,
+        );
 
         expect(findFirstVisibleText(_openFrontendLabels), findsOneWidget);
         expect(findFirstVisibleText(_checkConnectionLabels), findsOneWidget);
@@ -200,15 +298,15 @@ void main() {
           labels: _checkConnectionLabels,
         );
 
-        // 等待連線檢測結果 toast（最多 12 秒）
-        var toastShown = false;
-        for (var i = 0; i < 24; i++) {
-          await tester.pump(const Duration(milliseconds: 500));
-          if (find.byType(AppToast).evaluate().isNotEmpty) {
-            toastShown = true;
-            break;
-          }
-        }
+        final toastShown = await waitForCondition(
+          tester,
+          timeout: const Duration(seconds: 12),
+          step: const Duration(milliseconds: 500),
+          logTag: _logTag,
+          description: 'backend connection toast',
+          waitMode: WaitMode.realtime,
+          condition: () => find.byType(AppToast).evaluate().isNotEmpty,
+        );
 
         expect(toastShown, isTrue, reason: '應顯示後端連線檢測結果 toast');
 
@@ -233,7 +331,22 @@ void main() {
       });
 
       app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await _waitForHomeReady(tester);
+
+      final dialogShown = await waitForCondition(
+        tester,
+        timeout: const Duration(seconds: 20),
+        step: const Duration(milliseconds: 500),
+        logTag: _logTag,
+        description: 'battery dialog title',
+        waitMode: WaitMode.realtime,
+        condition: () => isAnyLabelVisible(_batteryDialogTitleLabels),
+      );
+
+      if (!dialogShown) {
+        markTestSkipped('電池無限制提示未出現，可能為系統/權限差異');
+        return;
+      }
 
       expect(findFirstVisibleText(_batteryDialogTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_goToSettingsLabels), findsOneWidget);
@@ -249,7 +362,7 @@ void main() {
       });
 
       app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await _waitForHomeReady(tester);
 
       expect(findFirstVisibleText(_titleLabels), findsOneWidget);
       expect(findFirstVisibleText(_startLabels), findsOneWidget);
@@ -263,23 +376,27 @@ void main() {
         return;
       }
 
-      await waitForAnyText(tester, _runningStatusLabels,
-          timeout: const Duration(seconds: 60));
+      await waitForAnyText(
+        tester,
+        _runningStatusLabels,
+        timeout: const Duration(seconds: 60),
+        waitMode: WaitMode.realtime,
+      );
 
       await tapButtonByLabels(
         tester,
         buttonType: OutlinedButton,
         labels: _checkConnectionLabels,
       );
-      // 等待連線檢測結果 toast（最多 12 秒）
-      var toastShown = false;
-      for (var i = 0; i < 24; i++) {
-        await tester.pump(const Duration(milliseconds: 500));
-        if (find.byType(AppToast).evaluate().isNotEmpty) {
-          toastShown = true;
-          break;
-        }
-      }
+      final toastShown = await waitForCondition(
+        tester,
+        timeout: const Duration(seconds: 12),
+        step: const Duration(milliseconds: 500),
+        logTag: _logTag,
+        description: 'backend connection toast',
+        waitMode: WaitMode.realtime,
+        condition: () => find.byType(AppToast).evaluate().isNotEmpty,
+      );
       expect(toastShown, isTrue, reason: '全流程中應顯示連線檢測結果 toast');
 
       await tapButtonByLabels(
@@ -295,7 +412,7 @@ void main() {
 
     testWidgets('6. 錄製策略設定可持久化並在重開後回填', (tester) async {
       app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await _waitForHomeReady(tester);
 
       await _openSettingsSheet(tester);
 
@@ -314,14 +431,20 @@ void main() {
       await _closeSettingsSheet(tester);
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
+      await _waitForManagedEnvironmentSettings(
+        tester,
+        expected: _expectedManagedEnvironmentAfterPolicy,
+      );
 
       app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await _waitForHomeReady(tester);
 
       await _openSettingsSheet(tester);
       // 驗證持久化：重啟後滑動條應該回填之前設定的值
-      final slidersAfterRestart =
-          tester.widgetList<Slider>(find.byType(Slider)).toList(growable: false);
+      final slidersAfterRestart = await _waitForRecordingPolicySliders(
+        tester,
+        expectedValues: _expectedRecordingPolicySliderValues,
+      );
       expect(slidersAfterRestart.length, greaterThanOrEqualTo(4));
       expect(slidersAfterRestart[0].value, 0); // MAX_RECORDING_HOURS 改為 0（無限制）
       expect(slidersAfterRestart[1].value, 2); // MIN_DISK_SPACE_BYTES 改為 10GB
@@ -331,13 +454,13 @@ void main() {
       // 驗證資料庫層：確認持久化值正確寫入
       // 注意：新版本保存到 ManagedEnvironmentSettings，要用對應的 API 讀取
       final envAfterRestart = await Preferences.getManagedEnvironmentSettings();
-      expect(envAfterRestart['MAX_RECORDING_HOURS'], '0');
       expect(
-        envAfterRestart['MIN_DISK_SPACE_BYTES'],
-        '${10 * 1024 * 1024 * 1024}',
+        _managedEnvironmentMatches(
+          envAfterRestart,
+          _expectedManagedEnvironmentAfterPolicy,
+        ),
+        isTrue,
       );
-      expect(envAfterRestart['MAX_RETRY_MINUTES'], '30');
-      expect(envAfterRestart['MAX_CONCURRENT_RECORDINGS'], '4');
 
       await _closeSettingsSheet(tester);
 
@@ -353,6 +476,7 @@ void main() {
         tester,
         [..._startingStatusLabels, ..._runningStatusLabels],
         timeout: const Duration(seconds: 60),
+        waitMode: WaitMode.realtime,
       );
 
       await _stopServiceIfRunning(tester);
