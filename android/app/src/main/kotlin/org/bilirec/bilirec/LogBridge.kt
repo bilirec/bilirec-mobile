@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -24,7 +25,7 @@ object LogBridge {
         object DebounceSweep : LogEvent
     }
 
-    private val eventChannel = Channel<LogEvent>(Channel.UNLIMITED)
+    private val eventChannel = Channel<LogEvent>(capacity = 4096, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     init {
