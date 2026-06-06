@@ -28,8 +28,8 @@ env:
 jobs:
   integration-basic-functional-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix: 
         api_level: [34, 36]
 
@@ -63,8 +63,8 @@ jobs:
 
   integration-ffmpeg-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         api_level: [34, 36]
 
@@ -117,14 +117,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-perf-monitor
+          name: ffmpeg-perf-monitor-api-${{ matrix.api_level }}
           path: .ci/perf-monitor/ffmpeg.*
           if-no-files-found: warn
 
   integration-service-toggle-stress-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         api_level: [ 34, 36 ]
 
@@ -177,14 +177,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: service-toggle-perf-monitor
+          name: service-toggle-perf-monitor-api-${{ matrix.api_level }}
           path: .ci/perf-monitor/service-toggle.*
           if-no-files-found: warn
 
   integration-multi-room-recording-stress-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         api_level: [ 34, 36 ]
 
@@ -237,35 +237,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: multi-room-recording-perf-monitor
+          name: multi-room-recording-perf-monitor-api-${{ matrix.api_level }}
           path: .ci/perf-monitor/multi-room-recording.*
           if-no-files-found: warn
-
-  pr-gate:
-    name: PR Gate
-    needs:
-      - integration-basic-functional-test
-      - integration-ffmpeg-test
-      - integration-service-toggle-stress-test
-      - integration-multi-room-recording-stress-test
-    runs-on: ubuntu-latest
-    if: always() && github.event_name == 'pull_request'
-    steps:
-      - name: Verify required tests all passed
-        run: |
-          FUNCTIONAL_RESULT="${{ needs.integration-basic-functional-test.result }}"
-          FFMPEGKIT_FFI_RESULT="${{ needs.integration-ffmpeg-test.result }}"
-          TOGGLE_STRESS_RESULT="${{ needs.integration-service-toggle-stress-test.result }}"
-          RECORDING_STRESS_RESULT="${{ needs.integration-multi-room-recording-stress-test.result }}"
-          
-          echo "Integration functional test result: $FUNCTIONAL_RESULT"
-          echo "Integration FFmpegKit FFI command test result: $FFMPEGKIT_FFI_RESULT"
-          echo "Integration service-toggle stress test result: $TOGGLE_STRESS_RESULT"
-          echo "Integration multi-room recording stress test result: $RECORDING_STRESS_RESULT"
-          
-          if [ "$FUNCTIONAL_RESULT" != "success" ] || [ "$FFMPEGKIT_FFI_RESULT" != "success" ] || [ "$TOGGLE_STRESS_RESULT" != "success" ] || [ "$RECORDING_STRESS_RESULT" != "success" ]; then
-            echo "❌ 四項整合測試需全部通過（功能測試、FFmpegKit FFI 指令測試、頻繁啟停壓測、多房同錄壓測），PR 無法合併！"
-            exit 1
-          fi
-          
-          echo "✅ 四項整合測試全部通過，PR 可以合併。"
