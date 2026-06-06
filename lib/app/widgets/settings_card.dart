@@ -134,7 +134,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       _ffmpegAllowDuringRecordingMaxActive = _readBoundedIntFromEnv(
         managedEnvironmentSettings,
         'FFMPEG_ALLOW_DURING_RECORDING_MAX_ACTIVE_RECORDINGS',
-        fallback: 0,
+        fallback: 1,
         min: 0,
         max: 5,
       );
@@ -320,6 +320,9 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     setState(() {
       _managedEnvironmentSettings = updated;
       _convertToMp4 = enabled;
+      if (!enabled) {
+        _deleteSourceAfterConvert = false;
+      }
     });
   }
 
@@ -340,7 +343,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     final updated = <String, String>{
       ..._managedEnvironmentSettings,
       'FFMPEG_ALLOW_DURING_RECORDING': '$enabled',
-      if (!enabled) 'FFMPEG_ALLOW_DURING_RECORDING_MAX_ACTIVE_RECORDINGS': '0',
+      if (!enabled) 'FFMPEG_ALLOW_DURING_RECORDING_MAX_ACTIVE_RECORDINGS': '1',
     };
     await Preferences.setManagedEnvironmentSettings(updated);
     if (!mounted) return;
