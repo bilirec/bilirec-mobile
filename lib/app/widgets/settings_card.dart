@@ -77,6 +77,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   int _maxConcurrentRecordings = _defaultMaxConcurrentRecordings;
   Map<String, String> _managedEnvironmentSettings = <String, String>{};
   Map<String, String> _developEnvironmentSettings = <String, String>{};
+  Future<void> _managedEnvironmentWriteQueue = Future<void>.value();
 
   final TextEditingController _outputDirController = TextEditingController();
 
@@ -261,14 +262,32 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     String key,
     String value,
   ) async {
-    final updated = <String, String>{
-      ..._managedEnvironmentSettings,
-      key: value
-    };
-    await Preferences.setManagedEnvironmentSettings(updated);
-    if (!mounted) return;
-    setState(() {
-      _managedEnvironmentSettings = updated;
+    await _updateManagedEnvironmentSettings((current) {
+      current[key] = value;
+      return current;
+    });
+  }
+
+  Future<void> _enqueueManagedEnvironmentWrite(
+    Future<void> Function() action,
+  ) {
+    final next = _managedEnvironmentWriteQueue.then((_) => action());
+    // Keep the queue alive even if one write fails, while preserving error for caller.
+    _managedEnvironmentWriteQueue = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _updateManagedEnvironmentSettings(
+    Map<String, String> Function(Map<String, String> current) transform,
+  ) async {
+    await _enqueueManagedEnvironmentWrite(() async {
+      final latest = await Preferences.getManagedEnvironmentSettings();
+      final updated = transform(<String, String>{...latest});
+      await Preferences.setManagedEnvironmentSettings(updated);
+      if (!mounted) return;
+      setState(() {
+        _managedEnvironmentSettings = updated;
+      });
     });
   }
 
@@ -310,15 +329,15 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   }
 
   Future<void> _setConvertToMp4Enabled(bool enabled) async {
-    final updated = <String, String>{
-      ..._managedEnvironmentSettings,
-      'CONVERT_TO_MP4': '$enabled',
-      if (!enabled) 'DELETE_SOURCE_AFTER_CONVERT': 'false',
-    };
-    await Preferences.setManagedEnvironmentSettings(updated);
+    await _updateManagedEnvironmentSettings((current) {
+      current['CONVERT_TO_MP4'] = '$enabled';
+      if (!enabled) {
+        current['DELETE_SOURCE_AFTER_CONVERT'] = 'false';
+      }
+      return current;
+    });
     if (!mounted) return;
     setState(() {
-      _managedEnvironmentSettings = updated;
       _convertToMp4 = enabled;
       if (!enabled) {
         _deleteSourceAfterConvert = false;
@@ -327,28 +346,26 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   }
 
   Future<void> _setDeleteSourceAfterConvertEnabled(bool enabled) async {
-    final updated = <String, String>{
-      ..._managedEnvironmentSettings,
-      'DELETE_SOURCE_AFTER_CONVERT': '$enabled',
-    };
-    await Preferences.setManagedEnvironmentSettings(updated);
+    await _updateManagedEnvironmentSettings((current) {
+      current['DELETE_SOURCE_AFTER_CONVERT'] = '$enabled';
+      return current;
+    });
     if (!mounted) return;
     setState(() {
-      _managedEnvironmentSettings = updated;
       _deleteSourceAfterConvert = enabled;
     });
   }
 
   Future<void> _setFfmpegAllowDuringRecordingEnabled(bool enabled) async {
-    final updated = <String, String>{
-      ..._managedEnvironmentSettings,
-      'FFMPEG_ALLOW_DURING_RECORDING': '$enabled',
-      if (!enabled) 'FFMPEG_ALLOW_DURING_RECORDING_MAX_ACTIVE_RECORDINGS': '1',
-    };
-    await Preferences.setManagedEnvironmentSettings(updated);
+    await _updateManagedEnvironmentSettings((current) {
+      current['FFMPEG_ALLOW_DURING_RECORDING'] = '$enabled';
+      if (!enabled) {
+        current['FFMPEG_ALLOW_DURING_RECORDING_MAX_ACTIVE_RECORDINGS'] = '1';
+      }
+      return current;
+    });
     if (!mounted) return;
     setState(() {
-      _managedEnvironmentSettings = updated;
       _ffmpegAllowDuringRecording = enabled;
       if (!enabled) {
         _ffmpegAllowDuringRecordingMaxActive = 1;
