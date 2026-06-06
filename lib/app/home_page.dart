@@ -108,7 +108,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       return;
     }
 
-    await Preferences.setExpectedRunning(false);
     await _stopForegroundIfRunning();
     if (!mounted || !_isLatestRequest(requestId)) return;
     setState(() {
@@ -188,16 +187,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   }
 
   Future<void> _bootstrap() async {
-    final expectedRunning = await Preferences.getExpectedRunning();
     final running = await _isServiceCoreRunning();
     final ignoringOptimization = Platform.isAndroid
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
         : true;
 
     var statusKey = running ? 'backendRunning' : 'backendNotRunning';
-    if (expectedRunning && !running) {
-      statusKey = 'backendNotRunning';
-    }
 
     if (!mounted) return;
     setState(() {
@@ -270,7 +265,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           _setStatus('backendNoResponse');
         });
         if (!stoppedByUser) {
-          Preferences.setExpectedRunning(false); // fire-and-forget
           unawaited(_stopForegroundIfRunning());
         }
         break;
@@ -474,7 +468,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           return;
         }
 
-        await Preferences.setExpectedRunning(ok);
         setState(() {
           _serviceUiState =
               ok ? ServiceUiState.starting : ServiceUiState.stopped;
@@ -507,10 +500,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         await Preferences.setStoppedByUser(true);
         debugLog(
             '[STOP/UI][$stopOpId] after setStoppedByUser(true) (${stopSw.elapsedMilliseconds}ms)');
-        debugLog('[STOP/UI][$stopOpId] before setExpectedRunning(false)');
-        await Preferences.setExpectedRunning(false);
-        debugLog(
-            '[STOP/UI][$stopOpId] after setExpectedRunning(false) (${stopSw.elapsedMilliseconds}ms)');
         debugLog('[STOP/UI][$stopOpId] before FlutterForegroundTask.stopService()');
         final stopped = await FlutterForegroundTask.stopService();
         debugLog(

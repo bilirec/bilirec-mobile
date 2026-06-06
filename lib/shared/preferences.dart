@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _expectedRunningKey = 'expected_service_running';
 const String _outputDirKey = 'output_dir';
 const String _stoppedByUserKey = 'stopped_by_user';
 const String _localeCodeKey = 'locale_code';
@@ -16,15 +15,6 @@ const String coreRunningKey = 'core_running';
 sealed class Preferences {
   static SharedPreferencesAsync get _prefs => SharedPreferencesAsync();
 
-  static Future<void> setExpectedRunning(bool value) async {
-    final prefs = _prefs;
-    await prefs.setBool(_expectedRunningKey, value);
-  }
-
-  static Future<bool> getExpectedRunning() async {
-    final prefs = _prefs;
-    return await prefs.getBool(_expectedRunningKey) ?? false;
-  }
 
   static Future<void> setStoppedByUser(bool value) async {
     final prefs = _prefs;

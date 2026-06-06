@@ -240,7 +240,6 @@ class BilirecTaskHandler extends TaskHandler {
   }
 
   Future<void> _notifyPpkKilled() async {
-    await Preferences.setExpectedRunning(false);
     await _localNotifications.show(
       2027,
       _l10n.tr('ppkKilledTitle'),
@@ -320,10 +319,6 @@ class BilirecTaskHandler extends TaskHandler {
       await Preferences.setStoppedByUser(true);
       debugLog(
           '[STOP/NOTI][$opId] after setStoppedByUser(true) (${sw.elapsedMilliseconds}ms)');
-      debugLog('[STOP/NOTI][$opId] before setExpectedRunning(false)');
-      await Preferences.setExpectedRunning(false);
-      debugLog(
-          '[STOP/NOTI][$opId] after setExpectedRunning(false) (${sw.elapsedMilliseconds}ms)');
       debugLog('[STOP/NOTI][$opId] before FlutterForegroundTask.stopService()');
       await FlutterForegroundTask.stopService();
       debugLog(
