@@ -87,7 +87,9 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
 
   String _buildLabel(AppLocalizations l10n) {
     if (widget.actionInFlight) {
-      return widget.isStopping ? l10n.tr('stoppingShort') : l10n.tr('startingShort');
+      return widget.isStopping
+          ? l10n.tr('stoppingShort')
+          : l10n.tr('startingShort');
     }
     return widget.isServiceRunning ? l10n.tr('stop') : l10n.tr('start');
   }
@@ -95,14 +97,21 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final buttonSide =
+        (widget.size.shortestSide * 0.32).clamp(96.0, 144.0).toDouble();
+    final buttonRadius = buttonSide * 0.25;
+    final iconBoxSide = (buttonSide * 0.34).clamp(32.0, 48.0).toDouble();
+    final iconSize = (iconBoxSide * 0.9).clamp(26.0, 44.0).toDouble();
+    final labelSpacing = (buttonSide * 0.05).clamp(4.0, 8.0).toDouble();
+    final labelFontSize = (buttonSide * 0.14).clamp(12.0, 18.0).toDouble();
 
     return Positioned.fill(
       child: Center(
         child: Transform.translate(
           offset: const Offset(0, -64),
           child: SizedBox(
-            width: widget.size.width * 0.28,
-            height: widget.size.height * 0.12,
+            width: buttonSide,
+            height: buttonSide,
             child: GestureDetector(
               onTap: widget.actionInFlight ? null : widget.onTap,
               child: AnimatedContainer(
@@ -114,7 +123,7 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
                     end: Alignment.bottomRight,
                     colors: widget.buttonGradientColors,
                   ),
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(buttonRadius),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF5BAEDB).withValues(alpha: 0.55),
@@ -137,8 +146,8 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         SizedBox(
-                          width: 40,
-                          height: 40,
+                          width: iconBoxSide,
+                          height: iconBoxSide,
                           child: Center(
                             child: widget.isStarting
                                 ? FadeTransition(
@@ -150,9 +159,9 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
                                           const AlwaysStoppedAnimation<double>(
                                             1.0,
                                           ),
-                                      child: const Icon(
+                                      child: Icon(
                                         Icons.power_settings_new,
-                                        size: 40,
+                                        size: iconSize,
                                         color: Colors.white,
                                       ),
                                     ),
@@ -160,34 +169,35 @@ class _ServicePowerButtonAreaState extends State<ServicePowerButtonArea>
                                 : widget.isStopping
                                     ? FadeTransition(
                                         opacity: _localStopOpacity ??
-                                            const AlwaysStoppedAnimation<double>(
-                                                1.0),
+                                            const AlwaysStoppedAnimation<
+                                                double>(1.0),
                                         child: ScaleTransition(
                                           scale: _localStopScale ??
-                                              const AlwaysStoppedAnimation<double>(
+                                              const AlwaysStoppedAnimation<
+                                                  double>(
                                                 1.0,
                                               ),
-                                          child: const Icon(
+                                          child: Icon(
                                             Icons.power_settings_new,
-                                            size: 40,
+                                            size: iconSize,
                                             color: Colors.white,
                                           ),
                                         ),
                                       )
-                                    : const Icon(
+                                    : Icon(
                                         Icons.power_settings_new,
-                                        size: 40,
+                                        size: iconSize,
                                         color: Colors.white,
                                       ),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        SizedBox(height: labelSpacing),
                         Text(
                           _buildLabel(l10n),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontSize: labelFontSize,
                           ),
                         ),
                       ],
