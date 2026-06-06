@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -14,7 +15,8 @@ Finder _findText(String label, {bool contains = false}) {
 
 String visibleLabelsSummary(Iterable<String> labels, {bool contains = false}) {
   final visible = labels
-      .where((label) => _findText(label, contains: contains).evaluate().isNotEmpty)
+      .where(
+          (label) => _findText(label, contains: contains).evaluate().isNotEmpty)
       .toList();
   return visible.isEmpty ? '<none>' : visible.join(' | ');
 }
@@ -175,7 +177,7 @@ Future<void> waitUntilPowerButtonStable(
   required Iterable<String> stopLabels,
   Duration timeout = const Duration(seconds: 40),
   String? logTag,
-  WaitMode waitMode = WaitMode.ui,
+  WaitMode waitMode = WaitMode.realtime,
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (DateTime.now().isBefore(deadline)) {
@@ -188,7 +190,23 @@ Future<void> waitUntilPowerButtonStable(
     await _tickWait(tester, const Duration(milliseconds: 300), waitMode);
   }
 
-  if (logTag != null) testLog(logTag, 'wait power stable timeout');
+  if (logTag != null) {
+    final inFlightVisible = visibleLabelsSummary(inFlightLabels);
+    final stableVisible = visibleLabelsSummary([...startLabels, ...stopLabels]);
+    Object? coreRunning;
+    Object? runtimeError;
+    bool? isRunningService;
+    try {
+      isRunningService = await FlutterForegroundTask.isRunningService;
+      coreRunning = await FlutterForegroundTask.getData(key: coreRunningKey);
+    } catch (e) {
+      runtimeError = e;
+    }
+    testLog(
+      logTag,
+      'wait power stable timeout: inFlightVisible=$inFlightVisible, stableVisible=$stableVisible, isRunningService=$isRunningService, coreRunning=$coreRunning, runtimeError=${runtimeError ?? '<none>'}',
+    );
+  }
   fail('等待啟停狀態穩定超時（${timeout.inSeconds}s）');
 }
 
