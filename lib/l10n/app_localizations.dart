@@ -286,7 +286,7 @@ class AppLocalizations {
       'ffmpegAllowDuringRecordingTitle': '录制中允许转换',
       'ffmpegAllowDuringRecordingDescription': '开启后，App 将在录制直播的同时同步在后台转档。',
       'ffmpegAllowDuringRecordingWarning':
-          '同步转换会增加磁碟读写负载，若遇到录製掉帧或手机发热，建议关闭此选项。',
+          '同步转换会增加磁碟读写负载，若遇到录制掉帧或手机发热，建议关闭此选项。',
       'ffmpegMaxActiveRecordingsTitle': '允许转档的「最高录制路数」',
       'ffmpegMaxActiveRecordingsDescription':
           '当「正在录制」的直播间数量超过此数值时，系统将自动暂停后台转档，优先确保录制流畅。设置为 0 路表示不设限制（将面临极高发热与崩溃风险）。',
