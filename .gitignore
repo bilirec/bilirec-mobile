@@ -49,3 +49,7 @@ app.*.map.json
 # Self Signed Key
 *.jks
 key.properties
+
+# Others
+*.flv
+*.mp4

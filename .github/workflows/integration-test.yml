@@ -28,8 +28,8 @@ env:
 jobs:
   integration-basic-functional-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix: 
         api_level: [34, 36]
 
@@ -61,10 +61,70 @@ jobs:
             echo "=== 開始執行 Flutter 整合功能測試 ==="
             flutter test integration_test/basic_functional_test.dart --reporter=expanded --dart-define=CI=true
 
+  integration-ffmpeg-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        api_level: [34, 36]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-flutter-android
+        with:
+          api_level: ${{ matrix.api_level }}
+          jdk_version: ${{ env.jdk_version }}
+          ndk_version: ${{ env.ndk_version }}
+          profile: ${{ env.emulator_profile }}
+
+      - name: Pre-build Debug APK
+        run: flutter build apk --debug
+
+      - name: Prepare performance monitor workspace
+        run: mkdir -p .ci/perf-monitor
+
+      - name: Run FFmpeg Integration Test on Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api_level }}
+          disable-animations: true
+          target: default
+          arch: x86_64
+          profile: ${{ env.emulator_profile }}
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            sh ./.github/scripts/run_stress_with_monitor.sh integration_test/ffmpeg_test.dart ffmpeg .ci/perf-monitor/ffmpeg.log .ci/perf-monitor/ffmpeg.summary ${{ env.perf_monitor_interval_seconds }} ${{ env.perf_monitor_ram_warn_mb }} ${{ env.perf_monitor_cpu_warn_percent }} true
+
+      - name: Publish FFmpeg Perf Summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f .ci/perf-monitor/ffmpeg.summary ]; then
+            {
+              echo "### FFmpeg Integration Test Perf Monitor"
+              echo ''
+              cat .ci/perf-monitor/ffmpeg.summary
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload FFmpeg Perf Monitor Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-perf-monitor-api-${{ matrix.api_level }}
+          path: .ci/perf-monitor/ffmpeg.*
+          if-no-files-found: warn
+
   integration-service-toggle-stress-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         api_level: [ 34, 36 ]
 
@@ -117,14 +177,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: service-toggle-perf-monitor
+          name: service-toggle-perf-monitor-api-${{ matrix.api_level }}
           path: .ci/perf-monitor/service-toggle.*
           if-no-files-found: warn
 
   integration-multi-room-recording-stress-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         api_level: [ 34, 36 ]
 
@@ -177,33 +237,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: multi-room-recording-perf-monitor
+          name: multi-room-recording-perf-monitor-api-${{ matrix.api_level }}
           path: .ci/perf-monitor/multi-room-recording.*
           if-no-files-found: warn
-
-  pr-gate:
-    name: PR Gate
-    needs:
-      - integration-basic-functional-test
-      - integration-service-toggle-stress-test
-      - integration-multi-room-recording-stress-test
-    runs-on: ubuntu-latest
-    if: always() && github.event_name == 'pull_request'
-    steps:
-      - name: Verify required tests all passed
-        run: |
-          FUNCTIONAL_RESULT="${{ needs.integration-basic-functional-test.result }}"
-          TOGGLE_STRESS_RESULT="${{ needs.integration-service-toggle-stress-test.result }}"
-          RECORDING_STRESS_RESULT="${{ needs.integration-multi-room-recording-stress-test.result }}"
-          
-          echo "Integration functional test result: $FUNCTIONAL_RESULT"
-          echo "Integration service-toggle stress test result: $TOGGLE_STRESS_RESULT"
-          echo "Integration multi-room recording stress test result: $RECORDING_STRESS_RESULT"
-          
-          if [ "$FUNCTIONAL_RESULT" != "success" ] || [ "$TOGGLE_STRESS_RESULT" != "success" ] || [ "$RECORDING_STRESS_RESULT" != "success" ]; then
-            echo "❌ 三項整合測試需全部通過（功能測試、頻繁啟停壓測、多房同錄壓測），PR 無法合併！"
-            exit 1
-          fi
-          
-          echo "✅ 三項整合測試全部通過，PR 可以合併。"
-

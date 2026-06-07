@@ -108,13 +108,65 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       return;
     }
 
-    await Preferences.setExpectedRunning(false);
     await _stopForegroundIfRunning();
     if (!mounted || !_isLatestRequest(requestId)) return;
     setState(() {
       _serviceUiState = ServiceUiState.stopped;
       _desiredServiceState = ServiceIntent.stopped;
       _setStatus('backendNoResponse');
+    });
+  }
+
+  Future<void> _confirmStopped(
+    int requestId, {
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    final epoch = ++_healthCheckEpoch;
+    await Future<void>.delayed(timeout);
+
+    if (!mounted ||
+        !_isLatestRequest(requestId) ||
+        _desiredServiceState != ServiceIntent.stopped ||
+        epoch != _healthCheckEpoch) {
+      return;
+    }
+
+    // If task callback already reconciled UI, avoid overriding it.
+    if (_serviceUiState != ServiceUiState.stopping) {
+      return;
+    }
+
+    var stillRunning = true;
+    Object? runtimeError;
+    try {
+      stillRunning = await FlutterForegroundTask.isRunningService;
+    } catch (e) {
+      runtimeError = e;
+    }
+
+    if (!mounted ||
+        !_isLatestRequest(requestId) ||
+        _desiredServiceState != ServiceIntent.stopped ||
+        epoch != _healthCheckEpoch) {
+      return;
+    }
+
+    if (!stillRunning) {
+      setState(() {
+        _serviceUiState = ServiceUiState.stopped;
+        _desiredServiceState = ServiceIntent.stopped;
+        _setStatus('backendStopped');
+      });
+      return;
+    }
+
+    debugLog(
+      '[STOP/UI] confirm stop timeout, reconcile state to running (runtimeError=${runtimeError ?? '<none>'})',
+    );
+    setState(() {
+      _serviceUiState = ServiceUiState.running;
+      _desiredServiceState = ServiceIntent.running;
+      _setStatus('backendRunning');
     });
   }
 
@@ -188,16 +240,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   }
 
   Future<void> _bootstrap() async {
-    final expectedRunning = await Preferences.getExpectedRunning();
     final running = await _isServiceCoreRunning();
     final ignoringOptimization = Platform.isAndroid
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
         : true;
 
     var statusKey = running ? 'backendRunning' : 'backendNotRunning';
-    if (expectedRunning && !running) {
-      statusKey = 'backendNotRunning';
-    }
 
     if (!mounted) return;
     setState(() {
@@ -257,8 +305,10 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         setState(() {
           _serviceUiState = ServiceUiState.stopped;
           _desiredServiceState = ServiceIntent.stopped;
-          if (stoppedByUser){
+          if (stoppedByUser) {
             _setStatus('backendStopped');
+          } else {
+            _setStatus('backendNotRunning');
           }
         });
         break;
@@ -270,7 +320,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           _setStatus('backendNoResponse');
         });
         if (!stoppedByUser) {
-          Preferences.setExpectedRunning(false); // fire-and-forget
           unawaited(_stopForegroundIfRunning());
         }
         break;
@@ -323,7 +372,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
             return Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(32)),
               ),
               child: SettingsDrawerSheet(
                 scrollController: scrollController,
@@ -453,7 +503,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
             autoRunOnBoot: false,
             autoRunOnMyPackageReplaced: true,
             allowWakeLock: true,
-            allowWifiLock: !usingAntiSleep, // 如果啟用了防止休眠，則不使用普通的 Wi-Fi 鎖定，避免與高性能 Wi-Fi 鎖定衝突
+            allowWifiLock:
+                !usingAntiSleep, // 如果啟用了防止休眠，則不使用普通的 Wi-Fi 鎖定，避免與高性能 Wi-Fi 鎖定衝突
           ),
         );
 
@@ -474,7 +525,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           return;
         }
 
-        await Preferences.setExpectedRunning(ok);
         setState(() {
           _serviceUiState =
               ok ? ServiceUiState.starting : ServiceUiState.stopped;
@@ -507,11 +557,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         await Preferences.setStoppedByUser(true);
         debugLog(
             '[STOP/UI][$stopOpId] after setStoppedByUser(true) (${stopSw.elapsedMilliseconds}ms)');
-        debugLog('[STOP/UI][$stopOpId] before setExpectedRunning(false)');
-        await Preferences.setExpectedRunning(false);
         debugLog(
-            '[STOP/UI][$stopOpId] after setExpectedRunning(false) (${stopSw.elapsedMilliseconds}ms)');
-        debugLog('[STOP/UI][$stopOpId] before FlutterForegroundTask.stopService()');
+            '[STOP/UI][$stopOpId] before FlutterForegroundTask.stopService()');
         final stopped = await FlutterForegroundTask.stopService();
         debugLog(
             '[STOP/UI][$stopOpId] after FlutterForegroundTask.stopService() (${stopSw.elapsedMilliseconds}ms) result=$stopped');
@@ -526,7 +573,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
               ok ? ServiceIntent.stopped : ServiceIntent.running;
           _setStatus(ok ? 'foregroundStopWaitingCore' : 'stopServiceFailed');
         });
-        if (!ok) {
+        if (ok) {
+          unawaited(_confirmStopped(requestId));
+        } else {
           Preferences.setStoppedByUser(false);
         }
         debugLog(
@@ -559,7 +608,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       final healthy = response.statusCode < 500;
       showAppToast(
         context,
-        healthy ? '✅ ${l10n.tr('backendHealthy')}' : '⚠️ ${l10n.tr('backendUnhealthy')}',
+        healthy
+            ? '✅ ${l10n.tr('backendHealthy')}'
+            : '⚠️ ${l10n.tr('backendUnhealthy')}',
         animation: toastAnimation,
         location: toastLocation,
         edgeDistance: toastEdgeDistance,

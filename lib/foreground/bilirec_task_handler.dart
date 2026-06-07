@@ -38,7 +38,8 @@ class BilirecTaskHandler extends TaskHandler {
   bool _antiSleepEnabled = false;
   bool _networkLockRequested = false;
   String? _sseToken;
-  Map<String, String> _environmentSettings = const {};
+  Map<String, String> _managedEnvironmentSettings = const {};
+  Map<String, String> _developEnvironmentSettings = const {};
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -54,7 +55,10 @@ class BilirecTaskHandler extends TaskHandler {
       _sseEnabled = await Preferences.getEnableSsePush();
       _sseToken = _sseEnabled ? generateSseToken() : null;
       _antiSleepEnabled = await Preferences.getEnableAntiSleep();
-      _environmentSettings = await Preferences.getEnvironmentSettings();
+      _managedEnvironmentSettings =
+          await Preferences.getManagedEnvironmentSettings();
+      _developEnvironmentSettings =
+          await Preferences.getDevelopEnvironmentSettings();
       await Preferences.setStoppedByUser(false);
     } catch (_) {}
 
@@ -81,15 +85,15 @@ class BilirecTaskHandler extends TaskHandler {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_ppkAlertChannel);
 
-    final startEnv = <String, String>{};
+    final startEnv = <String, String>{..._managedEnvironmentSettings};
     if (outputDir != null && outputDir.isNotEmpty) {
       startEnv['OUTPUT_DIR'] = outputDir;
     }
     if (_sseToken != null && _sseToken!.isNotEmpty) {
       startEnv['NOTIFY_SSE_TOKEN'] = _sseToken!;
     }
-    // Developer options should have higher priority than regular settings.
-    startEnv.addAll(_environmentSettings);
+    // Developer environment settings should have higher priority than managed settings.
+    startEnv.addAll(_developEnvironmentSettings);
 
     final result = await BilirecService.start(
       StartConfig(
@@ -236,7 +240,6 @@ class BilirecTaskHandler extends TaskHandler {
   }
 
   Future<void> _notifyPpkKilled() async {
-    await Preferences.setExpectedRunning(false);
     await _localNotifications.show(
       2027,
       _l10n.tr('ppkKilledTitle'),
@@ -316,10 +319,6 @@ class BilirecTaskHandler extends TaskHandler {
       await Preferences.setStoppedByUser(true);
       debugLog(
           '[STOP/NOTI][$opId] after setStoppedByUser(true) (${sw.elapsedMilliseconds}ms)');
-      debugLog('[STOP/NOTI][$opId] before setExpectedRunning(false)');
-      await Preferences.setExpectedRunning(false);
-      debugLog(
-          '[STOP/NOTI][$opId] after setExpectedRunning(false) (${sw.elapsedMilliseconds}ms)');
       debugLog('[STOP/NOTI][$opId] before FlutterForegroundTask.stopService()');
       await FlutterForegroundTask.stopService();
       debugLog(

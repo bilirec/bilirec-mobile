@@ -39,9 +39,12 @@ if [ "$FLUTTER_STATUS" -ne 0 ]; then
   echo "⚠️ 偵測到測試失敗或 App 崩潰！正在撈取 Android Logcat 崩潰日誌..."
   echo "===================================================="
 
-  # 清理一下，只看最後 1000 行，並過濾出錯誤（Error）等級以上的日誌
-  # 或者你可以直接 adb logcat -d 查看完整日誌
-  adb logcat -d *:E | tail -n 1000
+  # 只保留 bilirec app 與 cgo/FFmpeg hook 相關錯誤日誌
+  # 若需完整錯誤可改回：adb logcat -d *:E
+  adb logcat -d *:E \
+    | grep -E 'org\.bilirec\.bilirec|BiliRec_FFmpegHook|cgo|CGO|libgojni|libffmpegkit|FFMPEG' \
+    | tail -n 1000 \
+    || true
 
   echo "===================================================="
 fi

@@ -31,6 +31,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        ndk {
+            abiFilters.clear()
+        }
     }
 
     signingConfigs {
@@ -47,8 +51,24 @@ android {
     }
 
     buildTypes {
+
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+
+            ndk {
+                // libbilirec.so only provides these two architectures
+                // x86_64 for android emulator, arm64-v8a for real devices
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
+        }
+
         release {
             signingConfig = signingConfigs.getByName("release")
+
+            ndk {
+                //noinspection ChromeOsAbiSupport
+                abiFilters += listOf("arm64-v8a") // x86_64 已經被淘汰
+            }
         }
     }
 }
@@ -65,5 +85,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("com.antonkarpenko:ffmpeg-kit-min:2.1.0")
 }
 

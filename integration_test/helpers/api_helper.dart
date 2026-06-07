@@ -6,6 +6,44 @@ const defaultBackendBaseUrl = 'http://127.0.0.1:8080';
 const defaultBroadcastsEndpoint =
     'https://api.livestats.top/api/v1/lives/broadcasts';
 
+class TaskQueue {
+  TaskQueue({
+    required this.taskId,
+    required this.inputPath,
+    this.outputPath,
+    this.convertTaskId,
+    this.deleteSource,
+    this.inputFileSize,
+    this.inputFormat,
+    this.outputFormat,
+    this.provider,
+  });
+
+  final String taskId;
+  final String inputPath;
+  final String? outputPath;
+  final String? convertTaskId;
+  final bool? deleteSource;
+  final int? inputFileSize;
+  final String? inputFormat;
+  final String? outputFormat;
+  final String? provider;
+
+  factory TaskQueue.fromJson(Map<String, dynamic> json) {
+    return TaskQueue(
+      taskId: json['task_id'] as String? ?? '',
+      inputPath: json['input_path'] as String? ?? '',
+      outputPath: json['output_path'] as String?,
+      convertTaskId: json['convert_task_id'] as String?,
+      deleteSource: json['delete_source'] as bool?,
+      inputFileSize: json['input_file_size'] as int?,
+      inputFormat: json['input_format'] as String?,
+      outputFormat: json['output_format'] as String?,
+      provider: json['provider'] as String?,
+    );
+  }
+}
+
 class ApiCallResult {
   const ApiCallResult({required this.statusCode, required this.body});
 
@@ -32,6 +70,92 @@ Future<Map<String, dynamic>> readJsonResponse(
     return decoded;
   }
   return <String, dynamic>{'data': decoded};
+}
+
+Future<List<TaskQueue>> listConvertTasks({
+  String baseUrl = defaultBackendBaseUrl,
+  String? bearerToken,
+}) async {
+  final client = HttpClient();
+  try {
+    final request = await client
+        .getUrl(Uri.parse('$baseUrl/convert/tasks'))
+        .timeout(const Duration(seconds: 6));
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    if (bearerToken != null && bearerToken.trim().isNotEmpty) {
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearerToken');
+    }
+    final response = await request.close().timeout(const Duration(seconds: 12));
+    final body = await response.transform(utf8.decoder).join();
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(
+        'list convert tasks failed: status=${response.statusCode}, body=$body',
+      );
+    }
+
+    final decoded = body.trim().isEmpty ? const [] : jsonDecode(body);
+    if (decoded is! List) {
+      return const [];
+    }
+
+    return decoded
+        .whereType<Map<String, dynamic>>()
+        .map((item) => TaskQueue.fromJson(item))
+        .toList(growable: false);
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<ApiCallResult> enqueueConvertTask(
+  String filePath, {
+  bool deleteOriginal = false,
+  String baseUrl = defaultBackendBaseUrl,
+  String? bearerToken,
+}) async {
+  final client = HttpClient();
+  try {
+    final encodedPath = Uri.encodeComponent(filePath);
+    final uri = Uri.parse('$baseUrl/convert/tasks/$encodedPath')
+        .replace(queryParameters: {'delete': deleteOriginal.toString()});
+
+    final request = await client.postUrl(uri).timeout(const Duration(seconds: 6));
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    if (bearerToken != null && bearerToken.trim().isNotEmpty) {
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearerToken');
+    }
+
+    final response = await request.close().timeout(const Duration(seconds: 12));
+    final body = await response.transform(utf8.decoder).join();
+    return ApiCallResult(statusCode: response.statusCode, body: body);
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<int> cancelConvertTask(
+  String taskId, {
+  String baseUrl = defaultBackendBaseUrl,
+  String? bearerToken,
+}) async {
+  final client = HttpClient();
+  try {
+    final encodedTaskId = Uri.encodeComponent(taskId);
+    final request = await client
+        .deleteUrl(Uri.parse('$baseUrl/convert/tasks/$encodedTaskId'))
+        .timeout(const Duration(seconds: 6));
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    if (bearerToken != null && bearerToken.trim().isNotEmpty) {
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearerToken');
+    }
+
+    final response = await request.close().timeout(const Duration(seconds: 12));
+    await response.drain<void>();
+    return response.statusCode;
+  } finally {
+    client.close(force: true);
+  }
 }
 
 Future<int> subscribeRoom(
@@ -281,8 +405,8 @@ Future<List<Map<String, dynamic>>> browseFilesAtPath({
       final items = payload['items'];
       if (items is List) {
         return items
-            .whereType<Map>()
-            .map((e) => e.map((k, v) => MapEntry(k.toString(), v)))
+            .whereType<Map<String, dynamic>>()
+            .map((e) => e)
             .toList(growable: false);
       }
     }
