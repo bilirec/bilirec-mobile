@@ -66,6 +66,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
   bool _useSsePush = false;
   bool _useAntiSleep = false;
+  bool _sequentialWriteEnabled = false;
   bool _downloadingBootstrapLog = false;
   bool _convertToMp4 = false;
   bool _deleteSourceAfterConvert = false;
@@ -75,7 +76,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   int _minDiskSpaceGb = _defaultMinDiskSpaceGb;
   int _maxRetryMinutes = _defaultMaxRetryMinutes;
   int _maxConcurrentRecordings = _defaultMaxConcurrentRecordings;
-  Map<String, String> _managedEnvironmentSettings = <String, String>{};
   Map<String, String> _developEnvironmentSettings = <String, String>{};
   Future<void> _managedEnvironmentWriteQueue = Future<void>.value();
 
@@ -115,7 +115,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     setState(() {
       _useSsePush = useSsePush;
       _useAntiSleep = useAntiSleep;
-      _managedEnvironmentSettings = managedEnvironmentSettings;
+      _sequentialWriteEnabled =
+          _readBoolFromEnv(managedEnvironmentSettings, 'SEQUENTIAL_WRITE');
       _developEnvironmentSettings = developEnvironmentSettings;
       _maxRecordingHours = _readMaxRecordingHours(managedEnvironmentSettings);
       _minDiskSpaceGb = _readMinDiskSpaceGb(managedEnvironmentSettings);
@@ -181,6 +182,14 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     if (!mounted) return;
     setState(() {
       _useAntiSleep = enabled;
+    });
+  }
+
+  Future<void> _setSequentialWriteEnabled(bool enabled) async {
+    await _setManagedEnvironmentSetting('SEQUENTIAL_WRITE', '$enabled');
+    if (!mounted) return;
+    setState(() {
+      _sequentialWriteEnabled = enabled;
     });
   }
 
@@ -284,10 +293,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       final latest = await Preferences.getManagedEnvironmentSettings();
       final updated = transform(<String, String>{...latest});
       await Preferences.setManagedEnvironmentSettings(updated);
-      if (!mounted) return;
-      setState(() {
-        _managedEnvironmentSettings = updated;
-      });
     });
   }
 
@@ -665,44 +670,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            children: [
-                              const Icon(Icons.folder_outlined),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('storagePathTitle'),
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            outputPathText,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton(
-                            onPressed:
-                                widget.controlsEnabled ? _browseBasePath : null,
-                            child: Text(l10n.tr('changePath')),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
@@ -812,6 +779,85 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                                     color: colorScheme.onSurfaceVariant,
                                   ),
                                 ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: colorScheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.storage_outlined),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  l10n.tr('storagePolicyTitle'),
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.tr('storagePolicyDescription'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            l10n.tr('storagePathTitle'),
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            outputPathText,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            onPressed:
+                                widget.controlsEnabled ? _browseBasePath : null,
+                            child: Text(l10n.tr('changePath')),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      l10n.tr('sequentialWriteTitle'),
+                                      style: theme.textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      l10n.tr('sequentialWriteDescription'),
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Switch.adaptive(
+                                value: _sequentialWriteEnabled,
+                                onChanged: widget.controlsEnabled
+                                    ? _setSequentialWriteEnabled
+                                    : null,
                               ),
                             ],
                           ),
@@ -1088,18 +1134,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    l10n.tr('conversionPolicyTitle'),
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.tr('conversionPolicyDescription'),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       border: Border.all(color: colorScheme.outlineVariant),
@@ -1110,6 +1144,26 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.transform_rounded),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  l10n.tr('conversionPolicyTitle'),
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.tr('conversionPolicyDescription'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
                           Text(
                             l10n.tr('fileConversionTitle'),
                             style: theme.textTheme.titleSmall,

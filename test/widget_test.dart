@@ -73,14 +73,44 @@ Future<void> _setSwitchByLabels(
   }
 }
 
+Finder _findRowSwitchByLabels(Iterable<String> labels) {
+  final labelFinder = _findFirstVisibleText(labels).first;
+  final switchFinder = find.descendant(
+    of: find.ancestor(of: labelFinder, matching: find.byType(Row)).first,
+    matching: find.byType(Switch),
+  );
+  expect(switchFinder, findsOneWidget, reason: '找不到開關: ${labels.join(' / ')}');
+  return switchFinder;
+}
+
+Future<void> _setRowSwitchByLabels(
+  WidgetTester tester, {
+  required Iterable<String> labels,
+  required bool enabled,
+}) async {
+  final switchFinder = _findRowSwitchByLabels(labels);
+  final switchWidget = tester.widget<Switch>(switchFinder);
+  final current = switchWidget.value;
+  if (current != enabled) {
+    expect(switchWidget.onChanged, isNotNull,
+        reason: '開關目前不可操作: ${labels.join(' / ')}');
+    switchWidget.onChanged!(enabled);
+    await tester.pumpAndSettle();
+  }
+}
+
 final _controlCenterTitleLabels = labelsForKey('controlCenterTitle');
 final _backendNotRunningLabels = labelsForKey('backendNotRunning');
 final _startLabels = labelsForKey('start');
 final _settingsLabels = labelsForKey('settings');
 final _generalSettingsTitleLabels = labelsForKey('generalSettingsTitle');
+final _storagePolicyTitleLabels = labelsForKey('storagePolicyTitle');
 final _storagePathTitleLabels = labelsForKey('storagePathTitle');
 final _outputPathUnsetLabels = labelsForKey('outputPathUnset');
 final _changePathLabels = labelsForKey('changePath');
+final _sequentialWriteTitleLabels = labelsForKey('sequentialWriteTitle');
+final _sequentialWriteDescriptionLabels =
+    labelsForKey('sequentialWriteDescription');
 final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
 final _ssePushDescriptionLabels = labelsForKey('ssePushDescription');
 final _ssePushHintLabels = labelsForKey('ssePushHint');
@@ -96,6 +126,7 @@ final _maxConcurrentRecordingsTitleLabels =
 final _maxConcurrentRecordingsWarningLabels =
     labelsForKey('maxConcurrentRecordingsWarning');
 final _fileConversionTitleLabels = labelsForKey('fileConversionTitle');
+final _conversionPolicyTitleLabels = labelsForKey('conversionPolicyTitle');
 final _convertToMp4TitleLabels = labelsForKey('convertToMp4Title');
 final _convertToMp4DescriptionLabels = labelsForKey('convertToMp4Description');
 final _deleteSourceAfterConvertTitleLabels =
@@ -186,9 +217,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_findFirstVisibleText(_generalSettingsTitleLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_storagePolicyTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_storagePathTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_outputPathUnsetLabels), findsOneWidget);
     expect(_findFirstVisibleText(_changePathLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_sequentialWriteTitleLabels), findsOneWidget);
+    expect(
+      _findFirstVisibleText(_sequentialWriteDescriptionLabels),
+      findsOneWidget,
+    );
     expect(_findFirstVisibleText(_ssePushSwitchTitleLabels), findsOneWidget);
     expect(find.byType(Switch), findsWidgets);
     expect(_findFirstVisibleText(_ssePushDescriptionLabels), findsOneWidget);
@@ -211,6 +248,7 @@ void main() {
       findsOneWidget,
     );
     expect(_findFirstVisibleText(_fileConversionTitleLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_conversionPolicyTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_convertToMp4TitleLabels), findsOneWidget);
     expect(
       _findFirstVisibleText(_convertToMp4DescriptionLabels),
@@ -338,6 +376,37 @@ void main() {
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
     expect(envSettings['CONVERT_TO_MP4'], 'true');
     expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
+  });
+
+  testWidgets('序列化寫入開關會更新 SEQUENTIAL_WRITE 環境參數', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+
+    final defaultSwitch =
+        tester.widget<Switch>(_findRowSwitchByLabels(_sequentialWriteTitleLabels));
+    expect(defaultSwitch.value, isFalse);
+
+    var envSettings = await Preferences.getManagedEnvironmentSettings();
+    expect(envSettings['SEQUENTIAL_WRITE'], isNot('true'));
+
+    await _setRowSwitchByLabels(
+      tester,
+      labels: _sequentialWriteTitleLabels,
+      enabled: true,
+    );
+    envSettings = await Preferences.getManagedEnvironmentSettings();
+    expect(envSettings['SEQUENTIAL_WRITE'], 'true');
+
+    await _setRowSwitchByLabels(
+      tester,
+      labels: _sequentialWriteTitleLabels,
+      enabled: false,
+    );
+    envSettings = await Preferences.getManagedEnvironmentSettings();
+    expect(envSettings['SEQUENTIAL_WRITE'], 'false');
   });
 
   testWidgets('服務啟動後設定按鈕會被禁用', (tester) async {
