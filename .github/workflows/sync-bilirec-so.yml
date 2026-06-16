@@ -2,9 +2,6 @@ name: Sync bilirec Android SO
 
 on:
   workflow_dispatch:
-  schedule:
-    # 03:00 HKT every day (UTC+8)
-    - cron: "0 19 * * *"
 
 permissions:
   contents: write
