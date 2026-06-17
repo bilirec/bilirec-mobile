@@ -4,7 +4,7 @@ import 'dart:math';
 
 const defaultBackendBaseUrl = 'http://127.0.0.1:8080';
 const defaultBroadcastsEndpoint =
-    'https://api.livestats.top/api/v1/lives/broadcasts';
+    'https://workers.vrp.moe/laplace/ranking?type=danmakus';
 
 class TaskQueue {
   TaskQueue({
@@ -210,26 +210,23 @@ Future<List<int>> fetchLiveBroadcastRoomIDs({
     final request = await client
         .getUrl(Uri.parse(endpoint))
         .timeout(const Duration(seconds: 6));
-    final response = await request.close().timeout(const Duration(seconds: 10));
+    final response = await request.close().timeout(const Duration(seconds: 90));
 
     if (response.statusCode != HttpStatus.ok) {
       throw StateError('broadcast API status=${response.statusCode}');
     }
 
-    final payload = await readJsonResponse(response);
-    if ((payload['code'] as num?)?.toInt() != 0) {
-      throw StateError('broadcast API code=${payload['code']}');
-    }
-
-    final data = payload['data'];
-    if (data is! List) {
-      throw StateError('broadcast API data is not a list');
+    final body = await response.transform(utf8.decoder).join();
+    final decoded = body.trim().isEmpty ? const [] : jsonDecode(body);
+    if (decoded is! List) {
+      throw StateError('broadcast API response is not a list');
     }
 
     final ids = <int>{};
-    for (final item in data) {
+    for (final item in decoded) {
       if (item is! Map) continue;
-      final raw = item['roomId'];
+      if (item['isDeleted'] == true) continue;
+      final raw = item['roomid'] ?? item['roomId'];
       final id = raw is int ? raw : int.tryParse(raw?.toString() ?? '');
       if (id != null && id > 0) {
         ids.add(id);
