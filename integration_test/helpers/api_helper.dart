@@ -266,7 +266,7 @@ Future<ApiCallResult> startRecording(
     final request =
         await client.postUrl(uri).timeout(const Duration(seconds: 6));
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    final response = await request.close().timeout(const Duration(seconds: 12));
+    final response = await request.close().timeout(const Duration(seconds: 30));
     final body = await response.transform(utf8.decoder).join();
     return ApiCallResult(statusCode: response.statusCode, body: body);
   } finally {
