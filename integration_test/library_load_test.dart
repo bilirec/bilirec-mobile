@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'helpers/test_helper.dart';
+
 const _logTag = 'LIBRARY_LOAD_TEST';
 
 void _log(String message) {
@@ -15,6 +17,10 @@ void _log(String message) {
 // Local test only, will not include in CI to avoid false positives due to environment differences
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() async {
+    await resetTestOutputDir();
+  });
 
   group('Native Library Integration Tests', () {
     testWidgets('在虚拟设备上加载 libbilirec.so', (tester) async {

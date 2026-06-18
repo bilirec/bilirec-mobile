@@ -115,7 +115,8 @@ void main() {
     FlutterForegroundTaskPlatform.instance = originalPlatform;
   });
 
-  setUp(() {
+  setUp(() async {
+    await resetTestOutputDir();
     _log('setUp: reset foreground task platform to battery bypass');
     FlutterForegroundTaskPlatform.instance =
         BatteryBypassForegroundTaskPlatform();

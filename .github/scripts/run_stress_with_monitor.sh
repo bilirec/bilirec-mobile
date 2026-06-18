@@ -18,8 +18,8 @@ CI_FLAG="$8"
 echo "=== 模擬器啟動成功，開始手動安裝 APK ==="
 adb install build/app/outputs/flutter-apk/app-debug.apk
 
-echo "=== 預先授予前景服務與通知權限 ==="
-adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS
+echo "=== 預先授予通知權限（API 33+；Android 10 略過）==="
+adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 
 echo "=== 啟動外部效能監控（RAM/CPU，只告警不阻斷）==="
 sh ./.github/scripts/perf_monitor.sh --package org.bilirec.bilirec --job-name "$JOB_NAME" --interval "$INTERVAL_SECONDS" --ram-warn "$RAM_WARN_MB" --cpu-warn "$CPU_WARN_PERCENT" --mode warn --log "$LOG_FILE" --summary "$SUMMARY_FILE" &
