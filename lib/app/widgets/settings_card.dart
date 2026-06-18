@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/android_external_storage_permission.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/storage_protection_env.dart';
@@ -160,6 +161,13 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     );
 
     if (selected == null || !mounted) return null;
+
+    final granted = await requestExternalStoragePermissionIfNeeded();
+    if (!mounted) return null;
+    if (!granted) {
+      _showToast('⚠️ ${l10n.tr('externalStoragePermissionDenied')}');
+      return null;
+    }
 
     setState(() {
       _outputDirController.text = selected;
@@ -582,6 +590,16 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         dialogTitle: l10n.tr('selectLogDownloadPath'),
       );
       if (selectedDir == null || selectedDir.trim().isEmpty) {
+        return;
+      }
+
+      final granted = await requestExternalStoragePermissionIfNeeded();
+      if (!mounted) return;
+      if (!granted) {
+        _showToast(
+          '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
+          location: AppToastLocation.bottom,
+        );
         return;
       }
 

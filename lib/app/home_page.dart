@@ -8,6 +8,7 @@ import 'package:bilirec/app/widgets/service_status_row.dart';
 import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/foreground/bilirec_task_handler.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/android_external_storage_permission.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/debugger.dart';
@@ -457,6 +458,20 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           debugLog('跳過服務啟動，因為尚未獲得電池優化豁免');
           return;
         }
+
+        final outputDir = await Preferences.getOutputDir();
+        if (outputDir != null && outputDir.isNotEmpty) {
+          final granted = await requestExternalStoragePermissionIfNeeded();
+          if (!granted) {
+            if (!mounted) return;
+            setState(() {
+              _setStatus('externalStoragePermissionDenied');
+            });
+            showAppToast(context, l10n.tr('externalStoragePermissionDenied'));
+            return;
+          }
+        }
+
         final requestId = _newRequest(ServiceIntent.running);
         setState(() {
           _serviceUiState = ServiceUiState.starting;
