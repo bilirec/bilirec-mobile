@@ -46,20 +46,27 @@ jobs:
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
           profile: ${{ env.emulator_profile }}
+          target: ${{ matrix.api_level == 29 && 'google_apis' || 'default' }}
 
       - name: Run Integration Functional Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 15
         with:
           api-level: ${{ matrix.api_level }}
           disable-animations: true
-          target: default
+          target: ${{ matrix.api_level == 29 && 'google_apis' || 'default' }}
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
             echo "=== 開始執行 Flutter 整合功能測試 ==="
+            set +e
             flutter test integration_test/basic_functional_test.dart --reporter=expanded --dart-define=CI=true
+            STATUS=$?
+            set -e
+            sh ./.github/scripts/cleanup_emulator.sh
+            exit $STATUS
 
   integration-android10-storage-test:
     runs-on: ubuntu-latest
@@ -76,16 +83,18 @@ jobs:
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
           profile: ${{ env.emulator_profile }}
+          target: google_apis
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
 
       - name: Run Android 10 Storage Integration Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 15
         with:
           api-level: 29
           disable-animations: true
-          target: default
+          target: google_apis
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
@@ -97,7 +106,12 @@ jobs:
             adb shell pm grant org.bilirec.bilirec android.permission.READ_EXTERNAL_STORAGE
             adb shell pm grant org.bilirec.bilirec android.permission.WRITE_EXTERNAL_STORAGE
             echo "=== Android 10 storage 整合測試（Case 1 & 3）==="
+            set +e
             flutter test integration_test/android10_storage_test.dart --reporter=expanded --dart-define=CI=true --no-uninstall
+            STATUS=$?
+            set -e
+            sh ./.github/scripts/cleanup_emulator.sh
+            exit $STATUS
 
   integration-ffmpeg-test:
     runs-on: ubuntu-latest
@@ -119,6 +133,7 @@ jobs:
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
           profile: ${{ env.emulator_profile }}
+          target: ${{ matrix.api_level == 29 && 'google_apis' || 'default' }}
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
@@ -128,10 +143,11 @@ jobs:
 
       - name: Run FFmpeg Integration Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 25
         with:
           api-level: ${{ matrix.api_level }}
           disable-animations: true
-          target: default
+          target: ${{ matrix.api_level == 29 && 'google_apis' || 'default' }}
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
@@ -179,6 +195,7 @@ jobs:
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
           profile: ${{ env.emulator_profile }}
+          target: ${{ matrix.api_level == 29 && 'google_apis' || 'default' }}
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
@@ -188,10 +205,11 @@ jobs:
 
       - name: Run Service Toggle Stress Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 25
         with:
           api-level: ${{ matrix.api_level }}
           disable-animations: true
-          target: default
+          target: ${{ matrix.api_level == 29 && 'google_apis' || 'default' }}
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
@@ -239,6 +257,7 @@ jobs:
           jdk_version: ${{ env.jdk_version }}
           ndk_version: ${{ env.ndk_version }}
           profile: ${{ env.emulator_profile }}
+          target: ${{ matrix.api_level == 29 && 'google_apis' || 'default' }}
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
@@ -248,10 +267,11 @@ jobs:
 
       - name: Run Multi-room Recording Stress Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 25
         with:
           api-level: ${{ matrix.api_level }}
           disable-animations: true
-          target: default
+          target: ${{ matrix.api_level == 29 && 'google_apis' || 'default' }}
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false

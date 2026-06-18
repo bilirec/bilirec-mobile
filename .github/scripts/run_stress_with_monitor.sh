@@ -58,4 +58,7 @@ if [ -f "$SUMMARY_FILE" ]; then
 fi
 
 echo "=== 壓測結束: $TEST_FILE ==="
+
+sh ./.github/scripts/cleanup_emulator.sh
+
 exit $FLUTTER_STATUS

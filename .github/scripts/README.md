@@ -43,3 +43,12 @@ then stops monitoring and returns the original `flutter test` exit code.
 The workflow calls this wrapper as a **single command line** to avoid command
 splitting pitfalls inside `reactivecircus/android-emulator-runner`.
 
+## `cleanup_emulator.sh`
+
+Force-kills the Android emulator and related processes (`qemu-system`,
+`crashpad_handler`) after tests complete. This prevents GitHub Actions from
+hanging indefinitely when `android-emulator-runner` tries to shut down API 29
+emulators (known deadlock in issues #373 / #385).
+
+Called automatically by `run_stress_with_monitor.sh` and inline emulator scripts.
+
