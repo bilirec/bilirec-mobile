@@ -58,7 +58,7 @@ jobs:
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none -prop sys.boot_completed=0
           script: |
             echo "=== 開始執行 Flutter 整合功能測試 ==="
             set +e
@@ -98,7 +98,7 @@ jobs:
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none -prop sys.boot_completed=0
           script: |
             echo "=== 安裝預建 debug APK ==="
             adb install -r build/app/outputs/flutter-apk/app-debug.apk
@@ -151,7 +151,7 @@ jobs:
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none -prop sys.boot_completed=0
           script: |
             sh ./.github/scripts/run_stress_with_monitor.sh integration_test/ffmpeg_test.dart ffmpeg .ci/perf-monitor/ffmpeg.log .ci/perf-monitor/ffmpeg.summary ${{ env.perf_monitor_interval_seconds }} ${{ env.perf_monitor_ram_warn_mb }} ${{ env.perf_monitor_cpu_warn_percent }} true
 
@@ -213,7 +213,7 @@ jobs:
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none -prop sys.boot_completed=0
           script: |
             sh ./.github/scripts/run_stress_with_monitor.sh integration_test/service_toggle_stress_test.dart service-toggle .ci/perf-monitor/service-toggle.log .ci/perf-monitor/service-toggle.summary ${{ env.perf_monitor_interval_seconds }} ${{ env.perf_monitor_ram_warn_mb }} ${{ env.perf_monitor_cpu_warn_percent }} true
 
@@ -275,7 +275,7 @@ jobs:
           arch: x86_64
           profile: ${{ env.emulator_profile }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none -prop sys.boot_completed=0
           script: |
             sh ./.github/scripts/run_stress_with_monitor.sh integration_test/multi_room_recording_stress_test.dart multi-room-recording .ci/perf-monitor/multi-room-recording.log .ci/perf-monitor/multi-room-recording.summary ${{ env.perf_monitor_interval_seconds }} ${{ env.perf_monitor_ram_warn_mb }} ${{ env.perf_monitor_cpu_warn_percent }} true
 
