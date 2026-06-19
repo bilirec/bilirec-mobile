@@ -8,7 +8,7 @@ import 'package:bilirec/app/widgets/service_status_row.dart';
 import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/foreground/bilirec_task_handler.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
-import 'package:bilirec/shared/android_external_storage_permission.dart';
+import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/debugger.dart';
@@ -461,7 +461,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
         final outputDir = await Preferences.getOutputDir();
         if (outputDir != null && outputDir.isNotEmpty) {
-          final granted = await requestExternalStoragePermissionIfNeeded();
+          final granted = await requestExternalStoragePermissionIfLegacy();
           if (!granted) {
             if (!mounted) return;
             setState(() {
@@ -523,6 +523,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           ),
         );
 
+        final serviceTypes = await getForegroundServiceTypesFromVersion();
         final started = await FlutterForegroundTask.startService(
           serviceId: 2026,
           notificationTitle: l10n.tr('notificationTitleRunning'),
@@ -531,6 +532,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
             NotificationButton(
                 id: 'stop', text: l10n.tr('notificationButtonStop')),
           ],
+          serviceTypes: serviceTypes,
           callback: startCallback,
         );
 

@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:bilirec/l10n/app_localizations.dart';
-import 'package:bilirec/shared/android_external_storage_permission.dart';
+import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/storage_protection_env.dart';
@@ -162,7 +162,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
     if (selected == null || !mounted) return null;
 
-    final granted = await requestExternalStoragePermissionIfNeeded();
+    final granted = await requestExternalStoragePermissionIfLegacy();
     if (!mounted) return null;
     if (!granted) {
       _showToast('⚠️ ${l10n.tr('externalStoragePermissionDenied')}');
@@ -593,7 +593,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         return;
       }
 
-      final granted = await requestExternalStoragePermissionIfNeeded();
+      final granted = await requestExternalStoragePermissionIfLegacy();
       if (!mounted) return;
       if (!granted) {
         _showToast(
