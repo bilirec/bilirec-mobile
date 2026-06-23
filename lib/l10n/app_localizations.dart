@@ -134,9 +134,9 @@ class AppLocalizations {
       'storagePathTitle': '輸出路徑',
       'changePath': '變更路徑',
       'outputPathUnset': '目前尚未設定輸出路徑（使用預設）',
-      'sequentialWriteTitle': '序列化寫入',
-      'sequentialWriteDescription':
-          '以序列化方式寫入錄製檔案。若輸出路徑選擇 microSD 卡，請務必開啟此選項。',
+      'microSdWearProtectionTitle': '啟用 microSD 卡磨損保護',
+      'microSdWearProtectionDescription':
+          '以輪流寫入方式降低 microSD 同時寫入峰值，延長卡片壽命。輸出到外置 SD 卡時請開啟；寫入節奏會隨「同時錄製上限」自動調節。',
       'ssePushSwitchTitle': '本地通知模式',
       'ssePushDescription': '如在中國大陸網絡環境下無法接收開播/錄製通知推送，可嘗試啟用此模式。',
       'ssePushHint': '啓用後，點擊通知將無法直接跳轉到錄製管理程式',
@@ -261,9 +261,9 @@ class AppLocalizations {
       'storagePathTitle': '输出路径',
       'changePath': '更改路径',
       'outputPathUnset': '目前尚未设置输出路径（使用默认）',
-      'sequentialWriteTitle': '序列化写入',
-      'sequentialWriteDescription':
-          '以序列化方式写入录制文件。若输出路径选择 microSD 卡，请务必开启此选项。',
+      'microSdWearProtectionTitle': '启用 microSD 卡磨损保护',
+      'microSdWearProtectionDescription':
+          '以轮流写入方式降低 microSD 同时写入峰值，延长卡片寿命。输出到外置 SD 卡时请开启；写入节奏会随「同时录制上限」自动调节。',
       'ssePushSwitchTitle': '本地通知模式',
       'ssePushDescription': '如在中国大陆网络环境下无法接收开播/录制通知推送，可尝试启用此模式。',
       'ssePushHint': '启用后，点击通知将无法直接跳转到录制管理程序',

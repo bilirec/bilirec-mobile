@@ -29,7 +29,8 @@ final _androidOnlyLabels = labelsForKey('androidOnly');
 final _generalSettingsTitleLabels = labelsForKey('generalSettingsTitle');
 final _storagePolicyTitleLabels = labelsForKey('storagePolicyTitle');
 final _storagePathTitleLabels = labelsForKey('storagePathTitle');
-final _sequentialWriteTitleLabels = labelsForKey('sequentialWriteTitle');
+final _microSdWearProtectionTitleLabels =
+    labelsForKey('microSdWearProtectionTitle');
 final _changePathLabels = labelsForKey('changePath');
 final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
 final _antiSleepTitleLabels = labelsForKey('antiSleepTitle');
@@ -251,7 +252,7 @@ void main() {
       expect(findFirstVisibleText(_generalSettingsTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_storagePolicyTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_storagePathTitleLabels), findsOneWidget);
-      expect(findFirstVisibleText(_sequentialWriteTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_microSdWearProtectionTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_changePathLabels), findsOneWidget);
       expect(findFirstVisibleText(_ssePushSwitchTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_antiSleepTitleLabels), findsOneWidget);

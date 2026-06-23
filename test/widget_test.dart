@@ -108,9 +108,10 @@ final _storagePolicyTitleLabels = labelsForKey('storagePolicyTitle');
 final _storagePathTitleLabels = labelsForKey('storagePathTitle');
 final _outputPathUnsetLabels = labelsForKey('outputPathUnset');
 final _changePathLabels = labelsForKey('changePath');
-final _sequentialWriteTitleLabels = labelsForKey('sequentialWriteTitle');
-final _sequentialWriteDescriptionLabels =
-    labelsForKey('sequentialWriteDescription');
+final _microSdWearProtectionTitleLabels =
+    labelsForKey('microSdWearProtectionTitle');
+final _microSdWearProtectionDescriptionLabels =
+    labelsForKey('microSdWearProtectionDescription');
 final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
 final _ssePushDescriptionLabels = labelsForKey('ssePushDescription');
 final _ssePushHintLabels = labelsForKey('ssePushHint');
@@ -221,9 +222,12 @@ void main() {
     expect(_findFirstVisibleText(_storagePathTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_outputPathUnsetLabels), findsOneWidget);
     expect(_findFirstVisibleText(_changePathLabels), findsOneWidget);
-    expect(_findFirstVisibleText(_sequentialWriteTitleLabels), findsOneWidget);
     expect(
-      _findFirstVisibleText(_sequentialWriteDescriptionLabels),
+      _findFirstVisibleText(_microSdWearProtectionTitleLabels),
+      findsOneWidget,
+    );
+    expect(
+      _findFirstVisibleText(_microSdWearProtectionDescriptionLabels),
       findsOneWidget,
     );
     expect(_findFirstVisibleText(_ssePushSwitchTitleLabels), findsOneWidget);
@@ -378,35 +382,39 @@ void main() {
     expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
   });
 
-  testWidgets('序列化寫入開關會更新 SEQUENTIAL_WRITE 環境參數', (tester) async {
+  testWidgets('microSD 磨損保護開關會更新 SEQUENTIAL_WRITE 與 flush 環境參數', (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
     await tester.tap(_findFirstVisibleText(_settingsLabels));
     await tester.pumpAndSettle();
 
-    final defaultSwitch =
-        tester.widget<Switch>(_findRowSwitchByLabels(_sequentialWriteTitleLabels));
+    final defaultSwitch = tester.widget<Switch>(
+      _findRowSwitchByLabels(_microSdWearProtectionTitleLabels),
+    );
     expect(defaultSwitch.value, isFalse);
 
     var envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['SEQUENTIAL_WRITE'], isNot('true'));
+    expect(envSettings.containsKey('LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'), isFalse);
 
     await _setRowSwitchByLabels(
       tester,
-      labels: _sequentialWriteTitleLabels,
+      labels: _microSdWearProtectionTitleLabels,
       enabled: true,
     );
     envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['SEQUENTIAL_WRITE'], 'true');
+    expect(envSettings['LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'], '15');
 
     await _setRowSwitchByLabels(
       tester,
-      labels: _sequentialWriteTitleLabels,
+      labels: _microSdWearProtectionTitleLabels,
       enabled: false,
     );
     envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['SEQUENTIAL_WRITE'], 'false');
+    expect(envSettings.containsKey('LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'), isFalse);
   });
 
   testWidgets('服務啟動後設定按鈕會被禁用', (tester) async {

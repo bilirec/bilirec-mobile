@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/preferences.dart';
+import 'package:bilirec/shared/storage_protection_env.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -66,7 +67,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
   bool _useSsePush = false;
   bool _useAntiSleep = false;
-  bool _sequentialWriteEnabled = false;
+  bool _microSdProtectionEnabled = false;
   bool _downloadingBootstrapLog = false;
   bool _convertToMp4 = false;
   bool _deleteSourceAfterConvert = false;
@@ -115,8 +116,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     setState(() {
       _useSsePush = useSsePush;
       _useAntiSleep = useAntiSleep;
-      _sequentialWriteEnabled =
-          _readBoolFromEnv(managedEnvironmentSettings, 'SEQUENTIAL_WRITE');
+      _microSdProtectionEnabled =
+          isSequentialWriteEnabled(managedEnvironmentSettings);
       _developEnvironmentSettings = developEnvironmentSettings;
       _maxRecordingHours = _readMaxRecordingHours(managedEnvironmentSettings);
       _minDiskSpaceGb = _readMinDiskSpaceGb(managedEnvironmentSettings);
@@ -166,6 +167,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
     await Preferences.setOutputDir(selected);
     if (!mounted) return null;
+
     return selected;
   }
 
@@ -185,11 +187,17 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     });
   }
 
-  Future<void> _setSequentialWriteEnabled(bool enabled) async {
-    await _setManagedEnvironmentSetting('SEQUENTIAL_WRITE', '$enabled');
+  Future<void> _setMicroSdProtectionEnabled(bool enabled) async {
+    await _updateManagedEnvironmentSettings((current) {
+      return applyStorageProtectionEnv(
+        env: current,
+        protectionEnabled: enabled,
+        maxConcurrent: parseMaxConcurrentRecordings(current),
+      );
+    });
     if (!mounted) return;
     setState(() {
-      _sequentialWriteEnabled = enabled;
+      _microSdProtectionEnabled = enabled;
     });
   }
 
@@ -326,7 +334,17 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
   Future<void> _setMaxConcurrentRecordings(int value) async {
     if (!_maxConcurrentRecordingOptions.contains(value)) return;
-    await _setManagedEnvironmentSetting('MAX_CONCURRENT_RECORDINGS', '$value');
+    await _updateManagedEnvironmentSettings((current) {
+      current['MAX_CONCURRENT_RECORDINGS'] = '$value';
+      if (_microSdProtectionEnabled) {
+        applyStorageProtectionEnv(
+          env: current,
+          protectionEnabled: true,
+          maxConcurrent: value,
+        );
+      }
+      return current;
+    });
     if (!mounted) return;
     setState(() {
       _maxConcurrentRecordings = value;
@@ -841,12 +859,12 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      l10n.tr('sequentialWriteTitle'),
+                                      l10n.tr('microSdWearProtectionTitle'),
                                       style: theme.textTheme.titleSmall,
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      l10n.tr('sequentialWriteDescription'),
+                                      l10n.tr('microSdWearProtectionDescription'),
                                       style: theme.textTheme.bodySmall,
                                     ),
                                   ],
@@ -854,9 +872,9 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                               ),
                               const SizedBox(width: 12),
                               Switch.adaptive(
-                                value: _sequentialWriteEnabled,
+                                value: _microSdProtectionEnabled,
                                 onChanged: widget.controlsEnabled
-                                    ? _setSequentialWriteEnabled
+                                    ? _setMicroSdProtectionEnabled
                                     : null,
                               ),
                             ],
