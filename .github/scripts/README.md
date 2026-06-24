@@ -52,3 +52,28 @@ emulators (known deadlock in issues #373 / #385).
 
 Called automatically by `run_stress_with_monitor.sh` and inline emulator scripts.
 
+## `free_disk_before_emulator.sh`
+
+Reclaims disk space after `flutter build apk --debug` and before launching the
+emulator in pre-build integration jobs. It removes Gradle/build intermediates
+while keeping `build/app/outputs/flutter-apk/app-debug.apk` intact.
+
+It does **not** run `flutter clean` (which would delete the pre-built APK) and
+does **not** touch `~/.pub-cache` (managed separately by `subosito/flutter-action`
+with `cache: true`).
+
+## AVD / system image caching
+
+`setup-flutter-android` caches:
+
+- `~/.android/avd/*`
+- `~/.android/adb*`
+- `/usr/local/lib/android/sdk/system-images/*`
+
+Cache key suffix: `v2` (includes system images; older `v1` entries are ignored).
+
+For **API 29**, the setup action skips `Create AVD and generate snapshot` to
+avoid running `android-emulator-runner` twice in one job. The test step is the
+only emulator launch, which still populates the cache at job end on success.
+API 34/36 still warm the AVD snapshot on cache miss.
+

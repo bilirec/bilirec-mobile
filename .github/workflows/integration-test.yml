@@ -88,6 +88,9 @@ jobs:
       - name: Pre-build Debug APK
         run: flutter build apk --debug
 
+      - name: Free disk before emulator
+        run: sh ./.github/scripts/free_disk_before_emulator.sh
+
       - name: Run Android 10 Storage Integration Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
         timeout-minutes: 15
@@ -137,6 +140,9 @@ jobs:
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
+
+      - name: Free disk before emulator
+        run: sh ./.github/scripts/free_disk_before_emulator.sh
 
       - name: Prepare performance monitor workspace
         run: mkdir -p .ci/perf-monitor
@@ -200,6 +206,9 @@ jobs:
       - name: Pre-build Debug APK
         run: flutter build apk --debug
 
+      - name: Free disk before emulator
+        run: sh ./.github/scripts/free_disk_before_emulator.sh
+
       - name: Prepare performance monitor workspace
         run: mkdir -p .ci/perf-monitor
 
@@ -261,6 +270,9 @@ jobs:
 
       - name: Pre-build Debug APK
         run: flutter build apk --debug
+
+      - name: Free disk before emulator
+        run: sh ./.github/scripts/free_disk_before_emulator.sh
 
       - name: Prepare performance monitor workspace
         run: mkdir -p .ci/perf-monitor
