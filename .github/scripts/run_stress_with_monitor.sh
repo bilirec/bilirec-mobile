@@ -24,8 +24,12 @@ adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS 2>/
 echo "=== 啟動外部效能監控（RAM/CPU，只告警不阻斷）==="
 sh ./.github/scripts/perf_monitor.sh --package org.bilirec.bilirec --job-name "$JOB_NAME" --interval "$INTERVAL_SECONDS" --ram-warn "$RAM_WARN_MB" --cpu-warn "$CPU_WARN_PERCENT" --mode warn --log "$LOG_FILE" --summary "$SUMMARY_FILE" &
 MONITOR_PID=$!
-cleanup() { kill "$MONITOR_PID" 2>/dev/null || true; wait "$MONITOR_PID" 2>/dev/null || true; }
-trap cleanup 0 INT TERM
+cleanup() {
+  kill "$MONITOR_PID" 2>/dev/null || true
+  wait "$MONITOR_PID" 2>/dev/null || true
+  sh ./.github/scripts/cleanup_emulator.sh
+}
+trap cleanup EXIT INT TERM
 
 adb logcat -c
 echo "=== 開始執行 Flutter 壓力測試: $TEST_FILE ==="
@@ -50,7 +54,7 @@ if [ "$FLUTTER_STATUS" -ne 0 ]; then
 fi
 
 cleanup
-trap - 0 INT TERM
+trap - EXIT INT TERM
 
 if [ -f "$SUMMARY_FILE" ]; then
   echo "=== 壓測效能摘要 ($JOB_NAME) ==="
@@ -58,7 +62,5 @@ if [ -f "$SUMMARY_FILE" ]; then
 fi
 
 echo "=== 壓測結束: $TEST_FILE ==="
-
-sh ./.github/scripts/cleanup_emulator.sh
 
 exit $FLUTTER_STATUS

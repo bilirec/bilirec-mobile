@@ -136,10 +136,12 @@ Future<bool> _waitForBootstrapLogsInAppSupport({
   return false;
 }
 
-Future<void> _skipUnlessAndroid10() async {
+Future<bool> _skipUnlessAndroid10() async {
   if (!await isAndroid10Only(logTag: _logTag)) {
     markTestSkipped('僅在 Android 10（API 29）執行');
+    return false;
   }
+  return true;
 }
 
 void main() {
@@ -169,7 +171,7 @@ void main() {
 
   group('Android 10 Storage 整合測試', () {
     testWidgets('Case 1：已授權 + 自訂外部路徑可啟動服務', (tester) async {
-      await _skipUnlessAndroid10();
+      if (!await _skipUnlessAndroid10()) return;
 
       await ensureLegacyStoragePermissionGranted(logTag: _logTag);
 
@@ -197,7 +199,7 @@ void main() {
     });
 
     testWidgets('Case 3：啟停服務後可匯出 bootstrap log 至外部路徑', (tester) async {
-      await _skipUnlessAndroid10();
+      if (!await _skipUnlessAndroid10()) return;
 
       await ensureLegacyStoragePermissionGranted(logTag: _logTag);
 
