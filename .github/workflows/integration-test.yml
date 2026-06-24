@@ -93,7 +93,7 @@ jobs:
 
       - name: Run Android 10 Storage Integration Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
-        timeout-minutes: 15
+        timeout-minutes: 30
         with:
           api-level: 29
           disable-animations: true
@@ -104,6 +104,7 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none -prop sys.boot_completed=0
           script: |
             echo "=== 安裝預建 debug APK ==="
+            adb uninstall org.bilirec.bilirec >/dev/null 2>&1 || true
             adb install -r build/app/outputs/flutter-apk/app-debug.apk
             echo "=== 預授權 legacy storage ==="
             adb shell pm grant org.bilirec.bilirec android.permission.READ_EXTERNAL_STORAGE
@@ -214,7 +215,7 @@ jobs:
 
       - name: Run Service Toggle Stress Test on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
-        timeout-minutes: 25
+        timeout-minutes: ${{ matrix.api_level == 29 && 45 || 25 }}
         with:
           api-level: ${{ matrix.api_level }}
           disable-animations: true

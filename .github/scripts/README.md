@@ -77,3 +77,18 @@ avoid running `android-emulator-runner` twice in one job. The test step is the
 only emulator launch, which still populates the cache at job end on success.
 API 34/36 still warm the AVD snapshot on cache miss.
 
+## `watch_app_process.sh`
+
+Fails fast when an integration test loses the app process on device:
+
+- App never appears within a startup window (default 180s)
+- App disappears for too long after it was running (default 90s)
+
+When triggered, it kills the `flutter test` PID so the job fails with logcat
+instead of hanging until the GitHub Actions timeout.
+
+## `dump_integration_logcat.sh`
+
+Prints filtered error/fatal logcat lines for integration test failures
+(`AndroidRuntime`, `FATAL`, native panic tags, and bilirec package logs).
+

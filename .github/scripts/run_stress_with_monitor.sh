@@ -15,11 +15,18 @@ RAM_WARN_MB="$6"
 CPU_WARN_PERCENT="$7"
 CI_FLAG="$8"
 
+APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+
 echo "=== 模擬器啟動成功，開始手動安裝 APK ==="
-adb install build/app/outputs/flutter-apk/app-debug.apk
+adb uninstall org.bilirec.bilirec >/dev/null 2>&1 || true
+adb install -r "$APK_PATH"
 
 echo "=== 預先授予通知權限（API 33+；Android 10 略過）==="
 adb shell pm grant org.bilirec.bilirec android.permission.POST_NOTIFICATIONS 2>/dev/null || true
+
+echo "=== 預授權 legacy storage（Android 10 / API 29）==="
+adb shell pm grant org.bilirec.bilirec android.permission.READ_EXTERNAL_STORAGE 2>/dev/null || true
+adb shell pm grant org.bilirec.bilirec android.permission.WRITE_EXTERNAL_STORAGE 2>/dev/null || true
 
 echo "=== 啟動外部效能監控（RAM/CPU，只告警不阻斷）==="
 sh ./.github/scripts/perf_monitor.sh --package org.bilirec.bilirec --job-name "$JOB_NAME" --interval "$INTERVAL_SECONDS" --ram-warn "$RAM_WARN_MB" --cpu-warn "$CPU_WARN_PERCENT" --mode warn --log "$LOG_FILE" --summary "$SUMMARY_FILE" &
@@ -34,23 +41,25 @@ trap cleanup EXIT INT TERM
 adb logcat -c
 echo "=== 開始執行 Flutter 壓力測試: $TEST_FILE ==="
 set +e
-flutter test "$TEST_FILE" --reporter=expanded --dart-define=CI="$CI_FLAG"
+flutter test "$TEST_FILE" \
+  --reporter=expanded \
+  --dart-define=CI="$CI_FLAG" \
+  --no-uninstall \
+  -d emulator-5554 &
+FLUTTER_PID=$!
+
+sh ./.github/scripts/watch_app_process.sh org.bilirec.bilirec "$FLUTTER_PID" 90 10 240 &
+WATCHDOG_PID=$!
+
+wait "$FLUTTER_PID"
 FLUTTER_STATUS=$?
+kill "$WATCHDOG_PID" 2>/dev/null || true
+wait "$WATCHDOG_PID" 2>/dev/null || true
 set -e
 
 if [ "$FLUTTER_STATUS" -ne 0 ]; then
-  echo "===================================================="
   echo "⚠️ 偵測到測試失敗或 App 崩潰！正在撈取 Android Logcat 崩潰日誌..."
-  echo "===================================================="
-
-  # 只保留 bilirec app 與 cgo/FFmpeg hook 相關錯誤日誌
-  # 若需完整錯誤可改回：adb logcat -d *:E
-  adb logcat -d *:E \
-    | grep -E 'org\.bilirec\.bilirec|BiliRec_FFmpegHook|cgo|CGO|libgojni|libffmpegkit|FFMPEG' \
-    | tail -n 1000 \
-    || true
-
-  echo "===================================================="
+  sh ./.github/scripts/dump_integration_logcat.sh
 fi
 
 cleanup

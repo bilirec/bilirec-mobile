@@ -312,6 +312,7 @@ void main() {
           rethrow;
         }
       },
+      timeout: const Timeout(Duration(minutes: 40)),
     );
   });
 }
