@@ -78,6 +78,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   int _minDiskSpaceGb = _defaultMinDiskSpaceGb;
   int _maxRetryMinutes = _defaultMaxRetryMinutes;
   int _maxConcurrentRecordings = _defaultMaxConcurrentRecordings;
+  String _recordingRecoveryDuration = 'preserve';
   Map<String, String> _developEnvironmentSettings = <String, String>{};
   Future<void> _managedEnvironmentWriteQueue = Future<void>.value();
 
@@ -123,6 +124,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       _maxRecordingHours = _readMaxRecordingHours(managedEnvironmentSettings);
       _minDiskSpaceGb = _readMinDiskSpaceGb(managedEnvironmentSettings);
       _maxRetryMinutes = _readMaxRetryMinutes(managedEnvironmentSettings);
+      _recordingRecoveryDuration =
+          _readRecordingRecoveryDuration(managedEnvironmentSettings);
       _maxConcurrentRecordings =
           _readMaxConcurrentRecordings(managedEnvironmentSettings);
       _convertToMp4 =
@@ -251,6 +254,14 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     return fallback;
   }
 
+  String _readRecordingRecoveryDuration(Map<String, String> env) {
+    final raw = (env['RECORDING_RECOVERY_DURATION'] ?? '').trim().toLowerCase();
+    if (raw == 'reset') {
+      return 'reset';
+    }
+    return 'preserve';
+  }
+
   int _readMaxConcurrentRecordings(Map<String, String> env) {
     final value = _readBoundedIntFromEnv(
       env,
@@ -337,6 +348,18 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     if (!mounted) return;
     setState(() {
       _maxRetryMinutes = value;
+    });
+  }
+
+  Future<void> _setRecordingRecoveryDuration(String value) async {
+    final normalized = value == 'reset' ? 'reset' : 'preserve';
+    await _setManagedEnvironmentSetting(
+      'RECORDING_RECOVERY_DURATION',
+      normalized,
+    );
+    if (!mounted) return;
+    setState(() {
+      _recordingRecoveryDuration = normalized;
     });
   }
 
@@ -1086,6 +1109,54 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                                         value,
                                       ),
                                     );
+                                  }
+                                : null,
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            l10n.tr('recordingRecoveryDurationTitle'),
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            l10n.tr('recordingRecoveryDurationDescription'),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _recordingRecoveryDuration == 'reset'
+                                ? l10n.tr('recordingRecoveryDurationResetHint')
+                                : l10n.tr(
+                                    'recordingRecoveryDurationPreserveHint',
+                                  ),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SegmentedButton<String>(
+                            segments: [
+                              ButtonSegment<String>(
+                                value: 'preserve',
+                                label: Text(
+                                  l10n.tr('recordingRecoveryDurationPreserve'),
+                                ),
+                              ),
+                              ButtonSegment<String>(
+                                value: 'reset',
+                                label: Text(
+                                  l10n.tr('recordingRecoveryDurationReset'),
+                                ),
+                              ),
+                            ],
+                            selected: {_recordingRecoveryDuration},
+                            onSelectionChanged: widget.controlsEnabled
+                                ? (selection) {
+                                    final value = selection.first;
+                                    setState(() {
+                                      _recordingRecoveryDuration = value;
+                                    });
+                                    _setRecordingRecoveryDuration(value);
                                   }
                                 : null,
                           ),

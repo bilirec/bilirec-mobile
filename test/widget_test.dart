@@ -122,6 +122,10 @@ final _recordingPolicyDescriptionLabels =
 final _maxRecordingHoursTitleLabels = labelsForKey('maxRecordingHoursTitle');
 final _minDiskSpaceTitleLabels = labelsForKey('minDiskSpaceTitle');
 final _maxRetryMinutesTitleLabels = labelsForKey('maxRetryMinutesTitle');
+final _recordingRecoveryDurationTitleLabels =
+    labelsForKey('recordingRecoveryDurationTitle');
+final _recordingRecoveryDurationResetLabels =
+    labelsForKey('recordingRecoveryDurationReset');
 final _maxConcurrentRecordingsTitleLabels =
     labelsForKey('maxConcurrentRecordingsTitle');
 final _maxConcurrentRecordingsWarningLabels =
@@ -244,6 +248,10 @@ void main() {
     expect(_findFirstVisibleText(_minDiskSpaceTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_maxRetryMinutesTitleLabels), findsOneWidget);
     expect(
+      _findFirstVisibleText(_recordingRecoveryDurationTitleLabels),
+      findsOneWidget,
+    );
+    expect(
       _findFirstVisibleText(_maxConcurrentRecordingsTitleLabels),
       findsOneWidget,
     );
@@ -359,6 +367,12 @@ void main() {
     sliders.elementAt(3).onChangeEnd?.call(3);
     await tester.pumpAndSettle();
 
+    final recoveryButton = tester.widget<SegmentedButton<String>>(
+      find.byType(SegmentedButton<String>),
+    );
+    recoveryButton.onSelectionChanged?.call({'reset'});
+    await tester.pumpAndSettle();
+
     await _setSwitchByLabels(
       tester,
       labels: _convertToMp4TitleLabels,
@@ -377,6 +391,7 @@ void main() {
       '${10 * 1024 * 1024 * 1024}',
     );
     expect(envSettings['MAX_RETRY_MINUTES'], '30');
+    expect(envSettings['RECORDING_RECOVERY_DURATION'], 'reset');
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
     expect(envSettings['CONVERT_TO_MP4'], 'true');
     expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
