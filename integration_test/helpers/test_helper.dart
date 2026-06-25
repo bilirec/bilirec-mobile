@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bilirec/shared/preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task_method_channel.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider/path_provider.dart';
+
+import 'api_helper.dart';
 
 void testLog(String tag, String message) {
   debugPrint('[$tag][${DateTime.now().toIso8601String()}] $message');
@@ -109,3 +113,27 @@ int asInt(dynamic value) {
 }
 
 String asString(dynamic value) => value?.toString() ?? '';
+
+Future<List<int>> fetchLiveBroadcastRoomIDsForTest({
+  String logTag = 'BROADCAST',
+}) async {
+  try {
+    final ids = await fetchLiveBroadcastRoomIDs();
+    testLog(logTag, 'fetched ${ids.length} live room ids');
+    return ids;
+  } on TimeoutException {
+    const reason = 'broadcast API 請求逾時（90 秒），略過測試';
+    testLog(logTag, reason);
+    markTestSkipped(reason);
+  } on SocketException catch (e) {
+    final reason = 'broadcast API 連線失敗：$e，略過測試';
+    testLog(logTag, reason);
+    markTestSkipped(reason);
+  } on StateError catch (e) {
+    final reason = 'broadcast API 失敗：$e，略過測試';
+    testLog(logTag, reason);
+    markTestSkipped(reason);
+  }
+
+  throw StateError('fetchLiveBroadcastRoomIDsForTest unreachable');
+}

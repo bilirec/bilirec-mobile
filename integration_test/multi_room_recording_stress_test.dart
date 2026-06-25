@@ -230,7 +230,8 @@ void main() {
           );
 
           _log('STEP 3: fetch and pick 3 live room ids (API-only)');
-          final liveRoomPool = await fetchLiveBroadcastRoomIDs();
+          final liveRoomPool =
+              await fetchLiveBroadcastRoomIDsForTest(logTag: _logTag);
           if (liveRoomPool.length < _targetRecordingRooms) {
             final reason =
                 'broadcast API 回傳可用直播間不足 $_targetRecordingRooms 個，fetched=${liveRoomPool.length}';

@@ -1124,7 +1124,8 @@ void main() {
           waitMode: WaitMode.realtime,
         );
 
-        final liveRoomPool = await fetchLiveBroadcastRoomIDs();
+        final liveRoomPool =
+            await fetchLiveBroadcastRoomIDsForTest(logTag: _logTag);
         if (liveRoomPool.isEmpty) {
           markTestSkipped('broadcast API 無可用直播間，略過錄製轉檔測試');
           return;
