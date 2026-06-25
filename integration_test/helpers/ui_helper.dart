@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/app_toast.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'test_helper.dart';
 
@@ -325,6 +328,44 @@ Future<void> ensureForegroundNotificationPermissionGranted({
     NotificationPermission.granted,
     reason:
         'Foreground notification permission is required but was not granted.',
+  );
+}
+
+Future<void> ensureLegacyStoragePermissionGranted({
+  String? logTag,
+  Duration requestTimeout = const Duration(minutes: 3),
+}) async {
+  if (!Platform.isAndroid) return;
+
+  final sdkInt = (await DeviceInfoPlugin().androidInfo).version.sdkInt;
+  if (sdkInt > 29) return;
+
+  if (await Permission.storage.isGranted) {
+    return;
+  }
+
+  if (logTag != null) {
+    testLog(
+      logTag,
+      'legacy storage permission not granted, requesting permission...',
+    );
+  }
+
+  PermissionStatus status;
+  try {
+    status = await Permission.storage.request().timeout(requestTimeout);
+  } on TimeoutException {
+    if (logTag != null) {
+      testLog(logTag, 'legacy storage permission request timeout');
+    }
+    fail('等待取得 storage 權限超時（三分鐘）失敗');
+  }
+
+  expect(
+    status.isGranted,
+    isTrue,
+    reason:
+        'Legacy storage permission is required on Android 10 but was not granted.',
   );
 }
 

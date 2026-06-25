@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:bilirec/shared/preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task_method_channel.dart';
@@ -7,6 +8,10 @@ import 'package:path_provider/path_provider.dart';
 
 void testLog(String tag, String message) {
   debugPrint('[$tag][${DateTime.now().toIso8601String()}] $message');
+}
+
+Future<void> resetTestOutputDir() async {
+  await Preferences.setOutputDir(null);
 }
 
 Future<void> printBootstrapLogsIfAny({

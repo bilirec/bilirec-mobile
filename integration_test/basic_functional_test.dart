@@ -222,7 +222,8 @@ void main() {
     FlutterForegroundTaskPlatform.instance = originalPlatform;
   });
 
-  setUp(() {
+  setUp(() async {
+    await resetTestOutputDir();
     FlutterForegroundTaskPlatform.instance =
         PermissionGrantedForegroundTaskPlatform();
   });

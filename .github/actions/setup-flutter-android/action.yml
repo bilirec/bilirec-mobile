@@ -1,5 +1,5 @@
 name: 'Setup Flutter & Android Env'
-description: '配置 KVM、Java、Flutter、NDK 並處理 AVD 快取'
+description: '配置 KVM、Java、Flutter、NDK 並處理 AVD / system-images 快取（API 29 跳過 Create AVD）'
 inputs:
   api_level:
     description: 'Android API Level'
@@ -78,10 +78,27 @@ runs:
         path: |
           ~/.android/avd/*
           ~/.android/adb*
-        key: avd-${{ inputs.api_level }}-${{ inputs.arch }}-${{ inputs.target }}-${{ steps.format-profile.outputs.slug }}-${{ runner.os }}-v1
+          /usr/local/lib/android/sdk/system-images/*
+        key: avd-${{ inputs.api_level }}-${{ inputs.arch }}-${{ inputs.target }}-${{ steps.format-profile.outputs.slug }}-${{ runner.os }}-v2
+        restore-keys: |
+          avd-${{ inputs.api_level }}-${{ inputs.arch }}-${{ inputs.target }}-${{ steps.format-profile.outputs.slug }}-${{ runner.os }}-
+          avd-${{ inputs.api_level }}-${{ inputs.arch }}-${{ runner.os }}-
+
+    - name: Report AVD cache and disk status
+      shell: bash
+      run: |
+        echo "AVD cache hit: ${{ steps.avd-cache.outputs.cache-hit }}"
+        df -h
+        SYSTEM_IMAGE_DIR="/usr/local/lib/android/sdk/system-images/android-${{ inputs.api_level }}"
+        if [ -d "$SYSTEM_IMAGE_DIR" ]; then
+          echo "System image present: $SYSTEM_IMAGE_DIR"
+          du -sh "$SYSTEM_IMAGE_DIR" || true
+        else
+          echo "System image not yet present: $SYSTEM_IMAGE_DIR"
+        fi
 
     - name: Create AVD and generate snapshot
-      if: steps.avd-cache.outputs.cache-hit != 'true'
+      if: steps.avd-cache.outputs.cache-hit != 'true' && inputs.api_level != '29'
       uses: reactivecircus/android-emulator-runner@v2
       with:
         api-level: ${{ inputs.api_level }}

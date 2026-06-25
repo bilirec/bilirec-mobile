@@ -43,3 +43,52 @@ then stops monitoring and returns the original `flutter test` exit code.
 The workflow calls this wrapper as a **single command line** to avoid command
 splitting pitfalls inside `reactivecircus/android-emulator-runner`.
 
+## `cleanup_emulator.sh`
+
+Force-kills the Android emulator and related processes (`qemu-system`,
+`crashpad_handler`) after tests complete. This prevents GitHub Actions from
+hanging indefinitely when `android-emulator-runner` tries to shut down API 29
+emulators (known deadlock in issues #373 / #385).
+
+Called automatically by `run_stress_with_monitor.sh` and inline emulator scripts.
+
+## `free_disk_before_emulator.sh`
+
+Reclaims disk space after `flutter build apk --debug` and before launching the
+emulator in pre-build integration jobs. It removes Gradle/build intermediates
+while keeping `build/app/outputs/flutter-apk/app-debug.apk` intact.
+
+It does **not** run `flutter clean` (which would delete the pre-built APK) and
+does **not** touch `~/.pub-cache` (managed separately by `subosito/flutter-action`
+with `cache: true`).
+
+## AVD / system image caching
+
+`setup-flutter-android` caches:
+
+- `~/.android/avd/*`
+- `~/.android/adb*`
+- `/usr/local/lib/android/sdk/system-images/*`
+
+Cache key suffix: `v2` (includes system images; older `v1` entries are ignored).
+
+For **API 29**, the setup action skips `Create AVD and generate snapshot` to
+avoid running `android-emulator-runner` twice in one job. The test step is the
+only emulator launch, which still populates the cache at job end on success.
+API 34/36 still warm the AVD snapshot on cache miss.
+
+## `watch_app_process.sh`
+
+Fails fast when an integration test loses the app process on device:
+
+- App never appears within a startup window (default 180s)
+- App disappears for too long after it was running (default 90s)
+
+When triggered, it kills the `flutter test` PID so the job fails with logcat
+instead of hanging until the GitHub Actions timeout.
+
+## `dump_integration_logcat.sh`
+
+Prints filtered error/fatal logcat lines for integration test failures
+(`AndroidRuntime`, `FATAL`, native panic tags, and bilirec package logs).
+
