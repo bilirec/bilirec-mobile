@@ -191,6 +191,14 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     return selected;
   }
 
+  Future<void> _restoreDefaultOutputPath() async {
+    await Preferences.setOutputDir(null);
+    if (!mounted) return;
+    setState(() {
+      _outputDirController.clear();
+    });
+  }
+
   Future<void> _setSsePushEnabled(bool enabled) async {
     await Preferences.setEnableSsePush(enabled);
     if (!mounted) return;
@@ -1172,6 +1180,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   @override
   Widget build(BuildContext context) {
     final trimmedOutputPath = _outputDirController.text.trim();
+    final hasCustomOutputPath = trimmedOutputPath.isNotEmpty;
     final outputPathText = trimmedOutputPath.isEmpty
         ? l10n.tr('outputPathUnset')
         : trimmedOutputPath;
@@ -1381,10 +1390,24 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                             style: theme.textTheme.bodyMedium,
                           ),
                           const SizedBox(height: 12),
-                          OutlinedButton(
-                            onPressed:
-                                widget.controlsEnabled ? _browseBasePath : null,
-                            child: Text(l10n.tr('changePath')),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              OutlinedButton(
+                                onPressed: widget.controlsEnabled
+                                    ? _browseBasePath
+                                    : null,
+                                child: Text(l10n.tr('changePath')),
+                              ),
+                              OutlinedButton(
+                                onPressed: widget.controlsEnabled &&
+                                        hasCustomOutputPath
+                                    ? _restoreDefaultOutputPath
+                                    : null,
+                                child: Text(l10n.tr('restoreDefaultPath')),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 14),
                           Row(
@@ -2213,4 +2236,3 @@ class _EnvironmentSettingInput {
 class _ExportTargetNotWritableException implements Exception {
   const _ExportTargetNotWritableException();
 }
-

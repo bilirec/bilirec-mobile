@@ -172,6 +172,7 @@ class AppLocalizations {
       'storagePolicyDescription': '設定錄製檔案的輸出路徑與寫入方式。',
       'storagePathTitle': '輸出路徑',
       'changePath': '變更路徑',
+      'restoreDefaultPath': '恢復預設',
       'outputPathUnset': '目前尚未設定輸出路徑（使用預設）',
       'microSdWearProtectionTitle': '啟用 microSD 卡磨損保護',
       'microSdWearProtectionDescription':
@@ -345,6 +346,7 @@ class AppLocalizations {
       'storagePolicyDescription': '设置录制文件的输出路径与写入方式。',
       'storagePathTitle': '输出路径',
       'changePath': '更改路径',
+      'restoreDefaultPath': '恢复默认',
       'outputPathUnset': '目前尚未设置输出路径（使用默认）',
       'microSdWearProtectionTitle': '启用 microSD 卡磨损保护',
       'microSdWearProtectionDescription':
