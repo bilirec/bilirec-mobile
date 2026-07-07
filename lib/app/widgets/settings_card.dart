@@ -638,17 +638,18 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       final targetPath =
           '$selectedDir${Platform.pathSeparator}bootstrap_$timestamp.log';
 
-      // 串流合併：逐一將每個分片寫入目標檔案，避免一次性讀入記憶體
-      final targetFile = File(targetPath);
-      final sink = targetFile.openWrite(mode: FileMode.write);
-      try {
-        for (final file in logFiles) {
-          await sink.addStream(file.openRead());
-          // 確保每個分片接縫有換行，防止最後一行與下一片黏連
-          sink.writeln();
-        }
-      } finally {
-        await sink.close();
+      final wrote = await _writeBootstrapLogWithPermissionRecovery(
+        logFiles: logFiles,
+        selectedDir: selectedDir,
+        targetPath: targetPath,
+      );
+      if (!mounted) return;
+      if (!wrote) {
+        _showToast(
+          '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
+          location: AppToastLocation.bottom,
+        );
+        return;
       }
 
       if (!mounted) return;
@@ -678,6 +679,75 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         });
       }
     }
+  }
+
+  Future<bool> _writeBootstrapLogWithPermissionRecovery({
+    required List<File> logFiles,
+    required String selectedDir,
+    required String targetPath,
+  }) async {
+    var retriedAfterPermissionRequest = false;
+
+    while (true) {
+      final targetFile = File(targetPath);
+      try {
+        await _mergeBootstrapLogsIntoTarget(logFiles, targetFile);
+        return true;
+      } catch (e) {
+        if (retriedAfterPermissionRequest || !_isPermissionLikeStorageFailure(e)) {
+          rethrow;
+        }
+
+        retriedAfterPermissionRequest = true;
+        debugLog(
+          'Bootstrap log export failed with permission-like error, requesting storage permission retry: $e',
+        );
+
+        final granted = await requestExternalStoragePermissionFromVersion();
+        if (!granted) {
+          return false;
+        }
+
+        final writable = await canWriteToDirectoryPath(selectedDir);
+        if (!writable) {
+          return false;
+        }
+
+        try {
+          if (await targetFile.exists()) {
+            await targetFile.delete();
+          }
+        } catch (_) {
+          // Best-effort cleanup before retry.
+        }
+      }
+    }
+  }
+
+  Future<void> _mergeBootstrapLogsIntoTarget(
+    List<File> logFiles,
+    File targetFile,
+  ) async {
+    // 串流合併：逐一將每個分片寫入目標檔案，避免一次性讀入記憶體
+    final sink = targetFile.openWrite(mode: FileMode.write);
+    try {
+      for (final file in logFiles) {
+        await sink.addStream(file.openRead());
+        // 確保每個分片接縫有換行，防止最後一行與下一片黏連
+        sink.writeln();
+      }
+    } finally {
+      await sink.close();
+    }
+  }
+
+  bool _isPermissionLikeStorageFailure(Object error) {
+    final lower = '$error'.toLowerCase();
+    return lower.contains('operation not permitted') ||
+        lower.contains('permission denied') ||
+        lower.contains('eacces') ||
+        lower.contains('errno = 1') ||
+        lower.contains('errno = 13');
   }
 
   Future<File> _resolveSubscribesDbFile() async {
