@@ -204,7 +204,7 @@ void main() {
       // 测试 Stop（应该是安全的，即使服务没启动）
       try {
         _log('🔍 查找 Stop 符号...');
-        final stopNative = lib!
+        final stopNative = lib
             .lookup<NativeFunction<Int32 Function()>>('Stop')
             .asFunction<int Function()>();
 

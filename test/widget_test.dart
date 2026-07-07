@@ -21,16 +21,6 @@ Finder _findFirstVisibleText(Iterable<String> labels) {
   return find.text(labels.first);
 }
 
-Finder _findFirstVisibleContainingText(Iterable<String> labels) {
-  for (final label in labels) {
-    final finder = find.textContaining(label);
-    if (finder.evaluate().isNotEmpty) {
-      return finder;
-    }
-  }
-  return find.textContaining(labels.first);
-}
-
 Finder _findFirstWidgetWithText(Type widgetType, Iterable<String> labels) {
   for (final label in labels) {
     final finder = find.widgetWithText(widgetType, label);
@@ -124,8 +114,6 @@ final _minDiskSpaceTitleLabels = labelsForKey('minDiskSpaceTitle');
 final _maxRetryMinutesTitleLabels = labelsForKey('maxRetryMinutesTitle');
 final _recordingRecoveryDurationTitleLabels =
     labelsForKey('recordingRecoveryDurationTitle');
-final _recordingRecoveryDurationResetLabels =
-    labelsForKey('recordingRecoveryDurationReset');
 final _maxConcurrentRecordingsTitleLabels =
     labelsForKey('maxConcurrentRecordingsTitle');
 final _maxConcurrentRecordingsWarningLabels =
