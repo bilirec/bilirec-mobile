@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/preferences.dart';
@@ -70,6 +72,9 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   bool _useAntiSleep = false;
   bool _microSdProtectionEnabled = false;
   bool _downloadingBootstrapLog = false;
+  bool _exportingSubscriptionList = false;
+  bool _importingSubscriptionList = false;
+  bool _resettingSubscriptionList = false;
   bool _convertToMp4 = false;
   bool _deleteSourceAfterConvert = false;
   bool _ffmpegAllowDuringRecording = false;
@@ -673,6 +678,338 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         });
       }
     }
+  }
+
+  Future<File> _resolveSubscribesDbFile() async {
+    final databaseDir =
+        (_developEnvironmentSettings['DATABASE_DIR'] ?? '').trim();
+    if (databaseDir.isNotEmpty) {
+      debugLog('locating subscribes.db in $databaseDir${Platform.pathSeparator}subscribes.db');
+      return File('$databaseDir${Platform.pathSeparator}subscribes.db');
+    }
+
+    final appSupport = await getApplicationSupportDirectory();
+    final databasePath =
+        '${appSupport.path}${Platform.pathSeparator}database${Platform.pathSeparator}subscribes.db';
+    debugLog('locating subscribes.db in $databasePath');
+    return File(databasePath);
+  }
+
+  String _formatTimestamp(DateTime now) {
+    return '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _exportSubscriptionList() async {
+    if (_exportingSubscriptionList ||
+        _importingSubscriptionList ||
+        _resettingSubscriptionList) {
+      return;
+    }
+    setState(() {
+      _exportingSubscriptionList = true;
+    });
+
+    try {
+      final sourceFile = await _resolveSubscribesDbFile();
+      final sourceExists = await sourceFile.exists();
+      if (!sourceExists) {
+        if (!mounted) return;
+        _showToast(
+          '⚠️ ${l10n.tr('subscriptionListNotFound')}',
+          location: AppToastLocation.bottom,
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      final selectedDir = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: l10n.tr('selectSubscriptionListExportPath'),
+      );
+      if (selectedDir == null || selectedDir.trim().isEmpty) {
+        return;
+      }
+
+      final writable =
+          await ensureDirectoryWritableWithPermissionFromVersion(selectedDir);
+      if (!mounted) return;
+      if (!writable) {
+        _showToast(
+          '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
+          location: AppToastLocation.bottom,
+        );
+        return;
+      }
+
+      final targetPath =
+          '$selectedDir${Platform.pathSeparator}subscribes_${_formatTimestamp(DateTime.now())}.db';
+      await sourceFile.copy(targetPath);
+
+      if (!mounted) return;
+      _showToast(
+        l10n.tr('exportSubscriptionListSuccess', params: {'path': targetPath}),
+        location: AppToastLocation.bottom,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(
+        l10n.tr('exportSubscriptionListFailed', params: {'error': '$e'}),
+        location: AppToastLocation.bottom,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportingSubscriptionList = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _importSubscriptionList() async {
+    if (_importingSubscriptionList ||
+        _exportingSubscriptionList ||
+        _resettingSubscriptionList) {
+      return;
+    }
+
+    final confirmed = await _showImportSubscriptionRiskDialog();
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _importingSubscriptionList = true;
+    });
+
+    try {
+      final selected = await FilePicker.platform.pickFiles(
+        // Some Android providers reject custom `.db` filters, so we use any
+        // and validate after selection.
+        type: FileType.any,
+        dialogTitle: l10n.tr('selectSubscriptionListImportFile'),
+        withData: true,
+      );
+
+      if (selected == null || selected.files.isEmpty) {
+        return;
+      }
+
+      final source = selected.files.single;
+      final sourcePath = source.path?.trim();
+      final Uint8List? bytes = source.bytes;
+      final sourceName = source.name.trim().toLowerCase();
+      final hasDbExtension =
+          sourceName.endsWith('.db') ||
+          (sourcePath?.toLowerCase().endsWith('.db') ?? false);
+      if ((sourcePath == null || sourcePath.isEmpty) && bytes == null) {
+        if (!mounted) return;
+        _showToast(
+          '⚠️ ${l10n.tr('importSubscriptionListInvalidFile')}',
+          location: AppToastLocation.bottom,
+        );
+        return;
+      }
+      if (!hasDbExtension) {
+        if (!mounted) return;
+        _showToast(
+          '⚠️ ${l10n.tr('importSubscriptionListInvalidFile')}',
+          location: AppToastLocation.bottom,
+        );
+        return;
+      }
+
+      final targetFile = await _resolveSubscribesDbFile();
+      await targetFile.parent.create(recursive: true);
+
+      final normalizedSource = sourcePath?.replaceAll('\\', '/').toLowerCase();
+      final normalizedTarget =
+          targetFile.path.replaceAll('\\', '/').toLowerCase();
+      if (normalizedSource != null && normalizedSource == normalizedTarget) {
+        if (!mounted) return;
+        _showToast(
+          '⚠️ ${l10n.tr('importSubscriptionListSamePath')}',
+          location: AppToastLocation.bottom,
+        );
+        return;
+      }
+
+      if (await targetFile.exists()) {
+        final backupPath =
+            '${targetFile.path}.bak_${_formatTimestamp(DateTime.now())}';
+        await targetFile.copy(backupPath);
+      }
+
+      final wal = File('${targetFile.path}-wal');
+      if (await wal.exists()) {
+        await wal.delete();
+      }
+      final shm = File('${targetFile.path}-shm');
+      if (await shm.exists()) {
+        await shm.delete();
+      }
+
+      if (bytes != null) {
+        await targetFile.writeAsBytes(bytes, flush: true);
+      } else {
+        await File(sourcePath!).copy(targetFile.path);
+      }
+
+      if (!mounted) return;
+      _showToast(
+        l10n.tr('importSubscriptionListSuccess',
+            params: {'path': targetFile.path}),
+        location: AppToastLocation.bottom,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(
+        l10n.tr('importSubscriptionListFailed', params: {'error': '$e'}),
+        location: AppToastLocation.bottom,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _importingSubscriptionList = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _showImportSubscriptionRiskDialog() async {
+    return _showWarningConfirmDialog(
+      title: l10n.tr('importSubscriptionRiskTitle'),
+      description: l10n.tr('importSubscriptionRiskDescription'),
+      confirmLabel: l10n.tr('importSubscriptionRiskConfirm'),
+    );
+  }
+
+  Future<void> _resetSubscriptionList() async {
+    if (_resettingSubscriptionList ||
+        _importingSubscriptionList ||
+        _exportingSubscriptionList) {
+      return;
+    }
+
+    final confirmed = await _showResetSubscriptionConfirmDialog();
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _resettingSubscriptionList = true;
+    });
+
+    try {
+      final targetFile = await _resolveSubscribesDbFile();
+      if (await targetFile.exists()) {
+        await targetFile.delete();
+      }
+
+      final wal = File('${targetFile.path}-wal');
+      if (await wal.exists()) {
+        await wal.delete();
+      }
+      final shm = File('${targetFile.path}-shm');
+      if (await shm.exists()) {
+        await shm.delete();
+      }
+
+      if (!mounted) return;
+      _showToast(
+        l10n.tr('resetSubscriptionListSuccess',
+            params: {'path': targetFile.path}),
+        location: AppToastLocation.bottom,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(
+        l10n.tr('resetSubscriptionListFailed', params: {'error': '$e'}),
+        location: AppToastLocation.bottom,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _resettingSubscriptionList = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _showResetSubscriptionConfirmDialog() async {
+    return _showWarningConfirmDialog(
+      title: l10n.tr('resetSubscriptionListWarningTitle'),
+      description: l10n.tr('resetSubscriptionListWarningDescription'),
+      confirmLabel: l10n.tr('resetSubscriptionListWarningConfirm'),
+    );
+  }
+
+  Future<bool> _showWarningConfirmDialog({
+    required String title,
+    required String description,
+    required String confirmLabel,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final colorScheme = Theme.of(dialogContext).colorScheme;
+        final textTheme = Theme.of(dialogContext).textTheme;
+
+        return AlertDialog(
+          icon: Icon(
+            Icons.warning_amber_rounded,
+            color: colorScheme.error,
+            size: 30,
+          ),
+          title: Text(title),
+          content: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.error),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.error_outline_rounded,
+                  color: colorScheme.onErrorContainer,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    description,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                MaterialLocalizations.of(dialogContext).cancelButtonLabel,
+              ),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: colorScheme.error,
+                foregroundColor: colorScheme.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.warning_rounded),
+              label: Text(confirmLabel),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result == true;
   }
 
   @override
@@ -1598,6 +1935,102 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                                   ? l10n.tr('downloadingLog')
                                   : l10n.tr('downloadBootstrapLog'),
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: colorScheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.playlist_add_check_outlined),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  l10n.tr('subscriptionListTransferTitle'),
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.tr('subscriptionListTransferDescription'),
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              FilledButton.tonalIcon(
+                                onPressed: (_importingSubscriptionList ||
+                                        _exportingSubscriptionList ||
+                                        _resettingSubscriptionList)
+                                    ? null
+                                    : _exportSubscriptionList,
+                                icon: _exportingSubscriptionList
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.upload_file_outlined),
+                                label: Text(
+                                  l10n.tr('exportSubscriptionList'),
+                                ),
+                              ),
+                              FilledButton.tonalIcon(
+                                onPressed: (_importingSubscriptionList ||
+                                        _exportingSubscriptionList ||
+                                        _resettingSubscriptionList)
+                                    ? null
+                                    : _importSubscriptionList,
+                                icon: _importingSubscriptionList
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.download_outlined),
+                                label: Text(
+                                  l10n.tr('importSubscriptionList'),
+                                ),
+                              ),
+                              FilledButton.tonalIcon(
+                                onPressed: (_importingSubscriptionList ||
+                                        _exportingSubscriptionList ||
+                                        _resettingSubscriptionList)
+                                    ? null
+                                    : _resetSubscriptionList,
+                                icon: _resettingSubscriptionList
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.restart_alt_rounded),
+                                label: Text(
+                                  l10n.tr('resetSubscriptionList'),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
