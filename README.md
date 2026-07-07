@@ -2,6 +2,8 @@
 
 Flutter Android 客户端，在手机上以前台服务方式运行 Bilirec 录制后端（内嵌 `libbilirec.so`）。
 
+**交流与反馈：** QQ 群 [834229325](https://qm.qq.com/q/oMTN3EsGBy)，用于交流和问题反映。
+
 ## 快速开始
 
 1. 从 [Releases](https://github.com/bilirec/bilirec-mobile/releases) 下载并安装 APK。
