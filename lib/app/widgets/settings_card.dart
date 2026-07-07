@@ -3,9 +3,11 @@ import 'dart:typed_data';
 
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/debugger.dart';
+import 'package:bilirec/shared/file_exporter.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/preferences.dart';
+import 'package:bilirec/shared/saf_export_gateway.dart';
 import 'package:bilirec/shared/storage_protection_env.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -88,6 +90,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   Future<void> _managedEnvironmentWriteQueue = Future<void>.value();
 
   final TextEditingController _outputDirController = TextEditingController();
+  final FileExporter _fileExporter = FileExporter();
+  final SafExportGateway _safExportGateway = SafExportGateway();
 
   AppLocalizations get l10n => AppLocalizations.of(context);
 
@@ -613,42 +617,50 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       // 結果即「由舊到新」，當前主日誌永遠排最後。
       logFiles.sort((a, b) => a.path.compareTo(b.path));
 
-      if (!mounted) return;
-      final selectedDir = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: l10n.tr('selectLogDownloadPath'),
-      );
-      if (selectedDir == null || selectedDir.trim().isEmpty) {
-        return;
-      }
-
-      final writable =
-          await ensureDirectoryWritableWithPermissionFromVersion(selectedDir);
-      if (!mounted) return;
-      if (!writable) {
-        _showToast(
-          '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
-          location: AppToastLocation.bottom,
-        );
-        return;
-      }
-
       final now = DateTime.now();
       final timestamp =
           '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-      final targetPath =
-          '$selectedDir${Platform.pathSeparator}bootstrap_$timestamp.log';
+      final outputFileName = 'bootstrap_$timestamp.log';
 
-      final wrote = await _writeBootstrapLogWithPermissionRecovery(
-        logFiles: logFiles,
-        selectedDir: selectedDir,
-        targetPath: targetPath,
+      final exported = await _fileExporter.exportWithSafFallback(
+        dialogTitle: l10n.tr('selectLogDownloadPath'),
+        onSafFailed: (error) {
+          debugLog(
+            'SAF bootstrap export failed, fallback to file path export: $error',
+          );
+        },
+        writeWithSaf: (treeUri) async {
+          final result = await _safExportGateway.writeMergedTextFileFromLocalFiles(
+            treeUri: treeUri,
+            fileName: outputFileName,
+            sourceFiles: logFiles,
+            mimeType: 'text/plain',
+          );
+          return result.uri.toString();
+        },
+        writeWithPath: (selectedDir) async {
+          final writable =
+              await ensureDirectoryWritableWithPermissionFromVersion(selectedDir);
+          if (!writable) {
+            throw const _ExportTargetNotWritableException();
+          }
+
+          final targetPath =
+              '$selectedDir${Platform.pathSeparator}$outputFileName';
+          final wrote = await _writeBootstrapLogWithPermissionRecovery(
+            logFiles: logFiles,
+            selectedDir: selectedDir,
+            targetPath: targetPath,
+          );
+          if (!wrote) {
+            throw const _ExportTargetNotWritableException();
+          }
+
+          return targetPath;
+        },
       );
-      if (!mounted) return;
-      if (!wrote) {
-        _showToast(
-          '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
-          location: AppToastLocation.bottom,
-        );
+      if (exported == null) {
+        debugLog('Bootstrap log export cancelled by user');
         return;
       }
 
@@ -657,10 +669,17 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         l10n.tr(
           'downloadBootstrapLogSuccess',
           params: {
-            'path': targetPath,
+            'path': _formatExportPathForDisplay(exported.location),
             'count': '${logFiles.length}',
           },
         ),
+        location: AppToastLocation.bottom,
+      );
+    } on _ExportTargetNotWritableException {
+      debugLog('Bootstrap log export target not writable');
+      if (!mounted) return;
+      _showToast(
+        '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
         location: AppToastLocation.bottom,
       );
     } catch (e) {
@@ -741,6 +760,51 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     }
   }
 
+  String _formatExportPathForDisplay(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+
+    var displayPath = trimmed;
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && uri.scheme == 'content') {
+      displayPath = _displayPathFromContentUri(uri);
+    }
+
+    return _ellipsizeMiddle(displayPath, maxLength: 56);
+  }
+
+  String _displayPathFromContentUri(Uri uri) {
+    final segments = uri.pathSegments;
+    final documentIndex = segments.indexOf('document');
+    if (documentIndex >= 0 && documentIndex + 1 < segments.length) {
+      final documentId = Uri.decodeComponent(segments[documentIndex + 1]);
+      final colonIndex = documentId.indexOf(':');
+      if (colonIndex >= 0 && colonIndex + 1 < documentId.length) {
+        return documentId.substring(colonIndex + 1);
+      }
+      return documentId;
+    }
+
+    if (segments.isNotEmpty) {
+      return Uri.decodeComponent(segments.last);
+    }
+
+    return uri.toString().replaceFirst('content://', '');
+  }
+
+  String _ellipsizeMiddle(String text, {required int maxLength}) {
+    if (text.length <= maxLength) {
+      return text;
+    }
+
+    const marker = '...';
+    final headLength = (maxLength - marker.length) ~/ 2;
+    final tailLength = maxLength - marker.length - headLength;
+    return '${text.substring(0, headLength)}$marker${text.substring(text.length - tailLength)}';
+  }
+
   bool _isPermissionLikeStorageFailure(Object error) {
     final lower = '$error'.toLowerCase();
     return lower.contains('operation not permitted') ||
@@ -791,32 +855,54 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         return;
       }
 
-      if (!mounted) return;
-      final selectedDir = await FilePicker.platform.getDirectoryPath(
+      final outputFileName =
+          'subscribes_${_formatTimestamp(DateTime.now())}.db';
+
+      final exported = await _fileExporter.exportWithSafFallback(
         dialogTitle: l10n.tr('selectSubscriptionListExportPath'),
+        onSafFailed: (error) {
+          debugLog(
+            'SAF subscription export failed, fallback to file path export: $error',
+          );
+        },
+        writeWithSaf: (treeUri) async {
+          final result = await _safExportGateway.copyLocalFileToDirectory(
+            sourcePath: sourceFile.path,
+            treeUri: treeUri,
+            fileName: outputFileName,
+            mimeType: 'application/x-sqlite3',
+          );
+          return result.uri.toString();
+        },
+        writeWithPath: (selectedDir) async {
+          final writable =
+              await ensureDirectoryWritableWithPermissionFromVersion(selectedDir);
+          if (!writable) {
+            throw const _ExportTargetNotWritableException();
+          }
+
+          final targetPath =
+              '$selectedDir${Platform.pathSeparator}$outputFileName';
+          await sourceFile.copy(targetPath);
+          return targetPath;
+        },
       );
-      if (selectedDir == null || selectedDir.trim().isEmpty) {
+      if (exported == null) {
+        debugLog('Subscription list export cancelled by user');
         return;
       }
-
-      final writable =
-          await ensureDirectoryWritableWithPermissionFromVersion(selectedDir);
-      if (!mounted) return;
-      if (!writable) {
-        _showToast(
-          '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
-          location: AppToastLocation.bottom,
-        );
-        return;
-      }
-
-      final targetPath =
-          '$selectedDir${Platform.pathSeparator}subscribes_${_formatTimestamp(DateTime.now())}.db';
-      await sourceFile.copy(targetPath);
 
       if (!mounted) return;
       _showToast(
-        l10n.tr('exportSubscriptionListSuccess', params: {'path': targetPath}),
+        l10n.tr('exportSubscriptionListSuccess',
+            params: {'path': _formatExportPathForDisplay(exported.location)}),
+        location: AppToastLocation.bottom,
+      );
+    } on _ExportTargetNotWritableException {
+      debugLog('Subscription list export target not writable');
+      if (!mounted) return;
+      _showToast(
+        '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
         location: AppToastLocation.bottom,
       );
     } catch (e) {
@@ -833,6 +919,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       }
     }
   }
+
 
   Future<void> _importSubscriptionList() async {
     if (_importingSubscriptionList ||
@@ -2122,3 +2209,8 @@ class _EnvironmentSettingInput {
   final String key;
   final String value;
 }
+
+class _ExportTargetNotWritableException implements Exception {
+  const _ExportTargetNotWritableException();
+}
+
