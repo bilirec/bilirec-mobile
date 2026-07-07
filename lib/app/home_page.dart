@@ -461,8 +461,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
         final outputDir = await Preferences.getOutputDir();
         if (outputDir != null && outputDir.isNotEmpty) {
-          final granted = await requestExternalStoragePermissionIfLegacy();
-          if (!granted) {
+          final writable =
+              await ensureDirectoryWritableWithPermissionFromVersion(outputDir);
+          if (!writable) {
             if (!mounted) return;
             setState(() {
               _setStatus('externalStoragePermissionDenied');

@@ -165,19 +165,19 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
     if (selected == null || !mounted) return null;
 
-    final granted = await requestExternalStoragePermissionIfLegacy();
-    if (!mounted) return null;
-    if (!granted) {
-      _showToast('⚠️ ${l10n.tr('externalStoragePermissionDenied')}');
-      return null;
-    }
-
     setState(() {
       _outputDirController.text = selected;
     });
 
     await Preferences.setOutputDir(selected);
     if (!mounted) return null;
+
+    final writable =
+        await ensureDirectoryWritableWithPermissionFromVersion(selected);
+    if (!mounted) return selected;
+    if (!writable) {
+      _showToast('⚠️ ${l10n.tr('externalStoragePermissionDenied')}');
+    }
 
     return selected;
   }
@@ -616,9 +616,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         return;
       }
 
-      final granted = await requestExternalStoragePermissionIfLegacy();
+      final writable =
+          await ensureDirectoryWritableWithPermissionFromVersion(selectedDir);
       if (!mounted) return;
-      if (!granted) {
+      if (!writable) {
         _showToast(
           '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
           location: AppToastLocation.bottom,
@@ -905,7 +906,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      l10n.tr('microSdWearProtectionDescription'),
+                                      l10n.tr(
+                                          'microSdWearProtectionDescription'),
                                       style: theme.textTheme.bodySmall,
                                     ),
                                   ],
