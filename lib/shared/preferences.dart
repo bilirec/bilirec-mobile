@@ -7,6 +7,7 @@ const String _stoppedByUserKey = 'stopped_by_user';
 const String _localeCodeKey = 'locale_code';
 const String _enableSsePushKey = 'enable_sse_push';
 const String _enableAntiSleepKey = 'enable_antisleep';
+const String _skippedUpdateVersionKey = 'skipped_update_version';
 const String _managedEnvironmentSettingsKey = 'managed_environment_settings';
 const String _developEnvironmentSettingsKey = 'develop_environment_settings';
 
@@ -14,7 +15,6 @@ const String coreRunningKey = 'core_running';
 
 sealed class Preferences {
   static SharedPreferencesAsync get _prefs => SharedPreferencesAsync();
-
 
   static Future<void> setStoppedByUser(bool value) async {
     final prefs = _prefs;
@@ -72,6 +72,20 @@ sealed class Preferences {
   static Future<bool> getEnableAntiSleep() async {
     final prefs = _prefs;
     return await prefs.getBool(_enableAntiSleepKey) ?? false;
+  }
+
+  static Future<void> setSkippedUpdateVersion(String? version) async {
+    final prefs = _prefs;
+    if (version == null || version.isEmpty) {
+      await prefs.remove(_skippedUpdateVersionKey);
+      return;
+    }
+    await prefs.setString(_skippedUpdateVersionKey, version);
+  }
+
+  static Future<String?> getSkippedUpdateVersion() async {
+    final prefs = _prefs;
+    return prefs.getString(_skippedUpdateVersionKey);
   }
 
   static Future<void> setManagedEnvironmentSettings(
