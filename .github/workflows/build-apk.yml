@@ -95,8 +95,31 @@ jobs:
           storeFile=release-key.jks
           EOF
 
+      - name: Prepare build version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$TAG" ]; then
+            TAG="1.0.0"
+          fi
+
+          TAG="${TAG#v}"
+          TAG="${TAG#V}"
+          if ! echo "$TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::Release tag 格式必須為 vX.Y.Z，實際為：$TAG"
+            exit 1
+          fi
+          echo "build_name=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Build Release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --build-name="${{ steps.version.outputs.build_name }}" --build-number=${{ github.run_number }}
 
       - name: Rename APK for artifact/release
         run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/bilirec-release.apk
