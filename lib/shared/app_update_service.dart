@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:github_release_apk_updater/github_release_apk_updater.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -35,15 +36,23 @@ class AppUpdateService {
     GithubApiService? apiService,
     ApkDownloaderService? apkDownloader,
     VersionComparator? versionComparator,
+    Future<Directory> Function()? temporaryDirectoryProvider,
+    Future<Directory?> Function()? externalStorageDirectoryProvider,
   })  : _updater = updater ?? GithubReleaseApkUpdater(),
         _apiService = apiService ?? GithubApiService(),
         _apkDownloader = apkDownloader ?? ApkDownloaderService(),
-        _versionComparator = versionComparator ?? VersionComparator();
+        _versionComparator = versionComparator ?? VersionComparator(),
+        _temporaryDirectoryProvider =
+            temporaryDirectoryProvider ?? getTemporaryDirectory,
+        _externalStorageDirectoryProvider = externalStorageDirectoryProvider ??
+            getExternalStorageDirectory;
 
   final GithubReleaseApkUpdater _updater;
   final GithubApiService _apiService;
   final ApkDownloaderService _apkDownloader;
   final VersionComparator _versionComparator;
+  final Future<Directory> Function() _temporaryDirectoryProvider;
+  final Future<Directory?> Function() _externalStorageDirectoryProvider;
 
   static String normalizeVersionIdentifier(String value) {
     final trimmed = value.trim();
@@ -71,6 +80,58 @@ class AppUpdateService {
     final normalizedSkipped = normalizeVersionIdentifier(skippedVersion);
     return normalizedRelease.isNotEmpty &&
         normalizedRelease == normalizedSkipped;
+  }
+
+  static bool isApkFileName(String name) {
+    return name.toLowerCase().endsWith('.apk');
+  }
+
+  @visibleForTesting
+  static Future<void> cleanupApkFilesInDirectory(Directory directory) async {
+    if (!await directory.exists()) {
+      return;
+    }
+
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+
+      final fileName = entity.uri.pathSegments.isNotEmpty
+          ? entity.uri.pathSegments.last
+          : '';
+      if (!isApkFileName(fileName)) {
+        continue;
+      }
+
+      try {
+        await entity.delete();
+        debugLog('app_update: deleted apk ${entity.path}');
+      } catch (e) {
+        debugLog('app_update: failed to delete apk ${entity.path}: $e');
+      }
+    }
+  }
+
+  Future<void> cleanupDownloadedApks() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+
+    try {
+      await cleanupApkFilesInDirectory(await _temporaryDirectoryProvider());
+    } catch (e) {
+      debugLog('app_update: cleanup temp apk files failed: $e');
+    }
+
+    try {
+      final externalDirectory = await _externalStorageDirectoryProvider();
+      if (externalDirectory != null) {
+        await cleanupApkFilesInDirectory(externalDirectory);
+      }
+    } catch (e) {
+      debugLog('app_update: cleanup external apk files failed: $e');
+    }
   }
 
   Future<AppUpdateCandidate?> checkForUpdate() async {
@@ -204,7 +265,9 @@ class AppUpdateService {
     HttpClient? client;
     IOSink? sink;
     try {
-      final targetDirectory = await getTemporaryDirectory();
+      await cleanupDownloadedApks();
+
+      final targetDirectory = await _temporaryDirectoryProvider();
       final fileName = _resolveApkFileName(apkUrl);
       final file = File('${targetDirectory.path}/$fileName');
 

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:bilirec/shared/app_update_service.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -70,6 +72,51 @@ void main() {
 
       await Preferences.setSkippedUpdateVersion('');
       expect(await Preferences.getSkippedUpdateVersion(), isNull);
+    });
+  });
+
+  group('AppUpdateService.isApkFileName', () {
+    test('matches apk extension case-insensitively', () {
+      expect(AppUpdateService.isApkFileName('bilirec-release.apk'), isTrue);
+      expect(AppUpdateService.isApkFileName('update.APK'), isTrue);
+      expect(AppUpdateService.isApkFileName('notes.txt'), isFalse);
+    });
+  });
+
+  group('AppUpdateService.cleanupApkFilesInDirectory', () {
+    late Directory tempDir;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('bilirec_apk_cleanup_test');
+    });
+
+    tearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('deletes all apk files and keeps other files', () async {
+      final apkOne = File('${tempDir.path}/release.apk');
+      final apkTwo = File('${tempDir.path}/bilirec-update-123.apk');
+      final keepFile = File('${tempDir.path}/state.json');
+      await apkOne.writeAsString('apk-one');
+      await apkTwo.writeAsString('apk-two');
+      await keepFile.writeAsString('{}');
+
+      await AppUpdateService.cleanupApkFilesInDirectory(tempDir);
+
+      expect(await apkOne.exists(), isFalse);
+      expect(await apkTwo.exists(), isFalse);
+      expect(await keepFile.exists(), isTrue);
+    });
+
+    test('completes when directory does not exist', () async {
+      final missingDir = Directory('${tempDir.path}/missing');
+      await expectLater(
+        AppUpdateService.cleanupApkFilesInDirectory(missingDir),
+        completes,
+      );
     });
   });
 }

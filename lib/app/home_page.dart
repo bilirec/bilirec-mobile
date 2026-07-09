@@ -280,6 +280,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
     _hasCheckedStartupUpdate = true;
 
+    await _appUpdateService.cleanupDownloadedApks();
+
     final update = await _appUpdateService.checkForUpdate();
     if (!mounted || update == null || _updateDialogVisible) {
       return;
