@@ -59,7 +59,9 @@ set -e
 
 if [ "$FLUTTER_STATUS" -ne 0 ]; then
   echo "⚠️ 偵測到測試失敗或 App 崩潰！正在撈取 Android Logcat 崩潰日誌..."
-  sh ./.github/scripts/dump_integration_logcat.sh
+  if ! sh ./.github/scripts/dump_integration_logcat.sh; then
+    echo "⚠️ Logcat 收集失敗；保留原始 Flutter 測試錯誤碼。"
+  fi
 fi
 
 cleanup
