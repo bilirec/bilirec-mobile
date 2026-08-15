@@ -1,6 +1,13 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:bilirec/app/widgets/settings/settings_hint.dart';
+import 'package:bilirec/app/widgets/settings/settings_option_slider.dart';
+import 'package:bilirec/app/widgets/settings/settings_range_slider.dart';
+import 'package:bilirec/app/widgets/settings/settings_section_card.dart';
+import 'package:bilirec/app/widgets/settings/settings_segmented_field.dart';
+import 'package:bilirec/app/widgets/settings/settings_switch_row.dart';
+import 'package:bilirec/app/widgets/settings/settings_switch_tile.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/file_exporter.dart';
@@ -503,16 +510,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     setState(() {
       _ffmpegAllowDuringRecordingMaxActive = bounded;
     });
-  }
-
-  int _optionFromSlider(List<int> options, double sliderValue) {
-    final index = sliderValue.round().clamp(0, options.length - 1);
-    return options[index];
-  }
-
-  double _sliderFromOption(List<int> options, int value) {
-    final index = options.indexOf(value);
-    return (index >= 0 ? index : 0).toDouble();
   }
 
   Future<void> _upsertEnvironmentSetting({
@@ -1274,873 +1271,362 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                     style: theme.textTheme.titleMedium,
                   ),
                   const SizedBox(height: 12),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      l10n.tr('ssePushSwitchTitle'),
-                                      style: theme.textTheme.titleMedium,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      l10n.tr('ssePushDescription'),
-                                      style: theme.textTheme.bodyMedium,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Switch.adaptive(
-                                value: _useSsePush,
-                                onChanged: widget.controlsEnabled
-                                    ? _setSsePushEnabled
-                                    : null,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Icons.info_outline,
-                                size: 16,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('ssePushHint'),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                  SettingsSectionCard(
+                    children: [
+                      SettingsSwitchRow(
+                        title: l10n.tr('ssePushSwitchTitle'),
+                        description: l10n.tr('ssePushDescription'),
+                        value: _useSsePush,
+                        enabled: widget.controlsEnabled,
+                        onChanged: _setSsePushEnabled,
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      SettingsHint(
+                        text: l10n.tr('ssePushHint'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      l10n.tr('antiSleepTitle'),
-                                      style: theme.textTheme.titleMedium,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      l10n.tr('antiSleepDescription'),
-                                      style: theme.textTheme.bodyMedium,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Switch.adaptive(
-                                value: _useAntiSleep,
-                                onChanged: widget.controlsEnabled
-                                    ? _setAntiSleepEnabled
-                                    : null,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Icons.info_outline,
-                                size: 16,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  _useAntiSleep
-                                      ? l10n.tr('antiSleepEnabledHint')
-                                      : l10n.tr('antiSleepDisabledHint'),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                  SettingsSectionCard(
+                    children: [
+                      SettingsSwitchRow(
+                        title: l10n.tr('antiSleepTitle'),
+                        description: l10n.tr('antiSleepDescription'),
+                        value: _useAntiSleep,
+                        enabled: widget.controlsEnabled,
+                        onChanged: _setAntiSleepEnabled,
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      SettingsHint(
+                        text: _useAntiSleep
+                            ? l10n.tr('antiSleepEnabledHint')
+                            : l10n.tr('antiSleepDisabledHint'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  SettingsSectionCard(
+                    icon: Icons.storage_outlined,
+                    title: l10n.tr('storagePolicyTitle'),
+                    description: l10n.tr('storagePolicyDescription'),
+                    children: [
+                      Text(
+                        l10n.tr('storagePathTitle'),
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        outputPathText,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.storage_outlined),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('storagePolicyTitle'),
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              ),
-                            ],
+                          OutlinedButton(
+                            onPressed:
+                                widget.controlsEnabled ? _browseBasePath : null,
+                            child: Text(l10n.tr('changePath')),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.tr('storagePolicyDescription'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('storagePathTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            outputPathText,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              OutlinedButton(
-                                onPressed: widget.controlsEnabled
-                                    ? _browseBasePath
-                                    : null,
-                                child: Text(l10n.tr('changePath')),
-                              ),
-                              OutlinedButton(
-                                onPressed: widget.controlsEnabled &&
-                                        hasCustomOutputPath
+                          OutlinedButton(
+                            onPressed:
+                                widget.controlsEnabled && hasCustomOutputPath
                                     ? _restoreDefaultOutputPath
                                     : null,
-                                child: Text(l10n.tr('restoreDefaultPath')),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      l10n.tr('microSdWearProtectionTitle'),
-                                      style: theme.textTheme.titleSmall,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      l10n.tr(
-                                          'microSdWearProtectionDescription'),
-                                      style: theme.textTheme.bodySmall,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Switch.adaptive(
-                                value: _microSdProtectionEnabled,
-                                onChanged: widget.controlsEnabled
-                                    ? _setMicroSdProtectionEnabled
-                                    : null,
-                              ),
-                            ],
+                            child: Text(l10n.tr('restoreDefaultPath')),
                           ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 14),
+                      SettingsSwitchRow(
+                        title: l10n.tr('microSdWearProtectionTitle'),
+                        titleStyle: theme.textTheme.titleSmall,
+                        spacing: 6,
+                        description:
+                            l10n.tr('microSdWearProtectionDescription'),
+                        descriptionStyle: theme.textTheme.bodySmall,
+                        value: _microSdProtectionEnabled,
+                        enabled: widget.controlsEnabled,
+                        onChanged: _setMicroSdProtectionEnabled,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.tune_rounded),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('recordingPolicyTitle'),
-                                  style: theme.textTheme.titleMedium,
-                                ),
+                  SettingsSectionCard(
+                    icon: Icons.tune_rounded,
+                    title: l10n.tr('recordingPolicyTitle'),
+                    description: l10n.tr('recordingPolicyDescription'),
+                    children: [
+                      SettingsRangeSlider(
+                        title: l10n.tr('maxRecordingHoursTitle'),
+                        description: l10n.tr('maxRecordingHoursDescription'),
+                        value: _maxRecordingHours,
+                        min: 0,
+                        max: 12,
+                        divisions: 12,
+                        valueLabel: _maxRecordingHours == 0
+                            ? l10n.tr('hoursUnlimitedOption')
+                            : l10n.tr(
+                                'hoursOption',
+                                params: {'value': '$_maxRecordingHours'},
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.tr('recordingPolicyDescription'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('maxRecordingHoursTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n.tr('maxRecordingHoursDescription'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _maxRecordingHours == 0
-                                ? l10n.tr('hoursUnlimitedOption')
-                                : l10n.tr(
-                                    'hoursOption',
-                                    params: {'value': '$_maxRecordingHours'},
-                                  ),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            // Keep line metrics stable between different label texts.
-                            strutStyle: StrutStyle(
-                              fontSize: theme.textTheme.bodySmall?.fontSize,
-                              height: 1.25,
-                              forceStrutHeight: true,
-                            ),
-                          ),
-                          Slider(
-                            value: _maxRecordingHours.toDouble(),
-                            min: 0,
-                            max: 12,
-                            divisions: 12,
-                            label: _maxRecordingHours == 0
-                                ? l10n.tr('hoursUnlimitedOption')
-                                : l10n.tr(
-                                    'hoursOption',
-                                    params: {'value': '$_maxRecordingHours'},
-                                  ),
-                            onChanged: widget.controlsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      _maxRecordingHours = value.round();
-                                    });
-                                  }
-                                : null,
-                            onChangeEnd: widget.controlsEnabled
-                                ? (value) {
-                                    _setMaxRecordingHours(value.round());
-                                  }
-                                : null,
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('minDiskSpaceTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n.tr('minDiskSpaceDescription'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n.tr(
-                              'diskSpaceOption',
-                              params: {'value': '$_minDiskSpaceGb'},
-                            ),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          Slider(
-                            value: _sliderFromOption(
-                              _diskSpaceOptionsGb,
-                              _minDiskSpaceGb,
-                            ),
-                            min: 0,
-                            max: (_diskSpaceOptionsGb.length - 1).toDouble(),
-                            divisions: _diskSpaceOptionsGb.length - 1,
-                            label: l10n.tr(
-                              'diskSpaceOption',
-                              params: {'value': '$_minDiskSpaceGb'},
-                            ),
-                            onChanged: widget.controlsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      _minDiskSpaceGb = _optionFromSlider(
-                                        _diskSpaceOptionsGb,
-                                        value,
-                                      );
-                                    });
-                                  }
-                                : null,
-                            onChangeEnd: widget.controlsEnabled
-                                ? (value) {
-                                    _setMinDiskSpaceGb(
-                                      _optionFromSlider(
-                                        _diskSpaceOptionsGb,
-                                        value,
-                                      ),
-                                    );
-                                  }
-                                : null,
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('maxRetryMinutesTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n.tr('maxRetryMinutesDescription'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n.tr(
-                              'minutesOption',
-                              params: {'value': '$_maxRetryMinutes'},
-                            ),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          Slider(
-                            value: _sliderFromOption(
-                              _retryMinuteOptions,
-                              _maxRetryMinutes,
-                            ),
-                            min: 0,
-                            max: (_retryMinuteOptions.length - 1).toDouble(),
-                            divisions: _retryMinuteOptions.length - 1,
-                            label: l10n.tr(
-                              'minutesOption',
-                              params: {'value': '$_maxRetryMinutes'},
-                            ),
-                            onChanged: widget.controlsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      _maxRetryMinutes = _optionFromSlider(
-                                        _retryMinuteOptions,
-                                        value,
-                                      );
-                                    });
-                                  }
-                                : null,
-                            onChangeEnd: widget.controlsEnabled
-                                ? (value) {
-                                    _setMaxRetryMinutes(
-                                      _optionFromSlider(
-                                        _retryMinuteOptions,
-                                        value,
-                                      ),
-                                    );
-                                  }
-                                : null,
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('recordingRecoveryDurationTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
+                        enabled: widget.controlsEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _maxRecordingHours = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setMaxRecordingHours(value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsOptionSlider(
+                        title: l10n.tr('minDiskSpaceTitle'),
+                        description: l10n.tr('minDiskSpaceDescription'),
+                        options: _diskSpaceOptionsGb,
+                        value: _minDiskSpaceGb,
+                        valueLabel: l10n.tr(
+                          'diskSpaceOption',
+                          params: {'value': '$_minDiskSpaceGb'},
+                        ),
+                        enabled: widget.controlsEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _minDiskSpaceGb = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setMinDiskSpaceGb(value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsOptionSlider(
+                        title: l10n.tr('maxRetryMinutesTitle'),
+                        description: l10n.tr('maxRetryMinutesDescription'),
+                        options: _retryMinuteOptions,
+                        value: _maxRetryMinutes,
+                        valueLabel: l10n.tr(
+                          'minutesOption',
+                          params: {'value': '$_maxRetryMinutes'},
+                        ),
+                        enabled: widget.controlsEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _maxRetryMinutes = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setMaxRetryMinutes(value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsSegmentedField<String>(
+                        key: const Key('recording_recovery_duration_segments'),
+                        title: l10n.tr('recordingRecoveryDurationTitle'),
+                        description:
                             l10n.tr('recordingRecoveryDurationDescription'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _recordingRecoveryDuration == 'reset'
-                                ? l10n.tr('recordingRecoveryDurationResetHint')
-                                : l10n.tr(
-                                    'recordingRecoveryDurationPreserveHint',
-                                  ),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                        hint: _recordingRecoveryDuration == 'reset'
+                            ? l10n.tr('recordingRecoveryDurationResetHint')
+                            : l10n.tr(
+                                'recordingRecoveryDurationPreserveHint',
+                              ),
+                        segments: [
+                          ButtonSegment<String>(
+                            value: 'preserve',
+                            label: Text(
+                              l10n.tr('recordingRecoveryDurationPreserve'),
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          SegmentedButton<String>(
-                            key: const Key(
-                              'recording_recovery_duration_segments',
+                          ButtonSegment<String>(
+                            value: 'reset',
+                            label: Text(
+                              l10n.tr('recordingRecoveryDurationReset'),
                             ),
-                            segments: [
-                              ButtonSegment<String>(
-                                value: 'preserve',
-                                label: Text(
-                                  l10n.tr('recordingRecoveryDurationPreserve'),
-                                ),
-                              ),
-                              ButtonSegment<String>(
-                                value: 'reset',
-                                label: Text(
-                                  l10n.tr('recordingRecoveryDurationReset'),
-                                ),
-                              ),
-                            ],
-                            selected: {_recordingRecoveryDuration},
-                            onSelectionChanged: widget.controlsEnabled
-                                ? (selection) {
-                                    final value = selection.first;
-                                    setState(() {
-                                      _recordingRecoveryDuration = value;
-                                    });
-                                    _setRecordingRecoveryDuration(value);
-                                  }
-                                : null,
                           ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('maxConcurrentRecordingsTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
+                        ],
+                        selected: _recordingRecoveryDuration,
+                        enabled: widget.controlsEnabled,
+                        onSelectionChanged: (value) {
+                          setState(() {
+                            _recordingRecoveryDuration = value;
+                          });
+                          _setRecordingRecoveryDuration(value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsOptionSlider(
+                        title: l10n.tr('maxConcurrentRecordingsTitle'),
+                        description:
                             l10n.tr('maxConcurrentRecordingsDescription'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Icons.info_outline,
-                                size: 16,
-                                color: Colors.amber.shade700,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('maxConcurrentRecordingsWarning'),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: Colors.amber.shade700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n.tr(
-                              'concurrentRecordingOption',
-                              params: {'value': '$_maxConcurrentRecordings'},
-                            ),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          Slider(
-                            value: _sliderFromOption(
-                              _maxConcurrentRecordingOptions,
-                              _maxConcurrentRecordings,
-                            ),
-                            min: 0,
-                            max: (_maxConcurrentRecordingOptions.length - 1)
-                                .toDouble(),
-                            divisions:
-                                _maxConcurrentRecordingOptions.length - 1,
-                            label: l10n.tr(
-                              'concurrentRecordingOption',
-                              params: {'value': '$_maxConcurrentRecordings'},
-                            ),
-                            onChanged: widget.controlsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      _maxConcurrentRecordings =
-                                          _optionFromSlider(
-                                        _maxConcurrentRecordingOptions,
-                                        value,
-                                      );
-                                    });
-                                  }
-                                : null,
-                            onChangeEnd: widget.controlsEnabled
-                                ? (value) {
-                                    _setMaxConcurrentRecordings(
-                                      _optionFromSlider(
-                                        _maxConcurrentRecordingOptions,
-                                        value,
-                                      ),
-                                    );
-                                  }
-                                : null,
-                          ),
-                        ],
+                        hint: SettingsHint(
+                          tone: SettingsHintTone.warning,
+                          text: l10n.tr('maxConcurrentRecordingsWarning'),
+                        ),
+                        options: _maxConcurrentRecordingOptions,
+                        value: _maxConcurrentRecordings,
+                        valueLabel: l10n.tr(
+                          'concurrentRecordingOption',
+                          params: {'value': '$_maxConcurrentRecordings'},
+                        ),
+                        enabled: widget.controlsEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _maxConcurrentRecordings = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setMaxConcurrentRecordings(value);
+                        },
                       ),
-                    ),
+                    ],
                   ),
                   const SizedBox(height: 20),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.subtitles_outlined),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('danmakuPolicyTitle'),
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.tr('danmakuPolicyDescription'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                  SettingsSectionCard(
+                    icon: Icons.subtitles_outlined,
+                    title: l10n.tr('danmakuPolicyTitle'),
+                    description: l10n.tr('danmakuPolicyDescription'),
+                    children: [
+                      SettingsSegmentedField<String>(
+                        key: const Key('danmaku_output_format_segments'),
+                        title: l10n.tr('danmakuOutputFormatTitle'),
+                        description: l10n.tr('danmakuOutputFormatDescription'),
+                        hint: _danmakuOutputFormat == 'xml'
+                            ? l10n.tr('danmakuOutputFormatXmlHint')
+                            : l10n.tr('danmakuOutputFormatJsonlHint'),
+                        segments: [
+                          ButtonSegment<String>(
+                            value: 'jsonl',
+                            label: Text(
+                              l10n.tr('danmakuOutputFormatJsonl'),
                             ),
                           ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('danmakuOutputFormatTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n.tr('danmakuOutputFormatDescription'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _danmakuOutputFormat == 'xml'
-                                ? l10n.tr('danmakuOutputFormatXmlHint')
-                                : l10n.tr('danmakuOutputFormatJsonlHint'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                          ButtonSegment<String>(
+                            value: 'xml',
+                            label: Text(
+                              l10n.tr('danmakuOutputFormatXml'),
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          SegmentedButton<String>(
-                            key: const Key('danmaku_output_format_segments'),
-                            segments: [
-                              ButtonSegment<String>(
-                                value: 'jsonl',
-                                label: Text(
-                                  l10n.tr('danmakuOutputFormatJsonl'),
-                                ),
-                              ),
-                              ButtonSegment<String>(
-                                value: 'xml',
-                                label: Text(
-                                  l10n.tr('danmakuOutputFormatXml'),
-                                ),
-                              ),
-                            ],
-                            selected: {_danmakuOutputFormat},
-                            onSelectionChanged: widget.controlsEnabled
-                                ? (selection) {
-                                    final value = selection.first;
-                                    setState(() {
-                                      _danmakuOutputFormat = value;
-                                    });
-                                    _setDanmakuOutputFormat(value);
-                                  }
-                                : null,
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('danmakuOverflowPolicyTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
+                        ],
+                        selected: _danmakuOutputFormat,
+                        enabled: widget.controlsEnabled,
+                        onSelectionChanged: (value) {
+                          setState(() {
+                            _danmakuOutputFormat = value;
+                          });
+                          _setDanmakuOutputFormat(value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsSegmentedField<String>(
+                        key: const Key('danmaku_overflow_policy_segments'),
+                        title: l10n.tr('danmakuOverflowPolicyTitle'),
+                        description:
                             l10n.tr('danmakuOverflowPolicyDescription'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _danmakuOverflowPolicy == 'block'
-                                ? l10n.tr('danmakuOverflowPolicyBlockHint')
-                                : l10n.tr('danmakuOverflowPolicyDropHint'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                        hint: _danmakuOverflowPolicy == 'block'
+                            ? l10n.tr('danmakuOverflowPolicyBlockHint')
+                            : l10n.tr('danmakuOverflowPolicyDropHint'),
+                        segments: [
+                          ButtonSegment<String>(
+                            value: 'drop',
+                            label: Text(
+                              l10n.tr('danmakuOverflowPolicyDrop'),
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          SegmentedButton<String>(
-                            key: const Key('danmaku_overflow_policy_segments'),
-                            segments: [
-                              ButtonSegment<String>(
-                                value: 'drop',
-                                label: Text(
-                                  l10n.tr('danmakuOverflowPolicyDrop'),
-                                ),
-                              ),
-                              ButtonSegment<String>(
-                                value: 'block',
-                                label: Text(
-                                  l10n.tr('danmakuOverflowPolicyBlock'),
-                                ),
-                              ),
-                            ],
-                            selected: {_danmakuOverflowPolicy},
-                            onSelectionChanged: widget.controlsEnabled
-                                ? (selection) {
-                                    final value = selection.first;
-                                    setState(() {
-                                      _danmakuOverflowPolicy = value;
-                                    });
-                                    _setDanmakuOverflowPolicy(value);
-                                  }
-                                : null,
+                          ButtonSegment<String>(
+                            value: 'block',
+                            label: Text(
+                              l10n.tr('danmakuOverflowPolicyBlock'),
+                            ),
                           ),
                         ],
+                        selected: _danmakuOverflowPolicy,
+                        enabled: widget.controlsEnabled,
+                        onSelectionChanged: (value) {
+                          setState(() {
+                            _danmakuOverflowPolicy = value;
+                          });
+                          _setDanmakuOverflowPolicy(value);
+                        },
                       ),
-                    ),
+                    ],
                   ),
                   const SizedBox(height: 20),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.transform_rounded),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('conversionPolicyTitle'),
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.tr('conversionPolicyDescription'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('fileConversionTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n.tr('convertToMp4Description'),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Material(
-                            color: Colors.transparent,
-                            child: SwitchListTile.adaptive(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(l10n.tr('convertToMp4Title')),
-                              subtitle: Text(
-                                l10n.tr('convertToMp4SecondaryDescription'),
-                              ),
-                              value: _convertToMp4,
-                              onChanged: widget.controlsEnabled
-                                  ? _setConvertToMp4Enabled
-                                  : null,
-                            ),
-                          ),
-                          Material(
-                            color: Colors.transparent,
-                            child: SwitchListTile.adaptive(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                l10n.tr('deleteSourceAfterConvertTitle'),
-                              ),
-                              subtitle: Text(
-                                l10n.tr('deleteSourceAfterConvertDescription'),
-                              ),
-                              value: _deleteSourceAfterConvert,
-                              onChanged:
-                                  (widget.controlsEnabled && _convertToMp4)
-                                      ? _setDeleteSourceAfterConvertEnabled
-                                      : null,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Material(
-                            color: Colors.transparent,
-                            child: SwitchListTile.adaptive(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                  l10n.tr('ffmpegAllowDuringRecordingTitle')),
-                              subtitle: Text(
-                                l10n.tr(
-                                    'ffmpegAllowDuringRecordingDescription'),
-                              ),
-                              value: _ffmpegAllowDuringRecording,
-                              onChanged: ffmpegControlsEnabled
-                                  ? _setFfmpegAllowDuringRecordingEnabled
-                                  : null,
-                            ),
-                          ),
-                          if (_ffmpegAllowDuringRecording)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  size: 16,
-                                  color: Colors.amber.shade700,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    l10n.tr(
-                                      'ffmpegAllowDuringRecordingWarning',
-                                    ),
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: Colors.amber.shade700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          const SizedBox(height: 8),
-                          Opacity(
-                            opacity: ffmpegLimitEnabled ? 1.0 : 0.5,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  l10n.tr('ffmpegMaxActiveRecordingsTitle'),
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    color: ffmpegLimitEnabled
-                                        ? null
-                                        : colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  l10n.tr(
-                                      'ffmpegMaxActiveRecordingsDescription'),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: ffmpegLimitEnabled
-                                        ? null
-                                        : colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _ffmpegAllowDuringRecordingMaxActive == 0
-                                      ? l10n
-                                          .tr('ffmpegMaxActiveUnlimitedOption')
-                                      : l10n.tr(
-                                          'ffmpegMaxActiveOption',
-                                          params: {
-                                            'value':
-                                                '$_ffmpegAllowDuringRecordingMaxActive'
-                                          },
-                                        ),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                  strutStyle: StrutStyle(
-                                    fontSize:
-                                        theme.textTheme.bodySmall?.fontSize,
-                                    height: 1.25,
-                                    forceStrutHeight: true,
-                                  ),
-                                ),
-                                Slider(
-                                  value: _ffmpegAllowDuringRecordingMaxActive
-                                      .toDouble(),
-                                  min: 0,
-                                  max: 5,
-                                  divisions: 5,
-                                  label: _ffmpegAllowDuringRecordingMaxActive ==
-                                          0
-                                      ? l10n
-                                          .tr('ffmpegMaxActiveUnlimitedOption')
-                                      : l10n.tr(
-                                          'ffmpegMaxActiveOption',
-                                          params: {
-                                            'value':
-                                                '$_ffmpegAllowDuringRecordingMaxActive'
-                                          },
-                                        ),
-                                  onChanged: ffmpegLimitEnabled
-                                      ? (value) {
-                                          setState(() {
-                                            _ffmpegAllowDuringRecordingMaxActive =
-                                                value.round();
-                                          });
-                                        }
-                                      : null,
-                                  onChangeEnd: ffmpegLimitEnabled
-                                      ? (value) {
-                                          _setFfmpegAllowDuringRecordingMaxActive(
-                                            value.round(),
-                                          );
-                                        }
-                                      : null,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                  SettingsSectionCard(
+                    icon: Icons.transform_rounded,
+                    title: l10n.tr('conversionPolicyTitle'),
+                    description: l10n.tr('conversionPolicyDescription'),
+                    children: [
+                      Text(
+                        l10n.tr('fileConversionTitle'),
+                        style: theme.textTheme.titleSmall,
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.tr('convertToMp4Description'),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      SettingsSwitchTile(
+                        title: l10n.tr('convertToMp4Title'),
+                        subtitle: l10n.tr('convertToMp4SecondaryDescription'),
+                        value: _convertToMp4,
+                        enabled: widget.controlsEnabled,
+                        onChanged: _setConvertToMp4Enabled,
+                      ),
+                      SettingsSwitchTile(
+                        title: l10n.tr('deleteSourceAfterConvertTitle'),
+                        subtitle:
+                            l10n.tr('deleteSourceAfterConvertDescription'),
+                        value: _deleteSourceAfterConvert,
+                        enabled: widget.controlsEnabled && _convertToMp4,
+                        onChanged: _setDeleteSourceAfterConvertEnabled,
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsSwitchTile(
+                        title: l10n.tr('ffmpegAllowDuringRecordingTitle'),
+                        subtitle:
+                            l10n.tr('ffmpegAllowDuringRecordingDescription'),
+                        value: _ffmpegAllowDuringRecording,
+                        enabled: ffmpegControlsEnabled,
+                        onChanged: _setFfmpegAllowDuringRecordingEnabled,
+                      ),
+                      if (_ffmpegAllowDuringRecording)
+                        SettingsHint(
+                          tone: SettingsHintTone.warning,
+                          text: l10n.tr('ffmpegAllowDuringRecordingWarning'),
+                        ),
+                      const SizedBox(height: 8),
+                      SettingsRangeSlider(
+                        title: l10n.tr('ffmpegMaxActiveRecordingsTitle'),
+                        description:
+                            l10n.tr('ffmpegMaxActiveRecordingsDescription'),
+                        value: _ffmpegAllowDuringRecordingMaxActive,
+                        min: 0,
+                        max: 5,
+                        divisions: 5,
+                        valueLabel: _ffmpegAllowDuringRecordingMaxActive == 0
+                            ? l10n.tr('ffmpegMaxActiveUnlimitedOption')
+                            : l10n.tr(
+                                'ffmpegMaxActiveOption',
+                                params: {
+                                  'value':
+                                      '$_ffmpegAllowDuringRecordingMaxActive'
+                                },
+                              ),
+                        enabled: ffmpegLimitEnabled,
+                        dimmedWhenDisabled: true,
+                        onChanged: (value) {
+                          setState(() {
+                            _ffmpegAllowDuringRecordingMaxActive = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setFfmpegAllowDuringRecordingMaxActive(value);
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   Text(
@@ -2155,136 +1641,113 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.code_outlined),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('environmentSettingsTitle'),
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Icons.warning_amber_rounded,
-                                size: 16,
-                                color: colorScheme.error,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('environmentSettingsWarning'),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.error,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: widget.controlsEnabled
-                                ? () => _showEnvironmentSettingDialog()
-                                : null,
-                            icon: const Icon(Icons.add),
-                            label: Text(l10n.tr('addEnvironmentSetting')),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.tr('savedEnvironmentSettingsTitle'),
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          if (customEnvironmentEntries.isEmpty)
-                            Text(
-                              l10n.tr('environmentSettingsEmpty'),
-                              style: theme.textTheme.bodySmall,
-                            )
-                          else
-                            ...customEnvironmentEntries.map((entry) {
-                              // 在這裡包上 Material
-                              return Material(
-                                color: Colors.transparent,
-                                // 保持透明，露出底下的 DecoratedBox 顏色
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(entry.key),
-                                  subtitle: Text(
-                                    entry.value.isEmpty
-                                        ? l10n.tr('environmentValueEmpty')
-                                        : entry.value,
-                                  ),
-                                  trailing: IconButton(
-                                    onPressed: widget.controlsEnabled
-                                        ? () =>
-                                            _removeEnvironmentSetting(entry.key)
-                                        : null,
-                                    icon: const Icon(Icons.delete_outline),
-                                    tooltip:
-                                        l10n.tr('removeEnvironmentSetting'),
-                                  ),
-                                  onTap: widget.controlsEnabled
-                                      ? () => _showEnvironmentSettingDialog(
-                                          initialKey: entry.key)
-                                      : null,
-                                ),
-                              );
-                            }),
-                        ],
+                  SettingsSectionCard(
+                    icon: Icons.code_outlined,
+                    title: l10n.tr('environmentSettingsTitle'),
+                    headerSpacing: 8,
+                    children: [
+                      SettingsHint(
+                        tone: SettingsHintTone.error,
+                        text: l10n.tr('environmentSettingsWarning'),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: widget.controlsEnabled
+                            ? () => _showEnvironmentSettingDialog()
+                            : null,
+                        icon: const Icon(Icons.add),
+                        label: Text(l10n.tr('addEnvironmentSetting')),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        l10n.tr('savedEnvironmentSettingsTitle'),
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      if (customEnvironmentEntries.isEmpty)
+                        Text(
+                          l10n.tr('environmentSettingsEmpty'),
+                          style: theme.textTheme.bodySmall,
+                        )
+                      else
+                        ...customEnvironmentEntries.map((entry) {
+                          // 在這裡包上 Material
+                          return Material(
+                            color: Colors.transparent,
+                            // 保持透明，露出底下的 DecoratedBox 顏色
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(entry.key),
+                              subtitle: Text(
+                                entry.value.isEmpty
+                                    ? l10n.tr('environmentValueEmpty')
+                                    : entry.value,
+                              ),
+                              trailing: IconButton(
+                                onPressed: widget.controlsEnabled
+                                    ? () => _removeEnvironmentSetting(entry.key)
+                                    : null,
+                                icon: const Icon(Icons.delete_outline),
+                                tooltip: l10n.tr('removeEnvironmentSetting'),
+                              ),
+                              onTap: widget.controlsEnabled
+                                  ? () => _showEnvironmentSettingDialog(
+                                      initialKey: entry.key)
+                                  : null,
+                            ),
+                          );
+                        }),
+                    ],
                   ),
                   const SizedBox(height: 12),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.description_outlined),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('bootstrapLogTitle'),
-                                  style: theme.textTheme.titleMedium,
+                  SettingsSectionCard(
+                    icon: Icons.description_outlined,
+                    title: l10n.tr('bootstrapLogTitle'),
+                    description: l10n.tr('bootstrapLogDescription'),
+                    descriptionStyle: theme.textTheme.bodyMedium,
+                    headerSpacing: 12,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: _downloadingBootstrapLog
+                            ? null
+                            : _downloadBootstrapLog,
+                        icon: _downloadingBootstrapLog
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.tr('bootstrapLogDescription'),
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 12),
+                              )
+                            : const Icon(Icons.download_rounded),
+                        label: Text(
+                          _downloadingBootstrapLog
+                              ? l10n.tr('downloadingLog')
+                              : l10n.tr('downloadBootstrapLog'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SettingsSectionCard(
+                    icon: Icons.playlist_add_check_outlined,
+                    title: l10n.tr('subscriptionListTransferTitle'),
+                    description: l10n.tr('subscriptionListTransferDescription'),
+                    descriptionStyle: theme.textTheme.bodyMedium,
+                    headerSpacing: 12,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
                           FilledButton.tonalIcon(
-                            onPressed: _downloadingBootstrapLog
+                            onPressed: (_importingSubscriptionList ||
+                                    _exportingSubscriptionList ||
+                                    _resettingSubscriptionList)
                                 ? null
-                                : _downloadBootstrapLog,
-                            icon: _downloadingBootstrapLog
+                                : _exportSubscriptionList,
+                            icon: _exportingSubscriptionList
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
@@ -2292,112 +1755,52 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Icon(Icons.download_rounded),
+                                : const Icon(Icons.upload_file_outlined),
                             label: Text(
-                              _downloadingBootstrapLog
-                                  ? l10n.tr('downloadingLog')
-                                  : l10n.tr('downloadBootstrapLog'),
+                              l10n.tr('exportSubscriptionList'),
+                            ),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: (_importingSubscriptionList ||
+                                    _exportingSubscriptionList ||
+                                    _resettingSubscriptionList)
+                                ? null
+                                : _importSubscriptionList,
+                            icon: _importingSubscriptionList
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.download_outlined),
+                            label: Text(
+                              l10n.tr('importSubscriptionList'),
+                            ),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: (_importingSubscriptionList ||
+                                    _exportingSubscriptionList ||
+                                    _resettingSubscriptionList)
+                                ? null
+                                : _resetSubscriptionList,
+                            icon: _resettingSubscriptionList
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.restart_alt_rounded),
+                            label: Text(
+                              l10n.tr('resetSubscriptionList'),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.playlist_add_check_outlined),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('subscriptionListTransferTitle'),
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.tr('subscriptionListTransferDescription'),
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              FilledButton.tonalIcon(
-                                onPressed: (_importingSubscriptionList ||
-                                        _exportingSubscriptionList ||
-                                        _resettingSubscriptionList)
-                                    ? null
-                                    : _exportSubscriptionList,
-                                icon: _exportingSubscriptionList
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.upload_file_outlined),
-                                label: Text(
-                                  l10n.tr('exportSubscriptionList'),
-                                ),
-                              ),
-                              FilledButton.tonalIcon(
-                                onPressed: (_importingSubscriptionList ||
-                                        _exportingSubscriptionList ||
-                                        _resettingSubscriptionList)
-                                    ? null
-                                    : _importSubscriptionList,
-                                icon: _importingSubscriptionList
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.download_outlined),
-                                label: Text(
-                                  l10n.tr('importSubscriptionList'),
-                                ),
-                              ),
-                              FilledButton.tonalIcon(
-                                onPressed: (_importingSubscriptionList ||
-                                        _exportingSubscriptionList ||
-                                        _resettingSubscriptionList)
-                                    ? null
-                                    : _resetSubscriptionList,
-                                icon: _resettingSubscriptionList
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.restart_alt_rounded),
-                                label: Text(
-                                  l10n.tr('resetSubscriptionList'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
