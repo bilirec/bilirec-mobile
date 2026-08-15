@@ -15,18 +15,23 @@ int parseMaxConcurrentRecordings(Map<String, String> env) {
 }
 
 /// Updates [env] for microSD wear protection (SEQUENTIAL_WRITE + flush period).
+///
+/// Video and danmaku flush intervals stay aligned so both writers share the
+/// same write cadence on a slow card.
 Map<String, String> applyStorageProtectionEnv({
   required Map<String, String> env,
   required bool protectionEnabled,
   required int maxConcurrent,
 }) {
   if (protectionEnabled) {
+    final flushPeriodSecs = '${computeFlushPeriodSecs(maxConcurrent)}';
     env['SEQUENTIAL_WRITE'] = 'true';
-    env['LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'] =
-        '${computeFlushPeriodSecs(maxConcurrent)}';
+    env['LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'] = flushPeriodSecs;
+    env['DANMAKU_WRITER_FLUSH_PERIOD_SECS'] = flushPeriodSecs;
   } else {
     env['SEQUENTIAL_WRITE'] = 'false';
     env.remove('LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS');
+    env.remove('DANMAKU_WRITER_FLUSH_PERIOD_SECS');
   }
   return env;
 }

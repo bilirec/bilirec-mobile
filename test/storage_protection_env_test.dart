@@ -26,6 +26,7 @@ void main() {
 
       expect(env['SEQUENTIAL_WRITE'], 'true');
       expect(env['LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'], '15');
+      expect(env['DANMAKU_WRITER_FLUSH_PERIOD_SECS'], '15');
     });
 
     test('disabled clears flush period', () {
@@ -33,6 +34,7 @@ void main() {
         env: <String, String>{
           'SEQUENTIAL_WRITE': 'true',
           'LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS': '20',
+          'DANMAKU_WRITER_FLUSH_PERIOD_SECS': '20',
         },
         protectionEnabled: false,
         maxConcurrent: 4,
@@ -40,6 +42,7 @@ void main() {
 
       expect(env['SEQUENTIAL_WRITE'], 'false');
       expect(env.containsKey('LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'), isFalse);
+      expect(env.containsKey('DANMAKU_WRITER_FLUSH_PERIOD_SECS'), isFalse);
     });
 
     test('enabled updates flush when concurrent changes', () {
@@ -50,6 +53,7 @@ void main() {
       );
 
       expect(env['LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'], '30');
+      expect(env['DANMAKU_WRITER_FLUSH_PERIOD_SECS'], '30');
     });
   });
 

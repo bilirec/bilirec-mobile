@@ -69,6 +69,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   static const int _defaultMinDiskSpaceGb = 5;
   static const int _defaultMaxRetryMinutes = 10;
   static const int _defaultMaxConcurrentRecordings = 3;
+  static const String _defaultDanmakuOutputFormat = 'jsonl';
+  static const String _defaultDanmakuOverflowPolicy = 'drop';
 
   bool _useSsePush = false;
   bool _useAntiSleep = false;
@@ -86,6 +88,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   int _maxRetryMinutes = _defaultMaxRetryMinutes;
   int _maxConcurrentRecordings = _defaultMaxConcurrentRecordings;
   String _recordingRecoveryDuration = 'preserve';
+  String _danmakuOutputFormat = _defaultDanmakuOutputFormat;
+  String _danmakuOverflowPolicy = _defaultDanmakuOverflowPolicy;
   Map<String, String> _developEnvironmentSettings = <String, String>{};
   Future<void> _managedEnvironmentWriteQueue = Future<void>.value();
 
@@ -135,6 +139,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       _maxRetryMinutes = _readMaxRetryMinutes(managedEnvironmentSettings);
       _recordingRecoveryDuration =
           _readRecordingRecoveryDuration(managedEnvironmentSettings);
+      _danmakuOutputFormat =
+          _readDanmakuOutputFormat(managedEnvironmentSettings);
+      _danmakuOverflowPolicy =
+          _readDanmakuOverflowPolicy(managedEnvironmentSettings);
       _maxConcurrentRecordings =
           _readMaxConcurrentRecordings(managedEnvironmentSettings);
       _convertToMp4 =
@@ -279,6 +287,22 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     return 'preserve';
   }
 
+  String _readDanmakuOutputFormat(Map<String, String> env) {
+    final raw = (env['DANMAKU_OUTPUT_FORMAT'] ?? '').trim().toLowerCase();
+    if (raw == 'xml') {
+      return 'xml';
+    }
+    return _defaultDanmakuOutputFormat;
+  }
+
+  String _readDanmakuOverflowPolicy(Map<String, String> env) {
+    final raw = (env['DANMAKU_OVERFLOW_POLICY'] ?? '').trim().toLowerCase();
+    if (raw == 'block') {
+      return 'block';
+    }
+    return _defaultDanmakuOverflowPolicy;
+  }
+
   int _readMaxConcurrentRecordings(Map<String, String> env) {
     final value = _readBoundedIntFromEnv(
       env,
@@ -377,6 +401,31 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     if (!mounted) return;
     setState(() {
       _recordingRecoveryDuration = normalized;
+    });
+  }
+
+  Future<void> _setDanmakuOutputFormat(String value) async {
+    final normalized = value == 'xml' ? 'xml' : _defaultDanmakuOutputFormat;
+    await _setManagedEnvironmentSetting(
+      'DANMAKU_OUTPUT_FORMAT',
+      normalized,
+    );
+    if (!mounted) return;
+    setState(() {
+      _danmakuOutputFormat = normalized;
+    });
+  }
+
+  Future<void> _setDanmakuOverflowPolicy(String value) async {
+    final normalized =
+        value == 'block' ? 'block' : _defaultDanmakuOverflowPolicy;
+    await _setManagedEnvironmentSetting(
+      'DANMAKU_OVERFLOW_POLICY',
+      normalized,
+    );
+    if (!mounted) return;
+    setState(() {
+      _danmakuOverflowPolicy = normalized;
     });
   }
 
@@ -638,7 +687,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
           );
         },
         writeWithSaf: (treeUri) async {
-          final result = await _safExportGateway.writeMergedTextFileFromLocalFiles(
+          final result =
+              await _safExportGateway.writeMergedTextFileFromLocalFiles(
             treeUri: treeUri,
             fileName: outputFileName,
             sourceFiles: logFiles,
@@ -648,7 +698,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         },
         writeWithPath: (selectedDir) async {
           final writable =
-              await ensureDirectoryWritableWithPermissionFromVersion(selectedDir);
+              await ensureDirectoryWritableWithPermissionFromVersion(
+                  selectedDir);
           if (!writable) {
             throw const _ExportTargetNotWritableException();
           }
@@ -721,7 +772,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         await _mergeBootstrapLogsIntoTarget(logFiles, targetFile);
         return true;
       } catch (e) {
-        if (retriedAfterPermissionRequest || !_isPermissionLikeStorageFailure(e)) {
+        if (retriedAfterPermissionRequest ||
+            !_isPermissionLikeStorageFailure(e)) {
           rethrow;
         }
 
@@ -826,7 +878,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     final databaseDir =
         (_developEnvironmentSettings['DATABASE_DIR'] ?? '').trim();
     if (databaseDir.isNotEmpty) {
-      debugLog('locating subscribes.db in $databaseDir${Platform.pathSeparator}subscribes.db');
+      debugLog(
+          'locating subscribes.db in $databaseDir${Platform.pathSeparator}subscribes.db');
       return File('$databaseDir${Platform.pathSeparator}subscribes.db');
     }
 
@@ -884,7 +937,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         },
         writeWithPath: (selectedDir) async {
           final writable =
-              await ensureDirectoryWritableWithPermissionFromVersion(selectedDir);
+              await ensureDirectoryWritableWithPermissionFromVersion(
+                  selectedDir);
           if (!writable) {
             throw const _ExportTargetNotWritableException();
           }
@@ -928,7 +982,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     }
   }
 
-
   Future<void> _importSubscriptionList() async {
     if (_importingSubscriptionList ||
         _exportingSubscriptionList ||
@@ -962,8 +1015,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       final sourcePath = source.path?.trim();
       final Uint8List? bytes = source.bytes;
       final sourceName = source.name.trim().toLowerCase();
-      final hasDbExtension =
-          sourceName.endsWith('.db') ||
+      final hasDbExtension = sourceName.endsWith('.db') ||
           (sourcePath?.toLowerCase().endsWith('.db') ?? false);
       if ((sourcePath == null || sourcePath.isEmpty) && bytes == null) {
         if (!mounted) return;
@@ -1654,6 +1706,9 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                           ),
                           const SizedBox(height: 8),
                           SegmentedButton<String>(
+                            key: const Key(
+                              'recording_recovery_duration_segments',
+                            ),
                             segments: [
                               ButtonSegment<String>(
                                 value: 'preserve',
@@ -1752,6 +1807,134 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                                         value,
                                       ),
                                     );
+                                  }
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: colorScheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.subtitles_outlined),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  l10n.tr('danmakuPolicyTitle'),
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.tr('danmakuPolicyDescription'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            l10n.tr('danmakuOutputFormatTitle'),
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            l10n.tr('danmakuOutputFormatDescription'),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _danmakuOutputFormat == 'xml'
+                                ? l10n.tr('danmakuOutputFormatXmlHint')
+                                : l10n.tr('danmakuOutputFormatJsonlHint'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SegmentedButton<String>(
+                            key: const Key('danmaku_output_format_segments'),
+                            segments: [
+                              ButtonSegment<String>(
+                                value: 'jsonl',
+                                label: Text(
+                                  l10n.tr('danmakuOutputFormatJsonl'),
+                                ),
+                              ),
+                              ButtonSegment<String>(
+                                value: 'xml',
+                                label: Text(
+                                  l10n.tr('danmakuOutputFormatXml'),
+                                ),
+                              ),
+                            ],
+                            selected: {_danmakuOutputFormat},
+                            onSelectionChanged: widget.controlsEnabled
+                                ? (selection) {
+                                    final value = selection.first;
+                                    setState(() {
+                                      _danmakuOutputFormat = value;
+                                    });
+                                    _setDanmakuOutputFormat(value);
+                                  }
+                                : null,
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            l10n.tr('danmakuOverflowPolicyTitle'),
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            l10n.tr('danmakuOverflowPolicyDescription'),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _danmakuOverflowPolicy == 'block'
+                                ? l10n.tr('danmakuOverflowPolicyBlockHint')
+                                : l10n.tr('danmakuOverflowPolicyDropHint'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SegmentedButton<String>(
+                            key: const Key('danmaku_overflow_policy_segments'),
+                            segments: [
+                              ButtonSegment<String>(
+                                value: 'drop',
+                                label: Text(
+                                  l10n.tr('danmakuOverflowPolicyDrop'),
+                                ),
+                              ),
+                              ButtonSegment<String>(
+                                value: 'block',
+                                label: Text(
+                                  l10n.tr('danmakuOverflowPolicyBlock'),
+                                ),
+                              ),
+                            ],
+                            selected: {_danmakuOverflowPolicy},
+                            onSelectionChanged: widget.controlsEnabled
+                                ? (selection) {
+                                    final value = selection.first;
+                                    setState(() {
+                                      _danmakuOverflowPolicy = value;
+                                    });
+                                    _setDanmakuOverflowPolicy(value);
                                   }
                                 : null,
                           ),

@@ -118,6 +118,15 @@ final _maxConcurrentRecordingsTitleLabels =
     labelsForKey('maxConcurrentRecordingsTitle');
 final _maxConcurrentRecordingsWarningLabels =
     labelsForKey('maxConcurrentRecordingsWarning');
+final _danmakuPolicyTitleLabels = labelsForKey('danmakuPolicyTitle');
+final _danmakuPolicyDescriptionLabels =
+    labelsForKey('danmakuPolicyDescription');
+final _danmakuOutputFormatTitleLabels =
+    labelsForKey('danmakuOutputFormatTitle');
+final _danmakuOverflowPolicyTitleLabels =
+    labelsForKey('danmakuOverflowPolicyTitle');
+final _danmakuOverflowPolicyBlockHintLabels =
+    labelsForKey('danmakuOverflowPolicyBlockHint');
 final _fileConversionTitleLabels = labelsForKey('fileConversionTitle');
 final _conversionPolicyTitleLabels = labelsForKey('conversionPolicyTitle');
 final _convertToMp4TitleLabels = labelsForKey('convertToMp4Title');
@@ -127,8 +136,10 @@ final _deleteSourceAfterConvertTitleLabels =
 final _developerSettingsTitleLabels = labelsForKey('developerSettingsTitle');
 final _developerSectionDescriptionLabels =
     labelsForKey('developerSectionDescription');
-final _environmentSettingsTitleLabels = labelsForKey('environmentSettingsTitle');
-final _environmentSettingsWarningLabels = labelsForKey('environmentSettingsWarning');
+final _environmentSettingsTitleLabels =
+    labelsForKey('environmentSettingsTitle');
+final _environmentSettingsWarningLabels =
+    labelsForKey('environmentSettingsWarning');
 final _addEnvironmentSettingLabels = labelsForKey('addEnvironmentSetting');
 final _saveEnvironmentSettingLabels = labelsForKey('saveEnvironmentSetting');
 final _bootstrapLogTitleLabels = labelsForKey('bootstrapLogTitle');
@@ -232,7 +243,8 @@ void main() {
       _findFirstVisibleText(_recordingPolicyDescriptionLabels),
       findsOneWidget,
     );
-    expect(_findFirstVisibleText(_maxRecordingHoursTitleLabels), findsOneWidget);
+    expect(
+        _findFirstVisibleText(_maxRecordingHoursTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_minDiskSpaceTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_maxRetryMinutesTitleLabels), findsOneWidget);
     expect(
@@ -247,6 +259,19 @@ void main() {
       _findFirstVisibleText(_maxConcurrentRecordingsWarningLabels),
       findsOneWidget,
     );
+    expect(_findFirstVisibleText(_danmakuPolicyTitleLabels), findsOneWidget);
+    expect(
+      _findFirstVisibleText(_danmakuPolicyDescriptionLabels),
+      findsOneWidget,
+    );
+    expect(
+      _findFirstVisibleText(_danmakuOutputFormatTitleLabels),
+      findsOneWidget,
+    );
+    expect(
+      _findFirstVisibleText(_danmakuOverflowPolicyTitleLabels),
+      findsOneWidget,
+    );
     expect(_findFirstVisibleText(_fileConversionTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_conversionPolicyTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_convertToMp4TitleLabels), findsOneWidget);
@@ -259,15 +284,19 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(Slider), findsWidgets);
-    expect(_findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
+    expect(
+        _findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
     expect(
       _findFirstVisibleText(_developerSectionDescriptionLabels),
       findsOneWidget,
     );
-    expect(_findFirstVisibleText(_environmentSettingsTitleLabels), findsOneWidget);
-    expect(_findFirstVisibleText(_environmentSettingsWarningLabels), findsOneWidget);
+    expect(
+        _findFirstVisibleText(_environmentSettingsTitleLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_environmentSettingsWarningLabels),
+        findsOneWidget);
     expect(_findFirstVisibleText(_bootstrapLogTitleLabels), findsOneWidget);
-    expect(_findFirstVisibleText(_bootstrapLogDescriptionLabels), findsOneWidget);
+    expect(
+        _findFirstVisibleText(_bootstrapLogDescriptionLabels), findsOneWidget);
     expect(
       _findFirstWidgetWithText(FilledButton, _downloadBootstrapLogLabels),
       findsOneWidget,
@@ -311,8 +340,10 @@ void main() {
     await tester.tap(addEnvironmentButton);
     await tester.pumpAndSettle();
 
-    expect(_findFirstVisibleText(_addEnvironmentSettingLabels), findsNWidgets(2));
-    expect(_findFirstVisibleText(_saveEnvironmentSettingLabels), findsOneWidget);
+    expect(
+        _findFirstVisibleText(_addEnvironmentSettingLabels), findsNWidgets(2));
+    expect(
+        _findFirstVisibleText(_saveEnvironmentSettingLabels), findsOneWidget);
     expect(find.byKey(const Key('env_key_input')), findsOneWidget);
     expect(find.byKey(const Key('env_value_input')), findsOneWidget);
 
@@ -356,7 +387,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final recoveryButton = tester.widget<SegmentedButton<String>>(
-      find.byType(SegmentedButton<String>),
+      find.byKey(const Key('recording_recovery_duration_segments')),
     );
     recoveryButton.onSelectionChanged?.call({'reset'});
     await tester.pumpAndSettle();
@@ -385,7 +416,38 @@ void main() {
     expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
   });
 
-  testWidgets('microSD 磨損保護開關會更新 SEQUENTIAL_WRITE 與 flush 環境參數', (tester) async {
+  testWidgets('彈幕策略設定變更會更新環境參數', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+
+    expect(_findFirstVisibleText(_danmakuOverflowPolicyBlockHintLabels),
+        findsNothing);
+
+    final formatButton = tester.widget<SegmentedButton<String>>(
+      find.byKey(const Key('danmaku_output_format_segments')),
+    );
+    formatButton.onSelectionChanged?.call({'xml'});
+    await tester.pumpAndSettle();
+
+    final overflowButton = tester.widget<SegmentedButton<String>>(
+      find.byKey(const Key('danmaku_overflow_policy_segments')),
+    );
+    overflowButton.onSelectionChanged?.call({'block'});
+    await tester.pumpAndSettle();
+
+    expect(_findFirstVisibleText(_danmakuOverflowPolicyBlockHintLabels),
+        findsOneWidget);
+
+    final envSettings = await Preferences.getManagedEnvironmentSettings();
+    expect(envSettings['DANMAKU_OUTPUT_FORMAT'], 'xml');
+    expect(envSettings['DANMAKU_OVERFLOW_POLICY'], 'block');
+  });
+
+  testWidgets('microSD 磨損保護開關會更新 SEQUENTIAL_WRITE 與 flush 環境參數',
+      (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
@@ -399,7 +461,10 @@ void main() {
 
     var envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['SEQUENTIAL_WRITE'], isNot('true'));
-    expect(envSettings.containsKey('LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'), isFalse);
+    expect(envSettings.containsKey('LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'),
+        isFalse);
+    expect(
+        envSettings.containsKey('DANMAKU_WRITER_FLUSH_PERIOD_SECS'), isFalse);
 
     await _setRowSwitchByLabels(
       tester,
@@ -409,6 +474,7 @@ void main() {
     envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['SEQUENTIAL_WRITE'], 'true');
     expect(envSettings['LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'], '15');
+    expect(envSettings['DANMAKU_WRITER_FLUSH_PERIOD_SECS'], '15');
 
     await _setRowSwitchByLabels(
       tester,
@@ -417,7 +483,10 @@ void main() {
     );
     envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['SEQUENTIAL_WRITE'], 'false');
-    expect(envSettings.containsKey('LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'), isFalse);
+    expect(envSettings.containsKey('LIVE_STREAM_WRITER_FLUSH_PERIOD_SECS'),
+        isFalse);
+    expect(
+        envSettings.containsKey('DANMAKU_WRITER_FLUSH_PERIOD_SECS'), isFalse);
   });
 
   testWidgets('服務啟動後設定按鈕會被禁用', (tester) async {

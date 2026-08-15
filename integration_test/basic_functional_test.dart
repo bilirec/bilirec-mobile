@@ -34,6 +34,7 @@ final _microSdWearProtectionTitleLabels =
 final _changePathLabels = labelsForKey('changePath');
 final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
 final _antiSleepTitleLabels = labelsForKey('antiSleepTitle');
+final _danmakuPolicyTitleLabels = labelsForKey('danmakuPolicyTitle');
 final _developerSettingsTitleLabels = labelsForKey('developerSettingsTitle');
 final _environmentSettingsTitleLabels = labelsForKey('environmentSettingsTitle');
 final _addEnvironmentSettingLabels = labelsForKey('addEnvironmentSetting');
@@ -257,6 +258,7 @@ void main() {
       expect(findFirstVisibleText(_changePathLabels), findsOneWidget);
       expect(findFirstVisibleText(_ssePushSwitchTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_antiSleepTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_danmakuPolicyTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_environmentSettingsTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_addEnvironmentSettingLabels), findsOneWidget);
