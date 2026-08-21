@@ -328,7 +328,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('可透過 dialog 新增環境參數並持久化', (tester) async {
+  testWidgets('可透過 dialog 新增環境變數並持久化', (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
@@ -363,7 +363,7 @@ void main() {
     expect(envSettings['BILIREC_ENV'], 'staging');
   });
 
-  testWidgets('錄製策略設定變更會更新環境參數', (tester) async {
+  testWidgets('錄製策略設定變更會更新環境變數', (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
@@ -416,7 +416,7 @@ void main() {
     expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
   });
 
-  testWidgets('彈幕策略設定變更會更新環境參數', (tester) async {
+  testWidgets('彈幕策略設定變更會更新環境變數', (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
 
@@ -446,7 +446,7 @@ void main() {
     expect(envSettings['DANMAKU_OVERFLOW_POLICY'], 'block');
   });
 
-  testWidgets('microSD 磨損保護開關會更新 SEQUENTIAL_WRITE 與 flush 環境參數',
+  testWidgets('microSD 磨損保護開關會更新 SEQUENTIAL_WRITE 與 flush 環境變數',
       (tester) async {
     await tester.pumpWidget(const BilirecApp());
     await tester.pumpAndSettle();
