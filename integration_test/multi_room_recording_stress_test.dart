@@ -14,6 +14,10 @@ const _logTag = 'MULTI_ROOM_RECORDING_STRESS_TEST';
 
 const _minValidRecordBytes = 5 * 1024 * 1024;
 const _minValidSegmentBytes = 256 * 1024;
+// HLS playlist 404 / init discontinuity can rotate to a tiny fMP4
+// (ftyp+moov only, often ~1 KiB) before media resumes. Those are
+// recovery artifacts, not failed media segments.
+const _tinyRecoveryFragmentBytes = 16 * 1024;
 const _maxRotationPer15Minutes = 10;
 
 final _startLabels = labelsForKey('start');
@@ -110,6 +114,7 @@ Future<void> _assertOutputFilesForRooms(
     var roomTotalBytes = 0;
     var roomSegmentCount = 0;
     var roomRotationCount = 0;
+    var roomTinyFmp4Count = 0;
 
     for (final dir in roomDirs) {
       final dirPath = asString(dir['path']);
@@ -135,6 +140,16 @@ Future<void> _assertOutputFilesForRooms(
         if (segmentIndex != null) {
           roomRotationCount++;
         }
+        final lowerName = fileName.toLowerCase();
+        final isTinyFmp4RecoveryFragment =
+            lowerName.endsWith('.fmp4') && size < _tinyRecoveryFragmentBytes;
+        if (isTinyFmp4RecoveryFragment) {
+          roomTinyFmp4Count++;
+          _log(
+            'room=$roomId skip tiny fMP4 recovery fragment: path=$filePath size=$size bytes',
+          );
+          continue;
+        }
         expect(
           size,
           greaterThan(_minValidSegmentBytes),
@@ -144,7 +159,7 @@ Future<void> _assertOutputFilesForRooms(
     }
 
     _log(
-      'room=$roomId verify summary: totalBytes=$roomTotalBytes segmentCount=$roomSegmentCount rotationCount=$roomRotationCount rotationLimit=$rotationLimit',
+      'room=$roomId verify summary: totalBytes=$roomTotalBytes segmentCount=$roomSegmentCount tinyFmp4Count=$roomTinyFmp4Count rotationCount=$roomRotationCount rotationLimit=$rotationLimit',
     );
 
     expect(
