@@ -106,6 +106,10 @@ final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
 final _ssePushDescriptionLabels = labelsForKey('ssePushDescription');
 final _ssePushHintLabels = labelsForKey('ssePushHint');
 final _antiSleepDisabledHintLabels = labelsForKey('antiSleepDisabledHint');
+final _autoRunOnBootTitleLabels = labelsForKey('autoRunOnBootTitle');
+final _autoRunOnBootDescriptionLabels =
+    labelsForKey('autoRunOnBootDescription');
+final _autoRunOnBootHintLabels = labelsForKey('autoRunOnBootHint');
 final _recordingPolicyTitleLabels = labelsForKey('recordingPolicyTitle');
 final _recordingPolicyDescriptionLabels =
     labelsForKey('recordingPolicyDescription');
@@ -238,6 +242,12 @@ void main() {
     expect(_findFirstVisibleText(_ssePushDescriptionLabels), findsOneWidget);
     expect(_findFirstVisibleText(_ssePushHintLabels), findsOneWidget);
     expect(_findFirstVisibleText(_antiSleepDisabledHintLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_autoRunOnBootTitleLabels), findsOneWidget);
+    expect(
+      _findFirstVisibleText(_autoRunOnBootDescriptionLabels),
+      findsOneWidget,
+    );
+    expect(_findFirstVisibleText(_autoRunOnBootHintLabels), findsOneWidget);
     expect(_findFirstVisibleText(_recordingPolicyTitleLabels), findsOneWidget);
     expect(
       _findFirstVisibleText(_recordingPolicyDescriptionLabels),

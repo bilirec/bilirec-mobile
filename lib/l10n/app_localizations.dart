@@ -184,6 +184,11 @@ class AppLocalizations {
       'antiSleepDescription': '如在關掉手機屏幕並閑置1~2小時後出現錄製斷斷續續或中斷的情況，可嘗試啓用此模式。',
       'antiSleepDisabledHint': '此功能會增加電池消耗，長時間錄製下建議連接電源使用。',
       'antiSleepEnabledHint': '通知欄標題顯示 ⚡ 即代表防休眠已生效。',
+      'autoRunOnBootTitle': '開機自動恢復服務',
+      'autoRunOnBootDescription':
+          '手機重啟後，若當時服務仍在運行，會自動再拉起。已手動停止則不會自啟。',
+      'autoRunOnBootHint':
+          '開啟後需再成功啟動一次服務才會生效。部分國產系統還要在系統設定允許自啟動。',
       'recordingPolicyTitle': '錄製策略',
       'recordingPolicyDescription': '以下選項會影響錄製時長、重試行為與資源占用，可依裝置狀況調整。',
       'maxRecordingHoursTitle': '單次錄製時長上限',
@@ -374,6 +379,11 @@ class AppLocalizations {
       'antiSleepDescription': '如在关掉手机屏幕并闲置1~2小时后出现录制断断续续或中断的情况，可尝试启用此模式。',
       'antiSleepDisabledHint': '此功能会增加电池消耗，长时间录制下建议连接电源使用。',
       'antiSleepEnabledHint': '通知栏标题显示 ⚡ 即代表防休眠已生效。',
+      'autoRunOnBootTitle': '开机自动恢复服务',
+      'autoRunOnBootDescription':
+          '手机重启后，若当时服务仍在运行，会自动再拉起。已手动停止则不会自启。',
+      'autoRunOnBootHint':
+          '开启后需再成功启动一次服务才会生效。部分国产系统还要在系统设置允许自启动。',
       'recordingPolicyTitle': '录制策略',
       'recordingPolicyDescription': '以下选项会影响录制时长、重试行为与资源占用，可按设备状态调整。',
       'maxRecordingHoursTitle': '单次录制时长上限',

@@ -834,6 +834,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         }
 
         final usingAntiSleep = await Preferences.getEnableAntiSleep();
+        final autoRunOnBoot = await Preferences.getEnableAutoRunOnBoot();
 
         FlutterForegroundTask.init(
           androidNotificationOptions: AndroidNotificationOptions(
@@ -851,7 +852,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
           ),
           foregroundTaskOptions: ForegroundTaskOptions(
             eventAction: ForegroundTaskEventAction.repeat(15000),
-            autoRunOnBoot: false,
+            autoRunOnBoot: autoRunOnBoot,
             autoRunOnMyPackageReplaced: true,
             allowWakeLock: true,
             allowWifiLock:

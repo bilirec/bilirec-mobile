@@ -7,6 +7,7 @@ const String _stoppedByUserKey = 'stopped_by_user';
 const String _localeCodeKey = 'locale_code';
 const String _enableSsePushKey = 'enable_sse_push';
 const String _enableAntiSleepKey = 'enable_antisleep';
+const String _enableAutoRunOnBootKey = 'enable_auto_run_on_boot';
 const String _skippedUpdateVersionKey = 'skipped_update_version';
 const String _managedEnvironmentSettingsKey = 'managed_environment_settings';
 const String _developEnvironmentSettingsKey = 'develop_environment_settings';
@@ -72,6 +73,16 @@ sealed class Preferences {
   static Future<bool> getEnableAntiSleep() async {
     final prefs = _prefs;
     return await prefs.getBool(_enableAntiSleepKey) ?? false;
+  }
+
+  static Future<void> setEnableAutoRunOnBoot(bool value) async {
+    final prefs = _prefs;
+    await prefs.setBool(_enableAutoRunOnBootKey, value);
+  }
+
+  static Future<bool> getEnableAutoRunOnBoot() async {
+    final prefs = _prefs;
+    return await prefs.getBool(_enableAutoRunOnBootKey) ?? false;
   }
 
   static Future<void> setSkippedUpdateVersion(String? version) async {

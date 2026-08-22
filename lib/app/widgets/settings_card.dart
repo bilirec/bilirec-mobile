@@ -81,6 +81,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
   bool _useSsePush = false;
   bool _useAntiSleep = false;
+  bool _useAutoRunOnBoot = false;
   bool _microSdProtectionEnabled = false;
   bool _downloadingBootstrapLog = false;
   bool _exportingSubscriptionList = false;
@@ -129,6 +130,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     final outputPath = await Preferences.getOutputDir() ?? '';
     final useSsePush = await Preferences.getEnableSsePush();
     final useAntiSleep = await Preferences.getEnableAntiSleep();
+    final useAutoRunOnBoot = await Preferences.getEnableAutoRunOnBoot();
     final managedEnvironmentSettings =
         await Preferences.getManagedEnvironmentSettings();
     final developEnvironmentSettings =
@@ -138,6 +140,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     setState(() {
       _useSsePush = useSsePush;
       _useAntiSleep = useAntiSleep;
+      _useAutoRunOnBoot = useAutoRunOnBoot;
       _microSdProtectionEnabled =
           isSequentialWriteEnabled(managedEnvironmentSettings);
       _developEnvironmentSettings = developEnvironmentSettings;
@@ -227,6 +230,14 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     if (!mounted) return;
     setState(() {
       _useAntiSleep = enabled;
+    });
+  }
+
+  Future<void> _setAutoRunOnBootEnabled(bool enabled) async {
+    await Preferences.setEnableAutoRunOnBoot(enabled);
+    if (!mounted) return;
+    setState(() {
+      _useAutoRunOnBoot = enabled;
     });
   }
 
@@ -1301,6 +1312,22 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         text: _useAntiSleep
                             ? l10n.tr('antiSleepEnabledHint')
                             : l10n.tr('antiSleepDisabledHint'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SettingsSectionCard(
+                    children: [
+                      SettingsSwitchRow(
+                        title: l10n.tr('autoRunOnBootTitle'),
+                        description: l10n.tr('autoRunOnBootDescription'),
+                        value: _useAutoRunOnBoot,
+                        enabled: widget.controlsEnabled,
+                        onChanged: _setAutoRunOnBootEnabled,
+                      ),
+                      const SizedBox(height: 12),
+                      SettingsHint(
+                        text: l10n.tr('autoRunOnBootHint'),
                       ),
                     ],
                   ),
