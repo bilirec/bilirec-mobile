@@ -6,14 +6,18 @@ import 'package:bilirec/app/widgets/service_action_section.dart';
 import 'package:bilirec/app/widgets/service_power_button_area.dart';
 import 'package:bilirec/app/widgets/service_status_row.dart';
 import 'package:bilirec/app/widgets/settings_card.dart';
+import 'package:bilirec/app/widgets/unexpected_stop_dialog.dart';
 import 'package:bilirec/foreground/bilirec_task_handler.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/app_update_service.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/debugger.dart';
+import 'package:bilirec/shared/device_uptime.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/preferences.dart';
+import 'package:bilirec/shared/unexpected_stop.dart';
+import 'package:bilirec/shared/unexpected_stop_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
@@ -51,6 +55,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   bool _batteryDialogVisible = false;
   bool _updateDialogVisible = false;
   bool _hasCheckedStartupUpdate = false;
+  bool _hasShownUnexpectedStopPromptThisSession = false;
   String _statusKey = 'initializing';
   Map<String, String> _statusParams = const {};
   final AppUpdateService _appUpdateService = AppUpdateService();
@@ -271,7 +276,70 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   Future<void> _runStartupDialogs() async {
     await _ensureBatteryDialog();
+    await _maybeShowUnexpectedStopDialog();
     await _checkForAppUpdateOnStartup();
+  }
+
+  Future<void> _maybeShowUnexpectedStopDialog() async {
+    if (!Platform.isAndroid || !mounted) {
+      return;
+    }
+    if (_hasShownUnexpectedStopPromptThisSession) {
+      return;
+    }
+
+    final running = await _isServiceCoreRunning();
+    final snapshot = await UnexpectedStopPreferences.loadSnapshot();
+    final autoRunOnBootEnabled = await Preferences.getEnableAutoRunOnBoot();
+    final currentBootId = await readBootId();
+    final cause = classifyUnexpectedStop(
+      serviceRunning: running,
+      intendedRunning: snapshot.intendedRunning,
+      stoppedByUser: snapshot.stoppedByUser,
+      promptMuted: snapshot.promptMuted,
+      lastStartId: snapshot.lastStartId,
+      consumedStartId: snapshot.consumedStartId,
+      lastBootId: snapshot.lastBootId,
+      currentBootId: currentBootId,
+    );
+    final prompt = resolveUnexpectedStopPrompt(
+      cause: cause,
+      autoRunOnBootEnabled: autoRunOnBootEnabled,
+    );
+    if (prompt == null || !mounted) {
+      return;
+    }
+
+    _hasShownUnexpectedStopPromptThisSession = true;
+    final action = await showDialog<UnexpectedStopDialogAction>(
+      context: context,
+      builder: (dialogContext) => UnexpectedStopDialog(prompt: prompt),
+    );
+    if (!mounted) {
+      return;
+    }
+
+    await UnexpectedStopPreferences.consumePrompt();
+    switch (action) {
+      case UnexpectedStopDialogAction.mute:
+        await UnexpectedStopPreferences.setPromptMuted(true);
+        break;
+      case UnexpectedStopDialogAction.enableAutoRunOnBoot:
+        await Preferences.setEnableAutoRunOnBoot(true);
+        if (!mounted) {
+          return;
+        }
+        showAppToast(context, l10n.tr('unexpectedStopBootEnabledHint'));
+        break;
+      case UnexpectedStopDialogAction.openOemDocs:
+        await openUrlPreferChrome(
+          Uri.parse(androidMainlandDocsUrl(widget.currentLocale)),
+        );
+        break;
+      case UnexpectedStopDialogAction.dismiss:
+      case null:
+        break;
+    }
   }
 
   Future<void> _checkForAppUpdateOnStartup() async {
@@ -907,10 +975,10 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         if (!_isLatestRequest(requestId) || !mounted) return;
         await Future.delayed(const Duration(seconds: 1));
 
-        debugLog('[STOP/UI][$stopOpId] before setStoppedByUser(true)');
-        await Preferences.setStoppedByUser(true);
+        debugLog('[STOP/UI][$stopOpId] before markStoppedByUser()');
+        await UnexpectedStopPreferences.markStoppedByUser();
         debugLog(
-            '[STOP/UI][$stopOpId] after setStoppedByUser(true) (${stopSw.elapsedMilliseconds}ms)');
+            '[STOP/UI][$stopOpId] after markStoppedByUser() (${stopSw.elapsedMilliseconds}ms)');
         debugLog(
             '[STOP/UI][$stopOpId] before FlutterForegroundTask.stopService()');
         final stopped = await FlutterForegroundTask.stopService();
@@ -930,7 +998,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         if (ok) {
           unawaited(_confirmStopped(requestId));
         } else {
-          Preferences.setStoppedByUser(false);
+          await UnexpectedStopPreferences.restoreAfterFailedStop();
         }
         debugLog(
             '[STOP/UI][$stopOpId] completed (ok=$ok, total=${stopSw.elapsedMilliseconds}ms)');

@@ -5,7 +5,9 @@ import 'dart:io';
 import 'package:bilirec/foreground/network_lock_service.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/debugger.dart';
+import 'package:bilirec/shared/device_uptime.dart';
 import 'package:bilirec/shared/preferences.dart';
+import 'package:bilirec/shared/unexpected_stop_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -17,13 +19,6 @@ import 'resource_monitor.dart';
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
-
-const AndroidNotificationChannel _ppkAlertChannel = AndroidNotificationChannel(
-  'bilirec_ppk_alert',
-  'Bilirec 重要提醒',
-  description: '當服務被系統中斷時顯示提醒',
-  importance: Importance.high,
-);
 
 class BilirecTaskHandler extends TaskHandler {
   late final ResourceMonitor _monitor;
@@ -59,7 +54,7 @@ class BilirecTaskHandler extends TaskHandler {
           await Preferences.getManagedEnvironmentSettings();
       _developEnvironmentSettings =
           await Preferences.getDevelopEnvironmentSettings();
-      await Preferences.setStoppedByUser(false);
+      await UnexpectedStopPreferences.setStoppedByUser(false);
     } catch (_) {}
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -79,11 +74,6 @@ class BilirecTaskHandler extends TaskHandler {
       _networkLockService = NetworkLockService();
       debugLog('激進防休眠模式已啓用，將在錄製時動態啓停網路鎖定服務');
     }
-
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(_ppkAlertChannel);
 
     final startEnv = <String, String>{..._managedEnvironmentSettings};
     if (outputDir != null && outputDir.isNotEmpty) {
@@ -116,6 +106,11 @@ class BilirecTaskHandler extends TaskHandler {
     });
     await FlutterForegroundTask.saveData(
         key: coreRunningKey, value: _nativeStarted);
+    if (_nativeStarted) {
+      await UnexpectedStopPreferences.markServiceStarted(
+        bootId: await readBootId(),
+      );
+    }
   }
 
   @override
@@ -126,14 +121,14 @@ class BilirecTaskHandler extends TaskHandler {
         _backendWasAlive = false;
         FlutterForegroundTask.sendDataToMain({
           'type': 'backend_dead',
-          'stoppedByUser': await Preferences.getStoppedByUser(),
+          'stoppedByUser': await UnexpectedStopPreferences.getStoppedByUser(),
         });
-        await _notifyPpkKilled();
         await FlutterForegroundTask.saveData(key: coreRunningKey, value: false);
       } else if (alive && !_backendWasAlive) {
         _backendWasAlive = true;
       }
     }
+    await _recordHeartbeat();
 
     final (cpu, ram) = _monitor.getUsage();
     debugLog(
@@ -239,21 +234,10 @@ class BilirecTaskHandler extends TaskHandler {
     }
   }
 
-  Future<void> _notifyPpkKilled() async {
-    await _localNotifications.show(
-      2027,
-      _l10n.tr('ppkKilledTitle'),
-      _l10n.tr('ppkKilledBody'),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'bilirec_ppk_alert',
-          'Bilirec 重要提醒',
-          channelDescription: '當服務被系統中斷時顯示提醒',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
-    );
+  Future<void> _recordHeartbeat() async {
+    try {
+      await UnexpectedStopPreferences.recordBootId(await readBootId());
+    } catch (_) {}
   }
 
   @override
@@ -280,10 +264,11 @@ class BilirecTaskHandler extends TaskHandler {
       debugLog(
           '[STOP/TASK][$opId] after _networkLockService.stop() (${sw.elapsedMilliseconds}ms) result=$stopped');
     }
-    debugLog('[STOP/TASK][$opId] before Preferences.getStoppedByUser()');
-    final stoppedByUser = await Preferences.getStoppedByUser();
     debugLog(
-        '[STOP/TASK][$opId] after Preferences.getStoppedByUser() (${sw.elapsedMilliseconds}ms) value=$stoppedByUser');
+        '[STOP/TASK][$opId] before UnexpectedStopPreferences.getStoppedByUser()');
+    final stoppedByUser = await UnexpectedStopPreferences.getStoppedByUser();
+    debugLog(
+        '[STOP/TASK][$opId] after UnexpectedStopPreferences.getStoppedByUser() (${sw.elapsedMilliseconds}ms) value=$stoppedByUser');
     debugLog('[STOP/TASK][$opId] before sendDataToMain(service_stopped)');
     FlutterForegroundTask.sendDataToMain({
       'type': 'service_stopped',
@@ -315,10 +300,10 @@ class BilirecTaskHandler extends TaskHandler {
       final opId = DateTime.now().microsecondsSinceEpoch;
       final sw = Stopwatch()..start();
       debugLog('[STOP/NOTI][$opId] stop button pressed');
-      debugLog('[STOP/NOTI][$opId] before setStoppedByUser(true)');
-      await Preferences.setStoppedByUser(true);
+      debugLog('[STOP/NOTI][$opId] before markStoppedByUser()');
+      await UnexpectedStopPreferences.markStoppedByUser();
       debugLog(
-          '[STOP/NOTI][$opId] after setStoppedByUser(true) (${sw.elapsedMilliseconds}ms)');
+          '[STOP/NOTI][$opId] after markStoppedByUser() (${sw.elapsedMilliseconds}ms)');
       debugLog('[STOP/NOTI][$opId] before FlutterForegroundTask.stopService()');
       await FlutterForegroundTask.stopService();
       debugLog(

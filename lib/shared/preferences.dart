@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String _outputDirKey = 'output_dir';
-const String _stoppedByUserKey = 'stopped_by_user';
 const String _localeCodeKey = 'locale_code';
 const String _enableSsePushKey = 'enable_sse_push';
 const String _enableAntiSleepKey = 'enable_antisleep';
@@ -16,16 +15,6 @@ const String coreRunningKey = 'core_running';
 
 sealed class Preferences {
   static SharedPreferencesAsync get _prefs => SharedPreferencesAsync();
-
-  static Future<void> setStoppedByUser(bool value) async {
-    final prefs = _prefs;
-    await prefs.setBool(_stoppedByUserKey, value);
-  }
-
-  static Future<bool> getStoppedByUser() async {
-    final prefs = _prefs;
-    return await prefs.getBool(_stoppedByUserKey) ?? false;
-  }
 
   static Future<void> setLocaleCode(String? code) async {
     final prefs = _prefs;
