@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -204,12 +205,45 @@ Future<int> updateRoomConfig(
 
 Future<List<int>> fetchLiveBroadcastRoomIDs({
   String endpoint = defaultBroadcastsEndpoint,
+  int maxAttempts = 3,
 }) async {
+  Object? lastError;
+  StackTrace? lastStack;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await _fetchLiveBroadcastRoomIDsOnce(endpoint);
+    } catch (error, stack) {
+      lastError = error;
+      lastStack = stack;
+      final retryable = error is FormatException ||
+          error is StateError ||
+          error is SocketException ||
+          error is TimeoutException ||
+          error is HttpException;
+      if (!retryable || attempt == maxAttempts) {
+        break;
+      }
+      await Future<void>.delayed(Duration(seconds: attempt * 2));
+    }
+  }
+
+  final error = lastError;
+  if (error is FormatException) {
+    throw StateError('broadcast API 回傳非 JSON: $error');
+  }
+  if (error != null && lastStack != null) {
+    Error.throwWithStackTrace(error, lastStack);
+  }
+  throw StateError('broadcast API 失敗');
+}
+
+Future<List<int>> _fetchLiveBroadcastRoomIDsOnce(String endpoint) async {
   final client = HttpClient();
   try {
     final request = await client
         .getUrl(Uri.parse(endpoint))
         .timeout(const Duration(seconds: 6));
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     final response = await request.close().timeout(const Duration(seconds: 90));
 
     if (response.statusCode != HttpStatus.ok) {
@@ -217,9 +251,23 @@ Future<List<int>> fetchLiveBroadcastRoomIDs({
     }
 
     final body = await response.transform(utf8.decoder).join();
-    final decoded = body.trim().isEmpty ? const [] : jsonDecode(body);
+    final trimmed = body.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('broadcast API empty body');
+    }
+
+    Object? decoded;
+    try {
+      decoded = jsonDecode(trimmed);
+    } on FormatException catch (error) {
+      throw StateError(
+        'broadcast API 回傳非 JSON: $error; body="${_previewText(trimmed)}"',
+      );
+    }
     if (decoded is! List) {
-      throw StateError('broadcast API response is not a list');
+      throw StateError(
+        'broadcast API response is not a list; body="${_previewText(trimmed)}"',
+      );
     }
 
     final ids = <int>{};
@@ -237,6 +285,14 @@ Future<List<int>> fetchLiveBroadcastRoomIDs({
   } finally {
     client.close(force: true);
   }
+}
+
+String _previewText(String text, {int maxLength = 180}) {
+  final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return '${normalized.substring(0, maxLength)}...';
 }
 
 List<int> pickDistinctRoomIDs(
