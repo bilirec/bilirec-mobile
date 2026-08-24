@@ -285,6 +285,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     if (!Platform.isAndroid) return;
     if (!await _appUpdateService.isFirstLaunchAfterUpdate()) return;
     await UnexpectedStopPreferences.consumePrompt();
+    await _appUpdateService.cleanupDownloadedApks();
     await _appUpdateService.acknowledgeInstalledVersion();
   }
 
@@ -355,8 +356,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       return;
     }
     _hasCheckedStartupUpdate = true;
-
-    await _appUpdateService.cleanupDownloadedApks();
 
     final update = await _appUpdateService.checkForUpdate();
     if (!mounted || update == null || _updateDialogVisible) {

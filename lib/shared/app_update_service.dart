@@ -89,10 +89,20 @@ class AppUpdateService {
     return name.toLowerCase().endsWith('.apk');
   }
 
+  static String updateApkFileNameForVersion(String version) {
+    return 'bilirec-update-${normalizeVersionIdentifier(version)}.apk';
+  }
+
+  static bool _isVersionedUpdateApkFileName(String name) {
+    final lower = name.toLowerCase();
+    return lower.startsWith('bilirec-update-') && lower.endsWith('.apk');
+  }
+
   Future<String> currentInstalledVersion() async {
     try {
-      final raw = _currentAppVersionProvider != null
-          ? await _currentAppVersionProvider!()
+      final versionProvider = _currentAppVersionProvider;
+      final raw = versionProvider != null
+          ? await versionProvider()
           : await _updater.getCurrentAppVersion();
       return normalizeVersionIdentifier(raw);
     } catch (e) {
@@ -146,6 +156,38 @@ class AppUpdateService {
         debugLog('app_update: deleted apk ${entity.path}');
       } catch (e) {
         debugLog('app_update: failed to delete apk ${entity.path}: $e');
+      }
+    }
+  }
+
+  @visibleForTesting
+  static Future<void> cleanupOtherVersionedUpdateApks(
+    Directory directory, {
+    required String keepFileName,
+  }) async {
+    if (!await directory.exists()) {
+      return;
+    }
+
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+
+      final fileName = entity.uri.pathSegments.isNotEmpty
+          ? entity.uri.pathSegments.last
+          : '';
+      if (!_isVersionedUpdateApkFileName(fileName) || fileName == keepFileName) {
+        continue;
+      }
+
+      try {
+        await entity.delete();
+        debugLog('app_update: deleted stale update apk ${entity.path}');
+      } catch (e) {
+        debugLog(
+          'app_update: failed to delete stale update apk ${entity.path}: $e',
+        );
       }
     }
   }
@@ -248,7 +290,7 @@ class AppUpdateService {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
     final downloadedAndInstalled = await _downloadAndInstall(
-      candidate.apkUrl,
+      candidate,
       onDownloadProgress: onDownloadProgress,
     );
     if (downloadedAndInstalled) {
@@ -271,15 +313,20 @@ class AppUpdateService {
   }
 
   Future<bool> _downloadAndInstall(
-    String apkUrl, {
+    AppUpdateCandidate candidate, {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
     try {
-      final filePath = await _downloadApkToInternalStorage(
-            apkUrl,
+      final filePath = await downloadApkToInternalStorage(
+            candidate.apkUrl,
+            version: candidate.version,
             onDownloadProgress: onDownloadProgress,
           ) ??
-          await _apkDownloader.downloadAPK(apkUrl, null, onDownloadProgress);
+          await _apkDownloader.downloadAPK(
+            candidate.apkUrl,
+            null,
+            onDownloadProgress,
+          );
       if (filePath == null || filePath.isEmpty) {
         debugLog('app_update: apk download failed');
         return false;
@@ -293,18 +340,34 @@ class AppUpdateService {
     }
   }
 
-  Future<String?> _downloadApkToInternalStorage(
+  @visibleForTesting
+  Future<String?> downloadApkToInternalStorage(
     String apkUrl, {
+    required String version,
     void Function(int received, int total)? onDownloadProgress,
   }) async {
     HttpClient? client;
     IOSink? sink;
     try {
-      await cleanupDownloadedApks();
+      final normalizedVersion = normalizeVersionIdentifier(version);
+      if (normalizedVersion.isEmpty) {
+        debugLog('app_update: skip internal download for empty version');
+        return null;
+      }
 
       final targetDirectory = await _temporaryDirectoryProvider();
-      final fileName = _resolveApkFileName(apkUrl);
+      final fileName = updateApkFileNameForVersion(normalizedVersion);
       final file = File('${targetDirectory.path}/$fileName');
+
+      if (await file.exists() && await file.length() > 0) {
+        debugLog('app_update: reusing downloaded apk ${file.path}');
+        return file.path;
+      }
+
+      await cleanupOtherVersionedUpdateApks(
+        targetDirectory,
+        keepFileName: fileName,
+      );
 
       client = HttpClient();
       final request = await client.getUrl(Uri.parse(apkUrl));
@@ -328,7 +391,7 @@ class AppUpdateService {
       await sink.close();
       sink = null;
 
-      if (!await file.exists()) {
+      if (!await file.exists() || await file.length() == 0) {
         return null;
       }
 
@@ -341,14 +404,5 @@ class AppUpdateService {
       await sink?.close();
       client?.close(force: true);
     }
-  }
-
-  String _resolveApkFileName(String apkUrl) {
-    final uri = Uri.parse(apkUrl);
-    final candidate = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-    if (candidate.toLowerCase().endsWith('.apk')) {
-      return candidate;
-    }
-    return 'bilirec-update-${DateTime.now().millisecondsSinceEpoch}.apk';
   }
 }
