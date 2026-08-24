@@ -56,29 +56,39 @@ class UnexpectedStopDialog extends StatelessWidget {
               ),
               child: Text(l10n.tr(primaryKey)),
             ),
-            if (isBootPrompt)
-              TextButton(
+            if (isBootPrompt) ...[
+              const SizedBox(height: 8),
+              OutlinedButton(
                 onPressed: () => Navigator.of(context)
                     .pop(UnexpectedStopDialogAction.openOemDocs),
                 child: Text(l10n.tr('unexpectedStopViewSetupGuide')),
               ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context)
-                      .pop(UnexpectedStopDialogAction.mute),
-                  style: TextButton.styleFrom(
-                    foregroundColor: colorScheme.onSurfaceVariant,
+            ],
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context)
+                          .pop(UnexpectedStopDialogAction.mute),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colorScheme.onSurfaceVariant,
+                      ),
+                      child: Text(l10n.tr('unexpectedStopDontRemind')),
+                    ),
                   ),
-                  child: Text(l10n.tr('unexpectedStopDontRemind')),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context)
-                      .pop(UnexpectedStopDialogAction.dismiss),
-                  child: Text(l10n.tr('unexpectedStopDismiss')),
-                ),
-              ],
+                  const VerticalDivider(width: 1, thickness: 1),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context)
+                          .pop(UnexpectedStopDialogAction.dismiss),
+                      child: Text(l10n.tr('unexpectedStopDismiss')),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
