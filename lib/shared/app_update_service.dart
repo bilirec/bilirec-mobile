@@ -38,6 +38,7 @@ class AppUpdateService {
     VersionComparator? versionComparator,
     Future<Directory> Function()? temporaryDirectoryProvider,
     Future<Directory?> Function()? externalStorageDirectoryProvider,
+    Future<String> Function()? currentAppVersionProvider,
   })  : _updater = updater ?? GithubReleaseApkUpdater(),
         _apiService = apiService ?? GithubApiService(),
         _apkDownloader = apkDownloader ?? ApkDownloaderService(),
@@ -45,7 +46,8 @@ class AppUpdateService {
         _temporaryDirectoryProvider =
             temporaryDirectoryProvider ?? getTemporaryDirectory,
         _externalStorageDirectoryProvider = externalStorageDirectoryProvider ??
-            getExternalStorageDirectory;
+            getExternalStorageDirectory,
+        _currentAppVersionProvider = currentAppVersionProvider;
 
   final GithubReleaseApkUpdater _updater;
   final GithubApiService _apiService;
@@ -53,6 +55,7 @@ class AppUpdateService {
   final VersionComparator _versionComparator;
   final Future<Directory> Function() _temporaryDirectoryProvider;
   final Future<Directory?> Function() _externalStorageDirectoryProvider;
+  final Future<String> Function()? _currentAppVersionProvider;
 
   static String normalizeVersionIdentifier(String value) {
     final trimmed = value.trim();
@@ -84,6 +87,40 @@ class AppUpdateService {
 
   static bool isApkFileName(String name) {
     return name.toLowerCase().endsWith('.apk');
+  }
+
+  Future<String> currentInstalledVersion() async {
+    try {
+      final raw = _currentAppVersionProvider != null
+          ? await _currentAppVersionProvider!()
+          : await _updater.getCurrentAppVersion();
+      return normalizeVersionIdentifier(raw);
+    } catch (e) {
+      debugLog('app_update: failed to read current version: $e');
+      return '';
+    }
+  }
+
+  Future<bool> isFirstLaunchAfterUpdate() async {
+    final currentVersion = await currentInstalledVersion();
+    if (currentVersion.isEmpty) {
+      return false;
+    }
+
+    final lastSeenRaw = await Preferences.getLastSeenInstalledVersion();
+    if (lastSeenRaw == null || lastSeenRaw.trim().isEmpty) {
+      return true;
+    }
+
+    return normalizeVersionIdentifier(lastSeenRaw) != currentVersion;
+  }
+
+  Future<void> acknowledgeInstalledVersion() async {
+    final currentVersion = await currentInstalledVersion();
+    if (currentVersion.isEmpty) {
+      return;
+    }
+    await Preferences.setLastSeenInstalledVersion(currentVersion);
   }
 
   @visibleForTesting
@@ -152,9 +189,7 @@ class AppUpdateService {
       }
 
       final latestVersion = normalizeVersionIdentifier(release.version);
-      final currentVersion = normalizeVersionIdentifier(
-        await _updater.getCurrentAppVersion(),
-      );
+      final currentVersion = await currentInstalledVersion();
       if (latestVersion.isEmpty || currentVersion.isEmpty) {
         debugLog(
           'app_update: empty version encountered (latest=$latestVersion, current=$currentVersion)',

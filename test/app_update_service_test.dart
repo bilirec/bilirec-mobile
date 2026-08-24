@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:bilirec/shared/app_update_service.dart';
 import 'package:bilirec/shared/preferences.dart';
+import 'package:bilirec/shared/unexpected_stop_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
@@ -73,6 +74,108 @@ void main() {
       await Preferences.setSkippedUpdateVersion('');
       expect(await Preferences.getSkippedUpdateVersion(), isNull);
     });
+  });
+
+  group('Preferences last seen installed version', () {
+    test('persists and clears last seen version', () async {
+      await Preferences.setLastSeenInstalledVersion('1.0.2');
+      expect(await Preferences.getLastSeenInstalledVersion(), '1.0.2');
+
+      await Preferences.setLastSeenInstalledVersion('');
+      expect(await Preferences.getLastSeenInstalledVersion(), isNull);
+    });
+  });
+
+  group('AppUpdateService first launch after update', () {
+    AppUpdateService serviceWithVersion(String Function() version) {
+      return AppUpdateService(currentAppVersionProvider: () async => version());
+    }
+
+    Future<void> runFirstLaunchHooks(AppUpdateService service) async {
+      if (!await service.isFirstLaunchAfterUpdate()) {
+        return;
+      }
+      await UnexpectedStopPreferences.consumePrompt();
+      await service.acknowledgeInstalledVersion();
+    }
+
+    test('no record is first launch; acknowledge then reports false', () async {
+      final service = serviceWithVersion(() => '1.0.2');
+
+      expect(await service.isFirstLaunchAfterUpdate(), isTrue);
+      expect(await service.currentInstalledVersion(), '1.0.2');
+
+      await service.acknowledgeInstalledVersion();
+
+      expect(await Preferences.getLastSeenInstalledVersion(), '1.0.2');
+      expect(await service.isFirstLaunchAfterUpdate(), isFalse);
+    });
+
+    test('version change from 1.0.2 to 1.0.3 is first launch again', () async {
+      var version = '1.0.2';
+      final service = serviceWithVersion(() => version);
+
+      await service.acknowledgeInstalledVersion();
+      expect(await service.isFirstLaunchAfterUpdate(), isFalse);
+
+      version = '1.0.3';
+      expect(await service.isFirstLaunchAfterUpdate(), isTrue);
+    });
+
+    test(
+      'first launch after markServiceStarted consumes prompt and keeps intendedRunning',
+      () async {
+        await UnexpectedStopPreferences.markServiceStarted();
+        final service = serviceWithVersion(() => '1.0.3');
+
+        await runFirstLaunchHooks(service);
+
+        expect(
+          await UnexpectedStopPreferences.getPromptConsumedStartId(),
+          await UnexpectedStopPreferences.getLastStartId(),
+        );
+        expect(await UnexpectedStopPreferences.getIntendedRunning(), isTrue);
+      },
+    );
+
+    test('same version launch does not consume prompt again', () async {
+      await UnexpectedStopPreferences.markServiceStarted();
+      final service = serviceWithVersion(() => '1.0.3');
+
+      await runFirstLaunchHooks(service);
+      final consumedStartId =
+          await UnexpectedStopPreferences.getPromptConsumedStartId();
+      expect(consumedStartId, isNotNull);
+
+      await UnexpectedStopPreferences.setLastStartId(consumedStartId! + 1);
+
+      await runFirstLaunchHooks(service);
+
+      expect(
+        await UnexpectedStopPreferences.getPromptConsumedStartId(),
+        consumedStartId,
+      );
+      expect(await service.isFirstLaunchAfterUpdate(), isFalse);
+    });
+
+    test(
+      'empty version is not first launch, does not write or consume',
+      () async {
+        await UnexpectedStopPreferences.markServiceStarted();
+        final service = serviceWithVersion(() => '');
+
+        expect(await service.isFirstLaunchAfterUpdate(), isFalse);
+        await runFirstLaunchHooks(service);
+        await service.acknowledgeInstalledVersion();
+
+        expect(await Preferences.getLastSeenInstalledVersion(), isNull);
+        expect(
+          await UnexpectedStopPreferences.getPromptConsumedStartId(),
+          isNull,
+        );
+        expect(await UnexpectedStopPreferences.getIntendedRunning(), isTrue);
+      },
+    );
   });
 
   group('AppUpdateService.isApkFileName', () {

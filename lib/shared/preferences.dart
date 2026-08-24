@@ -8,6 +8,7 @@ const String _enableSsePushKey = 'enable_sse_push';
 const String _enableAntiSleepKey = 'enable_antisleep';
 const String _enableAutoRunOnBootKey = 'enable_auto_run_on_boot';
 const String _skippedUpdateVersionKey = 'skipped_update_version';
+const String _lastSeenInstalledVersionKey = 'last_seen_installed_version';
 const String _managedEnvironmentSettingsKey = 'managed_environment_settings';
 const String _developEnvironmentSettingsKey = 'develop_environment_settings';
 
@@ -86,6 +87,20 @@ sealed class Preferences {
   static Future<String?> getSkippedUpdateVersion() async {
     final prefs = _prefs;
     return prefs.getString(_skippedUpdateVersionKey);
+  }
+
+  static Future<void> setLastSeenInstalledVersion(String? version) async {
+    final prefs = _prefs;
+    if (version == null || version.isEmpty) {
+      await prefs.remove(_lastSeenInstalledVersionKey);
+      return;
+    }
+    await prefs.setString(_lastSeenInstalledVersionKey, version);
+  }
+
+  static Future<String?> getLastSeenInstalledVersion() async {
+    final prefs = _prefs;
+    return prefs.getString(_lastSeenInstalledVersionKey);
   }
 
   static Future<void> setManagedEnvironmentSettings(

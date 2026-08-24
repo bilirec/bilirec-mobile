@@ -276,8 +276,16 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   Future<void> _runStartupDialogs() async {
     await _ensureBatteryDialog();
+    await _runFirstLaunchAfterUpdateHooks();
     await _maybeShowUnexpectedStopDialog();
     await _checkForAppUpdateOnStartup();
+  }
+
+  Future<void> _runFirstLaunchAfterUpdateHooks() async {
+    if (!Platform.isAndroid) return;
+    if (!await _appUpdateService.isFirstLaunchAfterUpdate()) return;
+    await UnexpectedStopPreferences.consumePrompt();
+    await _appUpdateService.acknowledgeInstalledVersion();
   }
 
   Future<void> _maybeShowUnexpectedStopDialog() async {
