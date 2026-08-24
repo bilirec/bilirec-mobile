@@ -359,15 +359,15 @@ class AppUpdateService {
       final fileName = updateApkFileNameForVersion(normalizedVersion);
       final file = File('${targetDirectory.path}/$fileName');
 
-      if (await file.exists() && await file.length() > 0) {
-        debugLog('app_update: reusing downloaded apk ${file.path}');
-        return file.path;
-      }
-
       await cleanupOtherVersionedUpdateApks(
         targetDirectory,
         keepFileName: fileName,
       );
+
+      if (await file.exists() && await file.length() > 0) {
+        debugLog('app_update: reusing downloaded apk ${file.path}');
+        return file.path;
+      }
 
       client = HttpClient();
       final request = await client.getUrl(Uri.parse(apkUrl));

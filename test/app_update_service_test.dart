@@ -310,7 +310,9 @@ void main() {
 
     test('reuses existing versioned apk without HTTP', () async {
       final cached = File('${tempDir.path}/bilirec-update-1.0.3.apk');
+      final stale = File('${tempDir.path}/bilirec-update-1.0.2.apk');
       await cached.writeAsBytes(const [9, 9, 9]);
+      await stale.writeAsString('old');
 
       final path = await makeService().downloadApkToInternalStorage(
         apkUrl,
@@ -320,6 +322,7 @@ void main() {
       expect(path, cached.path);
       expect(requestCount, 0);
       expect(await cached.readAsBytes(), const [9, 9, 9]);
+      expect(await stale.exists(), isFalse);
     });
 
     test('downloads to versioned filename when missing', () async {

@@ -282,8 +282,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   }
 
   Future<void> _runFirstLaunchAfterUpdateHooks() async {
-    if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid || !mounted) return;
     if (!await _appUpdateService.isFirstLaunchAfterUpdate()) return;
+    if (!mounted) return;
     await UnexpectedStopPreferences.consumePrompt();
     await _appUpdateService.cleanupDownloadedApks();
     await _appUpdateService.acknowledgeInstalledVersion();
