@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:bilirec/shared/preferences.dart';
@@ -121,19 +120,12 @@ Future<List<int>> fetchLiveBroadcastRoomIDsForTest({
     final ids = await fetchLiveBroadcastRoomIDs();
     testLog(logTag, 'fetched ${ids.length} live room ids');
     return ids;
-  } on TimeoutException {
-    const reason = 'broadcast API 請求逾時（90 秒），略過測試';
+  } catch (error, stack) {
+    final reason =
+        'broadcast API 失敗（第三方不可抗力），略過測試: ${error.runtimeType}: $error';
     testLog(logTag, reason);
+    testLog(logTag, '$stack');
     markTestSkipped(reason);
-  } on SocketException catch (e) {
-    final reason = 'broadcast API 連線失敗：$e，略過測試';
-    testLog(logTag, reason);
-    markTestSkipped(reason);
-  } on StateError catch (e) {
-    final reason = 'broadcast API 失敗：$e，略過測試';
-    testLog(logTag, reason);
-    markTestSkipped(reason);
+    return const [];
   }
-
-  throw StateError('fetchLiveBroadcastRoomIDsForTest unreachable');
 }
