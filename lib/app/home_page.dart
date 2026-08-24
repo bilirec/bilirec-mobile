@@ -276,8 +276,18 @@ class _BilirecHomePageState extends State<BilirecHomePage>
 
   Future<void> _runStartupDialogs() async {
     await _ensureBatteryDialog();
+    await _runFirstLaunchAfterUpdateHooks();
     await _maybeShowUnexpectedStopDialog();
     await _checkForAppUpdateOnStartup();
+  }
+
+  Future<void> _runFirstLaunchAfterUpdateHooks() async {
+    if (!Platform.isAndroid || !mounted) return;
+    if (!await _appUpdateService.isFirstLaunchAfterUpdate()) return;
+    if (!mounted) return;
+    await UnexpectedStopPreferences.consumePrompt();
+    await _appUpdateService.cleanupDownloadedApks();
+    await _appUpdateService.acknowledgeInstalledVersion();
   }
 
   Future<void> _maybeShowUnexpectedStopDialog() async {
@@ -347,8 +357,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       return;
     }
     _hasCheckedStartupUpdate = true;
-
-    await _appUpdateService.cleanupDownloadedApks();
 
     final update = await _appUpdateService.checkForUpdate();
     if (!mounted || update == null || _updateDialogVisible) {

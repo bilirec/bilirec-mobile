@@ -38,6 +38,7 @@ class AppUpdateService {
     VersionComparator? versionComparator,
     Future<Directory> Function()? temporaryDirectoryProvider,
     Future<Directory?> Function()? externalStorageDirectoryProvider,
+    Future<String> Function()? currentAppVersionProvider,
   })  : _updater = updater ?? GithubReleaseApkUpdater(),
         _apiService = apiService ?? GithubApiService(),
         _apkDownloader = apkDownloader ?? ApkDownloaderService(),
@@ -45,7 +46,8 @@ class AppUpdateService {
         _temporaryDirectoryProvider =
             temporaryDirectoryProvider ?? getTemporaryDirectory,
         _externalStorageDirectoryProvider = externalStorageDirectoryProvider ??
-            getExternalStorageDirectory;
+            getExternalStorageDirectory,
+        _currentAppVersionProvider = currentAppVersionProvider;
 
   final GithubReleaseApkUpdater _updater;
   final GithubApiService _apiService;
@@ -53,6 +55,7 @@ class AppUpdateService {
   final VersionComparator _versionComparator;
   final Future<Directory> Function() _temporaryDirectoryProvider;
   final Future<Directory?> Function() _externalStorageDirectoryProvider;
+  final Future<String> Function()? _currentAppVersionProvider;
 
   static String normalizeVersionIdentifier(String value) {
     final trimmed = value.trim();
@@ -86,6 +89,50 @@ class AppUpdateService {
     return name.toLowerCase().endsWith('.apk');
   }
 
+  static String updateApkFileNameForVersion(String version) {
+    return 'bilirec-update-${normalizeVersionIdentifier(version)}.apk';
+  }
+
+  static bool _isVersionedUpdateApkFileName(String name) {
+    final lower = name.toLowerCase();
+    return lower.startsWith('bilirec-update-') && lower.endsWith('.apk');
+  }
+
+  Future<String> currentInstalledVersion() async {
+    try {
+      final versionProvider = _currentAppVersionProvider;
+      final raw = versionProvider != null
+          ? await versionProvider()
+          : await _updater.getCurrentAppVersion();
+      return normalizeVersionIdentifier(raw);
+    } catch (e) {
+      debugLog('app_update: failed to read current version: $e');
+      return '';
+    }
+  }
+
+  Future<bool> isFirstLaunchAfterUpdate() async {
+    final currentVersion = await currentInstalledVersion();
+    if (currentVersion.isEmpty) {
+      return false;
+    }
+
+    final lastSeenRaw = await Preferences.getLastSeenInstalledVersion();
+    if (lastSeenRaw == null || lastSeenRaw.trim().isEmpty) {
+      return true;
+    }
+
+    return normalizeVersionIdentifier(lastSeenRaw) != currentVersion;
+  }
+
+  Future<void> acknowledgeInstalledVersion() async {
+    final currentVersion = await currentInstalledVersion();
+    if (currentVersion.isEmpty) {
+      return;
+    }
+    await Preferences.setLastSeenInstalledVersion(currentVersion);
+  }
+
   @visibleForTesting
   static Future<void> cleanupApkFilesInDirectory(Directory directory) async {
     if (!await directory.exists()) {
@@ -109,6 +156,38 @@ class AppUpdateService {
         debugLog('app_update: deleted apk ${entity.path}');
       } catch (e) {
         debugLog('app_update: failed to delete apk ${entity.path}: $e');
+      }
+    }
+  }
+
+  @visibleForTesting
+  static Future<void> cleanupOtherVersionedUpdateApks(
+    Directory directory, {
+    required String keepFileName,
+  }) async {
+    if (!await directory.exists()) {
+      return;
+    }
+
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+
+      final fileName = entity.uri.pathSegments.isNotEmpty
+          ? entity.uri.pathSegments.last
+          : '';
+      if (!_isVersionedUpdateApkFileName(fileName) || fileName == keepFileName) {
+        continue;
+      }
+
+      try {
+        await entity.delete();
+        debugLog('app_update: deleted stale update apk ${entity.path}');
+      } catch (e) {
+        debugLog(
+          'app_update: failed to delete stale update apk ${entity.path}: $e',
+        );
       }
     }
   }
@@ -152,9 +231,7 @@ class AppUpdateService {
       }
 
       final latestVersion = normalizeVersionIdentifier(release.version);
-      final currentVersion = normalizeVersionIdentifier(
-        await _updater.getCurrentAppVersion(),
-      );
+      final currentVersion = await currentInstalledVersion();
       if (latestVersion.isEmpty || currentVersion.isEmpty) {
         debugLog(
           'app_update: empty version encountered (latest=$latestVersion, current=$currentVersion)',
@@ -213,7 +290,7 @@ class AppUpdateService {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
     final downloadedAndInstalled = await _downloadAndInstall(
-      candidate.apkUrl,
+      candidate,
       onDownloadProgress: onDownloadProgress,
     );
     if (downloadedAndInstalled) {
@@ -236,15 +313,20 @@ class AppUpdateService {
   }
 
   Future<bool> _downloadAndInstall(
-    String apkUrl, {
+    AppUpdateCandidate candidate, {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
     try {
-      final filePath = await _downloadApkToInternalStorage(
-            apkUrl,
+      final filePath = await downloadApkToInternalStorage(
+            candidate.apkUrl,
+            version: candidate.version,
             onDownloadProgress: onDownloadProgress,
           ) ??
-          await _apkDownloader.downloadAPK(apkUrl, null, onDownloadProgress);
+          await _apkDownloader.downloadAPK(
+            candidate.apkUrl,
+            null,
+            onDownloadProgress,
+          );
       if (filePath == null || filePath.isEmpty) {
         debugLog('app_update: apk download failed');
         return false;
@@ -258,18 +340,34 @@ class AppUpdateService {
     }
   }
 
-  Future<String?> _downloadApkToInternalStorage(
+  @visibleForTesting
+  Future<String?> downloadApkToInternalStorage(
     String apkUrl, {
+    required String version,
     void Function(int received, int total)? onDownloadProgress,
   }) async {
     HttpClient? client;
     IOSink? sink;
     try {
-      await cleanupDownloadedApks();
+      final normalizedVersion = normalizeVersionIdentifier(version);
+      if (normalizedVersion.isEmpty) {
+        debugLog('app_update: skip internal download for empty version');
+        return null;
+      }
 
       final targetDirectory = await _temporaryDirectoryProvider();
-      final fileName = _resolveApkFileName(apkUrl);
+      final fileName = updateApkFileNameForVersion(normalizedVersion);
       final file = File('${targetDirectory.path}/$fileName');
+
+      await cleanupOtherVersionedUpdateApks(
+        targetDirectory,
+        keepFileName: fileName,
+      );
+
+      if (await file.exists() && await file.length() > 0) {
+        debugLog('app_update: reusing downloaded apk ${file.path}');
+        return file.path;
+      }
 
       client = HttpClient();
       final request = await client.getUrl(Uri.parse(apkUrl));
@@ -293,7 +391,7 @@ class AppUpdateService {
       await sink.close();
       sink = null;
 
-      if (!await file.exists()) {
+      if (!await file.exists() || await file.length() == 0) {
         return null;
       }
 
@@ -306,14 +404,5 @@ class AppUpdateService {
       await sink?.close();
       client?.close(force: true);
     }
-  }
-
-  String _resolveApkFileName(String apkUrl) {
-    final uri = Uri.parse(apkUrl);
-    final candidate = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-    if (candidate.toLowerCase().endsWith('.apk')) {
-      return candidate;
-    }
-    return 'bilirec-update-${DateTime.now().millisecondsSinceEpoch}.apk';
   }
 }
