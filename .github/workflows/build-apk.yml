@@ -10,6 +10,27 @@ on:
   release:
     types: [created]
   workflow_dispatch:
+    inputs:
+      source_repository:
+        description: "bilirec CI only — repository that produced the Android libraries. Leave empty for a normal manual build."
+        required: false
+        type: string
+      source_run_id:
+        description: "bilirec CI only — Actions run ID containing the Android artifacts. Leave empty for a normal manual build."
+        required: false
+        type: string
+      source_sha:
+        description: "bilirec CI only — source commit SHA for the bilirec build. Leave empty for a normal manual build."
+        required: false
+        type: string
+      source_ref:
+        description: "bilirec CI only — source ref for the bilirec build. Leave empty for a normal manual build."
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ (github.event_name == 'workflow_dispatch' && inputs.source_run_id != '') && format('build-apk-so-bump-{0}', github.ref_name) || format('build-apk-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 jobs:
   widget-test:
@@ -53,12 +74,163 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    env:
+      SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      SOURCE_REF: ${{ inputs.source_ref }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           lfs: true
+
+      - name: Validate nightly source metadata
+        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "$SOURCE_REPOSITORY" != "bilirec/bilirec" ]; then
+            echo "::error::Only bilirec/bilirec may trigger this workflow."
+            exit 1
+          fi
+
+          if [[ ! "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::source_run_id must contain only digits."
+            exit 1
+          fi
+
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::source_sha must be a 40-character commit SHA."
+            exit 1
+          fi
+
+          if [ -z "$SOURCE_REF" ]; then
+            echo "::error::source_ref must not be empty."
+            exit 1
+          fi
+
+          echo "Source repository: $SOURCE_REPOSITORY"
+          echo "Source run ID: $SOURCE_RUN_ID"
+          echo "Source SHA: $SOURCE_SHA"
+          echo "Source ref: $SOURCE_REF"
+
+      - name: Download arm64-v8a bilirec library
+        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+        uses: actions/download-artifact@v6
+        with:
+          name: bilirec-android-arm64-v8a
+          path: .tmp/bilirec-so/arm64-v8a
+          repository: ${{ inputs.source_repository }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.BILIREC_CROSS_REPO_TOKEN }}
+
+      - name: Download x86_64 bilirec library
+        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+        uses: actions/download-artifact@v6
+        with:
+          name: bilirec-android-x86_64
+          path: .tmp/bilirec-so/x86_64
+          repository: ${{ inputs.source_repository }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.BILIREC_CROSS_REPO_TOKEN }}
+
+      - name: Compare hashes and update jniLibs
+        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+        id: compare
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          arm_src=".tmp/bilirec-so/arm64-v8a/libbilirec-android-arm64-v8a.so"
+          x64_src=".tmp/bilirec-so/x86_64/libbilirec-android-x86_64.so"
+          arm_dst="android/app/src/main/jniLibs/arm64-v8a/libbilirec.so"
+          x64_dst="android/app/src/main/jniLibs/x86_64/libbilirec.so"
+
+          if [ ! -s "$arm_src" ]; then
+            echo "::error::arm64-v8a bilirec .so artifact is missing or empty."
+            exit 1
+          fi
+
+          if [ ! -s "$x64_src" ]; then
+            echo "::error::x86_64 bilirec .so artifact is missing or empty."
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "${arm_dst}")" "$(dirname "${x64_dst}")"
+
+          changed_arm=false
+          changed_x64=false
+
+          src_arm_hash="$(sha256sum "${arm_src}" | awk '{print $1}')"
+          src_x64_hash="$(sha256sum "${x64_src}" | awk '{print $1}')"
+
+          if [ ! -f "${arm_dst}" ]; then
+            changed_arm=true
+          else
+            dst_arm_hash="$(sha256sum "${arm_dst}" | awk '{print $1}')"
+            if [ "${src_arm_hash}" != "${dst_arm_hash}" ]; then
+              changed_arm=true
+            fi
+          fi
+
+          if [ ! -f "${x64_dst}" ]; then
+            changed_x64=true
+          else
+            dst_x64_hash="$(sha256sum "${x64_dst}" | awk '{print $1}')"
+            if [ "${src_x64_hash}" != "${dst_x64_hash}" ]; then
+              changed_x64=true
+            fi
+          fi
+
+          if [ "${changed_arm}" = true ]; then
+            cp -f "${arm_src}" "${arm_dst}"
+          fi
+
+          if [ "${changed_x64}" = true ]; then
+            cp -f "${x64_src}" "${x64_dst}"
+          fi
+
+          changed=false
+          if [ "${changed_arm}" = true ] || [ "${changed_x64}" = true ]; then
+            changed=true
+          fi
+
+          echo "changed=${changed}" >> "${GITHUB_OUTPUT}"
+
+          echo "arm64-v8a SHA256: ${src_arm_hash}"
+          echo "x86_64 SHA256: ${src_x64_hash}"
+          echo "arm64-v8a changed: ${changed_arm}"
+          echo "x86_64 changed: ${changed_x64}"
+
+      - name: Commit and push libbilirec.so
+        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != '' && steps.compare.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add android/app/src/main/jniLibs/arm64-v8a/libbilirec.so
+          git add android/app/src/main/jniLibs/x86_64/libbilirec.so
+
+          if git diff --cached --quiet; then
+            echo "No staged changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: bump libbilirec.so to version ${SOURCE_SHA:0:7}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: libbilirec.so already up to date
+        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != '' && steps.compare.outputs.changed != 'true'
+        run: echo "libbilirec.so is already up to date for both ABIs."
 
       - name: Set up Java
         uses: actions/setup-java@v4
