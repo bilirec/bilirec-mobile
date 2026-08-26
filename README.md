@@ -10,9 +10,6 @@ Flutter Android 客户端，在手机上以前台服务方式运行 Bilirec 录�
 2. 打开 App，完成电池优化与通知权限授权后，点击「启动」。
 3. 点击「打开录制管理程序」，在 Web 界面完成 B 站扫码登录即可使用。
 
-> [!IMPORTANT]
-> **大陆国产手机用户请先完成后台保活设置，否则 Bilirec 可能被系统杀后台，导致程序连接中断。** [查看设置步骤](https://www.bilirec.org/zh-cn/guides/android-mainland/)
-
 ## 文档
 
 完整使用说明、设置项说明与开发参考见官方文档站：
