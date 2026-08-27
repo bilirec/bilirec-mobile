@@ -33,9 +33,6 @@ jobs:
           sudo mv /tmp/osv-scanner /usr/local/bin/osv-scanner
           osv-scanner --version
 
-      - name: Self-check fail-on-critical script
-        run: python3 .github/scripts/osv_fail_on_critical.py --self-test
-
       - name: Scan pubspec.lock
         run: |
           set +e
@@ -52,5 +49,84 @@ jobs:
           fi
           exit 0
 
-      - name: Fail on CRITICAL findings
-        run: python3 .github/scripts/osv_fail_on_critical.py osv-results.json
+      - name: Fail only on CRITICAL findings
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          CRITICAL = 9.0
+
+          def _critical_label(value):
+              return isinstance(value, str) and value.strip().lower() == "critical"
+
+          def _score(value):
+              try:
+                  if isinstance(value, bool) or value is None:
+                      return None
+                  return float(value)
+              except (TypeError, ValueError):
+                  return None
+
+          def _severity_fields(node):
+              if not isinstance(node, dict):
+                  return
+              if "severity" in node:
+                  yield node["severity"]
+              extra = node.get("database_specific")
+              if isinstance(extra, dict) and "severity" in extra:
+                  yield extra["severity"]
+
+          def _is_critical_value(value):
+              if _critical_label(value):
+                  return True
+              score = _score(value)
+              if score is not None and score >= CRITICAL:
+                  return True
+              if isinstance(value, dict):
+                  return _is_critical_value(value.get("severity")) or _is_critical_value(
+                      value.get("score")
+                  )
+              if isinstance(value, list):
+                  return any(_is_critical_value(item) for item in value)
+              return False
+
+          def has_critical(report):
+              if not isinstance(report, dict):
+                  return False
+              for source in report.get("results") or []:
+                  if not isinstance(source, dict):
+                      continue
+                  for package in source.get("packages") or []:
+                      if not isinstance(package, dict):
+                          continue
+                      vulns = package.get("vulnerabilities") or []
+                      groups = package.get("groups") or []
+                      for group in groups:
+                          if not isinstance(group, dict):
+                              continue
+                          if _is_critical_value(group.get("max_severity")):
+                              return True
+                          if any(_is_critical_value(field) for field in _severity_fields(group)):
+                              return True
+                      for vuln in vulns:
+                          if isinstance(vuln, dict) and any(
+                              _is_critical_value(field) for field in _severity_fields(vuln)
+                          ):
+                              return True
+              return False
+
+          high = {"results": [{"packages": [{"groups": [{"max_severity": "8.8"}]}]}]}
+          critical = {"results": [{"packages": [{"groups": [{"max_severity": "9.8"}]}]}]}
+          assert not has_critical(high), "High must not fail"
+          assert has_critical(critical), "Critical must fail"
+          assert not has_critical({"results": []})
+
+          text = Path("osv-results.json").read_text(encoding="utf-8").strip()
+          report = json.loads(text) if text else {"results": []}
+          if has_critical(report):
+              print("CRITICAL vulnerabilities found in OSV scan", file=sys.stderr)
+              sys.exit(1)
+          sys.exit(0)
+          PY
