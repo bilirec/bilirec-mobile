@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:github_release_apk_updater/github_release_apk_updater.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -13,6 +14,8 @@ const String _repositoryGithub = 'bilirec-mobile';
 const String _apiKeyName = 'bilirec-release';
 const String _releasePageUrl =
     'https://github.com/$_ownerGithub/$_repositoryGithub/releases/latest';
+const MethodChannel _apkSignatureChannel =
+    MethodChannel('org.bilirec.bilirec/apk_signature');
 
 class AppUpdateCandidate {
   const AppUpdateCandidate({
@@ -39,6 +42,7 @@ class AppUpdateService {
     Future<Directory> Function()? temporaryDirectoryProvider,
     Future<Directory?> Function()? externalStorageDirectoryProvider,
     Future<String> Function()? currentAppVersionProvider,
+    Future<bool> Function(String apkPath)? apkSigningMatchesInstalled,
   })  : _updater = updater ?? GithubReleaseApkUpdater(),
         _apiService = apiService ?? GithubApiService(),
         _apkDownloader = apkDownloader ?? ApkDownloaderService(),
@@ -47,7 +51,9 @@ class AppUpdateService {
             temporaryDirectoryProvider ?? getTemporaryDirectory,
         _externalStorageDirectoryProvider = externalStorageDirectoryProvider ??
             getExternalStorageDirectory,
-        _currentAppVersionProvider = currentAppVersionProvider;
+        _currentAppVersionProvider = currentAppVersionProvider,
+        _apkSigningMatchesInstalled =
+            apkSigningMatchesInstalled ?? _defaultApkSigningMatchesInstalled;
 
   final GithubReleaseApkUpdater _updater;
   final GithubApiService _apiService;
@@ -56,6 +62,7 @@ class AppUpdateService {
   final Future<Directory> Function() _temporaryDirectoryProvider;
   final Future<Directory?> Function() _externalStorageDirectoryProvider;
   final Future<String> Function()? _currentAppVersionProvider;
+  final Future<bool> Function(String apkPath) _apkSigningMatchesInstalled;
 
   static String normalizeVersionIdentifier(String value) {
     final trimmed = value.trim();
@@ -332,6 +339,14 @@ class AppUpdateService {
         return false;
       }
 
+      final signingMatches = await _apkSigningMatchesInstalled(filePath);
+      if (!signingMatches) {
+        debugLog(
+          'app_update: apk signature mismatch, refusing install of $filePath',
+        );
+        return false;
+      }
+
       await _updater.installApk(filePath);
       return true;
     } catch (e) {
@@ -404,5 +419,22 @@ class AppUpdateService {
       await sink?.close();
       client?.close(force: true);
     }
+  }
+}
+
+Future<bool> _defaultApkSigningMatchesInstalled(String apkPath) async {
+  if (!Platform.isAndroid) {
+    return false;
+  }
+
+  try {
+    final matched = await _apkSignatureChannel.invokeMethod<bool>(
+      'matchesInstalledSigningCertificates',
+      {'apkPath': apkPath},
+    );
+    return matched == true;
+  } catch (e) {
+    debugLog('app_update: apk signature check failed: $e');
+    return false;
   }
 }

@@ -1,0 +1,56 @@
+name: Vulnerability Scan
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vuln-scan-master
+  cancel-in-progress: true
+
+jobs:
+  osv-scan:
+    name: OSV Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install osv-scanner
+        env:
+          OSV_SCANNER_VERSION: v2.5.1
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          chmod +x /tmp/osv-scanner
+          sudo mv /tmp/osv-scanner /usr/local/bin/osv-scanner
+          osv-scanner --version
+
+      - name: Self-check fail-on-critical script
+        run: python3 .github/scripts/osv_fail_on_critical.py --self-test
+
+      - name: Scan pubspec.lock
+        run: |
+          set +e
+          osv-scanner scan source --lockfile=pubspec.lock --format json --output osv-results.json
+          json_status=$?
+          osv-scanner scan source --lockfile=pubspec.lock --format table
+          if [ ! -f osv-results.json ]; then
+            echo "::error::osv-scanner did not write JSON output"
+            exit 1
+          fi
+          if [ "$json_status" -gt 1 ]; then
+            echo "::error::osv-scanner failed with exit $json_status"
+            exit "$json_status"
+          fi
+          exit 0
+
+      - name: Fail on CRITICAL findings
+        run: python3 .github/scripts/osv_fail_on_critical.py osv-results.json

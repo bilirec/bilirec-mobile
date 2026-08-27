@@ -4,6 +4,7 @@ import 'package:bilirec/shared/app_update_service.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/unexpected_stop_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:github_release_apk_updater/github_release_apk_updater.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 import 'test_support/in_memory_shared_preferences_async_platform.dart';
@@ -407,4 +408,72 @@ void main() {
       },
     );
   });
+
+  group('AppUpdateService signing check before install', () {
+    late Directory tempDir;
+    late File cachedApk;
+    late _RecordingUpdater updater;
+
+    const candidate = AppUpdateCandidate(
+      version: '1.0.4',
+      releaseNote: 'test',
+      apkUrl: 'http://127.0.0.1:1/never-hit.apk',
+      releasePageUrl: 'https://example.invalid/releases',
+    );
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('bilirec_apk_sign_test');
+      cachedApk = File('${tempDir.path}/bilirec-update-1.0.4.apk');
+      await cachedApk.writeAsBytes(const [1, 2, 3, 4]);
+      updater = _RecordingUpdater();
+    });
+
+    tearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    AppUpdateService makeService({
+      required Future<bool> Function(String apkPath) signing,
+    }) {
+      return AppUpdateService(
+        updater: updater,
+        currentAppVersionProvider: () async => '1.0.3',
+        temporaryDirectoryProvider: () async => tempDir,
+        externalStorageDirectoryProvider: () async => null,
+        apkSigningMatchesInstalled: signing,
+      );
+    }
+
+    test('does not install when signing does not match', () async {
+      final service = makeService(signing: (_) async => false);
+
+      final result = await service.performUpdateWithFallback(candidate);
+
+      expect(updater.installCount, 0);
+      expect(result, isNot(AppUpdateExecutionResult.installLaunched));
+    });
+
+    test('installs when signing matches', () async {
+      final service = makeService(signing: (_) async => true);
+
+      final result = await service.performUpdateWithFallback(candidate);
+
+      expect(updater.installCount, 1);
+      expect(updater.lastPath, cachedApk.path);
+      expect(result, AppUpdateExecutionResult.installLaunched);
+    });
+  });
+}
+
+class _RecordingUpdater extends GithubReleaseApkUpdater {
+  int installCount = 0;
+  String? lastPath;
+
+  @override
+  Future<void> installApk(String filePath) async {
+    installCount++;
+    lastPath = filePath;
+  }
 }
