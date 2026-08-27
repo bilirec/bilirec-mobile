@@ -192,7 +192,8 @@ void main() {
     late Directory tempDir;
 
     setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('bilirec_apk_cleanup_test');
+      tempDir =
+          await Directory.systemTemp.createTemp('bilirec_apk_cleanup_test');
     });
 
     tearDown(() async {
@@ -452,7 +453,7 @@ void main() {
       final result = await service.performUpdateWithFallback(candidate);
 
       expect(updater.installCount, 0);
-      expect(result, isNot(AppUpdateExecutionResult.installLaunched));
+      expect(result, AppUpdateExecutionResult.signatureMismatch);
     });
 
     test('installs when signing matches', () async {

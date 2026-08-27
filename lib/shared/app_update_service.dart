@@ -31,7 +31,14 @@ class AppUpdateCandidate {
   final String releasePageUrl;
 }
 
-enum AppUpdateExecutionResult { installLaunched, releasePageOpened, failed }
+enum AppUpdateExecutionResult {
+  installLaunched,
+  signatureMismatch,
+  releasePageOpened,
+  failed,
+}
+
+enum _DownloadInstallOutcome { installed, signatureMismatch, failed }
 
 class AppUpdateService {
   AppUpdateService({
@@ -49,8 +56,8 @@ class AppUpdateService {
         _versionComparator = versionComparator ?? VersionComparator(),
         _temporaryDirectoryProvider =
             temporaryDirectoryProvider ?? getTemporaryDirectory,
-        _externalStorageDirectoryProvider = externalStorageDirectoryProvider ??
-            getExternalStorageDirectory,
+        _externalStorageDirectoryProvider =
+            externalStorageDirectoryProvider ?? getExternalStorageDirectory,
         _currentAppVersionProvider = currentAppVersionProvider,
         _apkSigningMatchesInstalled =
             apkSigningMatchesInstalled ?? _defaultApkSigningMatchesInstalled;
@@ -184,7 +191,8 @@ class AppUpdateService {
       final fileName = entity.uri.pathSegments.isNotEmpty
           ? entity.uri.pathSegments.last
           : '';
-      if (!_isVersionedUpdateApkFileName(fileName) || fileName == keepFileName) {
+      if (!_isVersionedUpdateApkFileName(fileName) ||
+          fileName == keepFileName) {
         continue;
       }
 
@@ -296,20 +304,23 @@ class AppUpdateService {
     AppUpdateCandidate candidate, {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
-    final downloadedAndInstalled = await _downloadAndInstall(
+    final outcome = await _downloadAndInstall(
       candidate,
       onDownloadProgress: onDownloadProgress,
     );
-    if (downloadedAndInstalled) {
-      return AppUpdateExecutionResult.installLaunched;
+    switch (outcome) {
+      case _DownloadInstallOutcome.installed:
+        return AppUpdateExecutionResult.installLaunched;
+      case _DownloadInstallOutcome.signatureMismatch:
+        return AppUpdateExecutionResult.signatureMismatch;
+      case _DownloadInstallOutcome.failed:
+        final opened = await openReleasePage(candidate.releasePageUrl);
+        if (!opened) {
+          debugLog('app_update: failed to open release page fallback');
+          return AppUpdateExecutionResult.failed;
+        }
+        return AppUpdateExecutionResult.releasePageOpened;
     }
-
-    final opened = await openReleasePage(candidate.releasePageUrl);
-    if (!opened) {
-      debugLog('app_update: failed to open release page fallback');
-      return AppUpdateExecutionResult.failed;
-    }
-    return AppUpdateExecutionResult.releasePageOpened;
   }
 
   Future<bool> openReleasePage([String? releasePageUrl]) async {
@@ -319,7 +330,7 @@ class AppUpdateService {
     return openUrlPreferChrome(Uri.parse(target));
   }
 
-  Future<bool> _downloadAndInstall(
+  Future<_DownloadInstallOutcome> _downloadAndInstall(
     AppUpdateCandidate candidate, {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
@@ -336,7 +347,7 @@ class AppUpdateService {
           );
       if (filePath == null || filePath.isEmpty) {
         debugLog('app_update: apk download failed');
-        return false;
+        return _DownloadInstallOutcome.failed;
       }
 
       final signingMatches = await _apkSigningMatchesInstalled(filePath);
@@ -344,14 +355,14 @@ class AppUpdateService {
         debugLog(
           'app_update: apk signature mismatch, refusing install of $filePath',
         );
-        return false;
+        return _DownloadInstallOutcome.signatureMismatch;
       }
 
       await _updater.installApk(filePath);
-      return true;
+      return _DownloadInstallOutcome.installed;
     } catch (e) {
       debugLog('app_update: apk install failed: $e');
-      return false;
+      return _DownloadInstallOutcome.failed;
     }
   }
 
