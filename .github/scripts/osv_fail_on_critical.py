@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Iterable
 
 CRITICAL_THRESHOLD = 9.0
-FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 def _is_critical_label(value: Any) -> bool:
@@ -146,15 +145,43 @@ def load_report(path: Path) -> Any:
 
 
 def run_self_test() -> int:
-    high = json.loads((FIXTURES_DIR / "osv_high.json").read_text(encoding="utf-8"))
-    critical = json.loads(
-        (FIXTURES_DIR / "osv_critical.json").read_text(encoding="utf-8")
-    )
-    empty = json.loads((FIXTURES_DIR / "osv_empty.json").read_text(encoding="utf-8"))
+    high = {
+        "results": [
+            {
+                "packages": [
+                    {
+                        "groups": [{"ids": ["CVE-2026-8461"], "max_severity": "8.8"}],
+                        "vulnerabilities": [
+                            {
+                                "id": "CVE-2026-8461",
+                                "database_specific": {"severity": "HIGH"},
+                            }
+                        ],
+                    }
+                ]
+            }
+        ]
+    }
+    critical = {
+        "results": [
+            {
+                "packages": [
+                    {
+                        "groups": [{"ids": ["CVE-9999-0001"], "max_severity": "9.8"}],
+                        "vulnerabilities": [
+                            {
+                                "id": "CVE-9999-0001",
+                                "database_specific": {"severity": "CRITICAL"},
+                            }
+                        ],
+                    }
+                ]
+            }
+        ]
+    }
 
     assert exit_code_for_report(high) == 0, "High must exit 0"
     assert exit_code_for_report(critical) == 1, "Critical must exit 1"
-    assert exit_code_for_report(empty) == 0, "empty report must exit 0"
     assert exit_code_for_report({"results": []}) == 0
     print("osv_fail_on_critical self-test passed")
     return 0
