@@ -662,12 +662,105 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       case AppUpdateExecutionResult.installLaunched:
         showAppToast(context, l10n.tr('updateInstallPromptHint'));
         break;
+      case AppUpdateExecutionResult.signatureMismatch:
+        await _showSignatureMismatchDialog(update);
+        break;
       case AppUpdateExecutionResult.releasePageOpened:
         showAppToast(context, l10n.tr('updateOpenReleaseFallbackHint'));
         break;
       case AppUpdateExecutionResult.failed:
         showAppToast(context, l10n.tr('updateOpenReleaseFailed'));
         break;
+    }
+  }
+
+  Future<void> _showSignatureMismatchDialog(AppUpdateCandidate update) async {
+    if (!mounted) return;
+
+    final shouldOpenGithub = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final colorScheme = Theme.of(dialogContext).colorScheme;
+        final textTheme = Theme.of(dialogContext).textTheme;
+        return PopScope(
+          canPop: false,
+          child: Dialog(
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: colorScheme.errorContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.gpp_bad_rounded,
+                        color: colorScheme.onErrorContainer,
+                        size: 30,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    l10n.tr('updateSignatureMismatchTitle'),
+                    textAlign: TextAlign.center,
+                    style: textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.tr('updateSignatureMismatchContent'),
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: Text(l10n.tr('updateSignatureMismatchOpenGithub')),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(l10n.tr('updateSignatureMismatchDismiss')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (shouldOpenGithub != true || !mounted) {
+      return;
+    }
+
+    final opened =
+        await _appUpdateService.openReleasePage(update.releasePageUrl);
+    if (!opened && mounted) {
+      showAppToast(context, l10n.tr('updateOpenReleaseFailed'));
     }
   }
 
