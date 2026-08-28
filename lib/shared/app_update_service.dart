@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:github_release_apk_updater/github_release_apk_updater.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -13,6 +14,8 @@ const String _repositoryGithub = 'bilirec-mobile';
 const String _apiKeyName = 'bilirec-release';
 const String _releasePageUrl =
     'https://github.com/$_ownerGithub/$_repositoryGithub/releases/latest';
+const MethodChannel _apkSignatureChannel =
+    MethodChannel('org.bilirec.bilirec/apk_signature');
 
 class AppUpdateCandidate {
   const AppUpdateCandidate({
@@ -28,7 +31,14 @@ class AppUpdateCandidate {
   final String releasePageUrl;
 }
 
-enum AppUpdateExecutionResult { installLaunched, releasePageOpened, failed }
+enum AppUpdateExecutionResult {
+  installLaunched,
+  signatureMismatch,
+  releasePageOpened,
+  failed,
+}
+
+enum _DownloadInstallOutcome { installed, signatureMismatch, failed }
 
 class AppUpdateService {
   AppUpdateService({
@@ -39,15 +49,18 @@ class AppUpdateService {
     Future<Directory> Function()? temporaryDirectoryProvider,
     Future<Directory?> Function()? externalStorageDirectoryProvider,
     Future<String> Function()? currentAppVersionProvider,
+    Future<bool> Function(String apkPath)? apkSigningMatchesInstalled,
   })  : _updater = updater ?? GithubReleaseApkUpdater(),
         _apiService = apiService ?? GithubApiService(),
         _apkDownloader = apkDownloader ?? ApkDownloaderService(),
         _versionComparator = versionComparator ?? VersionComparator(),
         _temporaryDirectoryProvider =
             temporaryDirectoryProvider ?? getTemporaryDirectory,
-        _externalStorageDirectoryProvider = externalStorageDirectoryProvider ??
-            getExternalStorageDirectory,
-        _currentAppVersionProvider = currentAppVersionProvider;
+        _externalStorageDirectoryProvider =
+            externalStorageDirectoryProvider ?? getExternalStorageDirectory,
+        _currentAppVersionProvider = currentAppVersionProvider,
+        _apkSigningMatchesInstalled =
+            apkSigningMatchesInstalled ?? _defaultApkSigningMatchesInstalled;
 
   final GithubReleaseApkUpdater _updater;
   final GithubApiService _apiService;
@@ -56,6 +69,7 @@ class AppUpdateService {
   final Future<Directory> Function() _temporaryDirectoryProvider;
   final Future<Directory?> Function() _externalStorageDirectoryProvider;
   final Future<String> Function()? _currentAppVersionProvider;
+  final Future<bool> Function(String apkPath) _apkSigningMatchesInstalled;
 
   static String normalizeVersionIdentifier(String value) {
     final trimmed = value.trim();
@@ -177,7 +191,8 @@ class AppUpdateService {
       final fileName = entity.uri.pathSegments.isNotEmpty
           ? entity.uri.pathSegments.last
           : '';
-      if (!_isVersionedUpdateApkFileName(fileName) || fileName == keepFileName) {
+      if (!_isVersionedUpdateApkFileName(fileName) ||
+          fileName == keepFileName) {
         continue;
       }
 
@@ -289,20 +304,23 @@ class AppUpdateService {
     AppUpdateCandidate candidate, {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
-    final downloadedAndInstalled = await _downloadAndInstall(
+    final outcome = await _downloadAndInstall(
       candidate,
       onDownloadProgress: onDownloadProgress,
     );
-    if (downloadedAndInstalled) {
-      return AppUpdateExecutionResult.installLaunched;
+    switch (outcome) {
+      case _DownloadInstallOutcome.installed:
+        return AppUpdateExecutionResult.installLaunched;
+      case _DownloadInstallOutcome.signatureMismatch:
+        return AppUpdateExecutionResult.signatureMismatch;
+      case _DownloadInstallOutcome.failed:
+        final opened = await openReleasePage(candidate.releasePageUrl);
+        if (!opened) {
+          debugLog('app_update: failed to open release page fallback');
+          return AppUpdateExecutionResult.failed;
+        }
+        return AppUpdateExecutionResult.releasePageOpened;
     }
-
-    final opened = await openReleasePage(candidate.releasePageUrl);
-    if (!opened) {
-      debugLog('app_update: failed to open release page fallback');
-      return AppUpdateExecutionResult.failed;
-    }
-    return AppUpdateExecutionResult.releasePageOpened;
   }
 
   Future<bool> openReleasePage([String? releasePageUrl]) async {
@@ -312,7 +330,7 @@ class AppUpdateService {
     return openUrlPreferChrome(Uri.parse(target));
   }
 
-  Future<bool> _downloadAndInstall(
+  Future<_DownloadInstallOutcome> _downloadAndInstall(
     AppUpdateCandidate candidate, {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
@@ -329,14 +347,22 @@ class AppUpdateService {
           );
       if (filePath == null || filePath.isEmpty) {
         debugLog('app_update: apk download failed');
-        return false;
+        return _DownloadInstallOutcome.failed;
+      }
+
+      final signingMatches = await _apkSigningMatchesInstalled(filePath);
+      if (!signingMatches) {
+        debugLog(
+          'app_update: apk signature mismatch, refusing install of $filePath',
+        );
+        return _DownloadInstallOutcome.signatureMismatch;
       }
 
       await _updater.installApk(filePath);
-      return true;
+      return _DownloadInstallOutcome.installed;
     } catch (e) {
       debugLog('app_update: apk install failed: $e');
-      return false;
+      return _DownloadInstallOutcome.failed;
     }
   }
 
@@ -404,5 +430,22 @@ class AppUpdateService {
       await sink?.close();
       client?.close(force: true);
     }
+  }
+}
+
+Future<bool> _defaultApkSigningMatchesInstalled(String apkPath) async {
+  if (!Platform.isAndroid) {
+    return false;
+  }
+
+  try {
+    final matched = await _apkSignatureChannel.invokeMethod<bool>(
+      'matchesInstalledSigningCertificates',
+      {'apkPath': apkPath},
+    );
+    return matched == true;
+  } catch (e) {
+    debugLog('app_update: apk signature check failed: $e');
+    return false;
   }
 }

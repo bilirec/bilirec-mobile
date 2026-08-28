@@ -111,6 +111,11 @@ class AppLocalizations {
       'updateInstallPromptHint': '下載完成，請在安裝頁完成更新。',
       'updateOpenReleaseFallbackHint': '自動安裝失敗，已改為開啟下載頁面。',
       'updateOpenReleaseFailed': '更新失敗，且無法開啟下載頁面',
+      'updateSignatureMismatchTitle': '簽名校驗失敗',
+      'updateSignatureMismatchContent':
+          '已下載的更新檔與目前 App 的簽署憑證不一致，已拒絕安裝，以免安裝到不可信的檔案。\n\n你可以改從 GitHub 發行頁手動下載官方 APK。',
+      'updateSignatureMismatchOpenGithub': '前往 GitHub 下載',
+      'updateSignatureMismatchDismiss': '關閉',
       'androidOnly': '目前只支援 Android',
       'startingService': '正在啟動 Bilirec 系統服務...',
       'notificationPermissionDenied': '通知權限未開啟，無法啟動系統服務',
@@ -316,6 +321,11 @@ class AppLocalizations {
       'updateInstallPromptHint': '下载完成，请在安装页完成更新。',
       'updateOpenReleaseFallbackHint': '自动安装失败，已改为打开下载页面。',
       'updateOpenReleaseFailed': '更新失败，且无法打开下载页面',
+      'updateSignatureMismatchTitle': '签名校验失败',
+      'updateSignatureMismatchContent':
+          '已下载的更新文件与当前 App 的签署证书不一致，已拒绝安装，以免安装到不可信的文件。\n\n你可以改从 GitHub 发行页手动下载官方 APK。',
+      'updateSignatureMismatchOpenGithub': '前往 GitHub 下载',
+      'updateSignatureMismatchDismiss': '关闭',
       'androidOnly': '目前仅支持 Android',
       'startingService': '正在启动 Bilirec 系统服务...',
       'notificationPermissionDenied': '通知权限未开启，无法启动系统服务',
