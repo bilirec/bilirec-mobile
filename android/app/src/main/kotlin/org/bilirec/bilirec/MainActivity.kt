@@ -9,6 +9,7 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        StorageBridge.install(applicationContext)
         FFmpegKitConfig.enableLogCallback { log ->
             if (log.level < Level.AV_LOG_INFO) return@enableLogCallback
             LogBridge.enqueueLog(log.sessionId, log.level.value, log.message ?: "")
