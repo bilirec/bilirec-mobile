@@ -14,6 +14,7 @@ import 'package:bilirec/shared/app_update_service.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/device_uptime.dart';
+import 'package:bilirec/shared/external_storage_permission_prompt.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/unexpected_stop.dart';
@@ -964,7 +965,32 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         }
 
         final outputDir = await Preferences.getOutputDir();
+        if (!mounted) return;
         if (outputDir != null && outputDir.isNotEmpty) {
+          final permissionGranted =
+              await ensureExternalStoragePermissionWithPrompt(
+            context: context,
+            dialogTitle:
+                l10n.tr('startServiceExternalPathPermissionDialogTitle'),
+            dialogContent:
+                l10n.tr('startServiceExternalPathPermissionDialogContent'),
+            confirmLabel:
+                l10n.tr('startServiceExternalPathPermissionDialogConfirm'),
+            deniedToastMessage: l10n.tr('externalStoragePermissionDenied'),
+            showToast: (message) => showAppToast(context, message),
+            targetPath: outputDir,
+            promptOnlyForExternalPath: true,
+            showDeniedToastBeforePrompt: true,
+            showDeniedToastAfterDenied: false,
+          );
+          if (!permissionGranted) {
+            if (!mounted) return;
+            setState(() {
+              _setStatus('externalStoragePermissionDenied');
+            });
+            return;
+          }
+
           final writable =
               await ensureDirectoryWritableWithPermissionFromVersion(outputDir);
           if (!writable) {
