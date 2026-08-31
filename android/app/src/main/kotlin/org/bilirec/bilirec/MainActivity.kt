@@ -8,6 +8,11 @@ import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Permission changes may recreate this Activity after the IDE debugger
+        // has detached; replaying this one-shot flag would freeze the new VM.
+        if (BuildConfig.DEBUG && savedInstanceState != null) {
+            intent.removeExtra("start-paused")
+        }
         super.onCreate(savedInstanceState)
         FFmpegKitConfig.enableLogCallback { log ->
             if (log.level < Level.AV_LOG_INFO) return@enableLogCallback

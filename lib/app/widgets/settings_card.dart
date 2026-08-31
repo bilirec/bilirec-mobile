@@ -10,6 +10,7 @@ import 'package:bilirec/app/widgets/settings/settings_switch_row.dart';
 import 'package:bilirec/app/widgets/settings/settings_switch_tile.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/debugger.dart';
+import 'package:bilirec/shared/external_storage_permission_prompt.dart';
 import 'package:bilirec/shared/file_exporter.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
@@ -182,6 +183,16 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   }
 
   Future<String?> _browseBasePath() async {
+    final granted = await ensureExternalStoragePermissionWithPrompt(
+      context: context,
+      dialogTitle: l10n.tr('outputPathPermissionDialogTitle'),
+      dialogContent: l10n.tr('outputPathPermissionDialogContent'),
+      confirmLabel: l10n.tr('outputPathPermissionDialogConfirm'),
+      deniedToastMessage: '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
+      showToast: _showToast,
+    );
+    if (!granted || !mounted) return null;
+
     final currentDir = _outputDirController.text.trim();
     final initialDir = currentDir.isNotEmpty ? currentDir : null;
 
@@ -198,13 +209,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
     await Preferences.setOutputDir(selected);
     if (!mounted) return null;
-
-    final writable =
-        await ensureDirectoryWritableWithPermissionFromVersion(selected);
-    if (!mounted) return selected;
-    if (!writable) {
-      _showToast('⚠️ ${l10n.tr('externalStoragePermissionDenied')}');
-    }
 
     return selected;
   }
