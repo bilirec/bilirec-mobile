@@ -10,79 +10,20 @@ on:
   release:
     types: [created]
   workflow_dispatch:
-    inputs:
-      source_repository:
-        description: "bilirec CI only — repository that produced the Android libraries. Leave empty for a normal manual build."
-        required: false
-        type: string
-      source_run_id:
-        description: "bilirec CI only — Actions run ID containing the Android artifacts. Leave empty for a normal manual build."
-        required: false
-        type: string
-      source_sha:
-        description: "bilirec CI only — source commit SHA for the bilirec build. Leave empty for a normal manual build."
-        required: false
-        type: string
-      source_ref:
-        description: "bilirec CI only — source ref for the bilirec build. Leave empty for a normal manual build."
-        required: false
-        type: string
+  schedule:
+    - cron: "0 20 * * 1" # Mondays 20:00 UTC = Tuesdays 04:00 UTC+8
 
 concurrency:
-  group: ${{ (github.event_name == 'workflow_dispatch' && inputs.source_run_id != '') && format('build-apk-so-bump-{0}', github.ref_name) || format('build-apk-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'schedule' && format('build-apk-so-bump-{0}', github.ref_name) || format('build-apk-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
-  widget-test:
-    name: Widget Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          lfs: true
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Gradle cache
-        uses: gradle/actions/setup-gradle@v5
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: "3.47.1"
-          cache: true
-
-      - name: Set up Android NDK r28
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r28
-          local-cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Run widget tests
-        run: flutter test test/
-
-  build-apk:
+  sync-libbilirec:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write
-    env:
-      SOURCE_REPOSITORY: ${{ inputs.source_repository }}
-      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-      SOURCE_SHA: ${{ inputs.source_sha }}
-      SOURCE_REF: ${{ inputs.source_ref }}
+    outputs:
+      changed: ${{ steps.compare.outputs.changed || 'false' }}
 
     steps:
       - name: Checkout repository
@@ -90,8 +31,34 @@ jobs:
         with:
           lfs: true
 
-      - name: Validate nightly source metadata
-        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+      - name: Resolve latest bilirec build
+        if: github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.BILIREC_CROSS_REPO_TOKEN }}
+          script: |
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner: 'bilirec',
+              repo: 'bilirec',
+              workflow_id: 'build.yaml',
+              status: 'success',
+              per_page: 100,
+            });
+            const run = data.workflow_runs.find(
+              (r) => r.head_branch === 'develop' || r.head_branch === 'master'
+            );
+            if (!run) {
+              core.setFailed('No successful bilirec build run on develop/master');
+              return;
+            }
+            core.exportVariable('SOURCE_RUN_ID', String(run.id));
+            core.exportVariable('SOURCE_SHA', run.head_sha);
+            core.exportVariable('SOURCE_REF', 'refs/heads/' + run.head_branch);
+            core.exportVariable('SOURCE_REPOSITORY', 'bilirec/bilirec');
+            core.info(`Resolved run ${run.id} on ${run.head_branch} (${run.head_sha})`);
+
+      - name: Validate source metadata
+        if: env.SOURCE_RUN_ID != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -122,27 +89,27 @@ jobs:
           echo "Source ref: $SOURCE_REF"
 
       - name: Download arm64-v8a bilirec library
-        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+        if: env.SOURCE_RUN_ID != ''
         uses: actions/download-artifact@v6
         with:
           name: bilirec-android-arm64-v8a
           path: .tmp/bilirec-so/arm64-v8a
-          repository: ${{ inputs.source_repository }}
-          run-id: ${{ inputs.source_run_id }}
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
           github-token: ${{ secrets.BILIREC_CROSS_REPO_TOKEN }}
 
       - name: Download x86_64 bilirec library
-        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+        if: env.SOURCE_RUN_ID != ''
         uses: actions/download-artifact@v6
         with:
           name: bilirec-android-x86_64
           path: .tmp/bilirec-so/x86_64
-          repository: ${{ inputs.source_repository }}
-          run-id: ${{ inputs.source_run_id }}
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
           github-token: ${{ secrets.BILIREC_CROSS_REPO_TOKEN }}
 
       - name: Compare hashes and update jniLibs
-        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+        if: env.SOURCE_RUN_ID != ''
         id: compare
         shell: bash
         run: |
@@ -210,7 +177,7 @@ jobs:
           echo "x86_64 changed: ${changed_x64}"
 
       - name: Commit and push libbilirec.so
-        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != '' && steps.compare.outputs.changed == 'true'
+        if: env.SOURCE_RUN_ID != '' && steps.compare.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -230,8 +197,72 @@ jobs:
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: libbilirec.so already up to date
-        if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != '' && steps.compare.outputs.changed != 'true'
+        if: env.SOURCE_RUN_ID != '' && steps.compare.outputs.changed != 'true'
         run: echo "libbilirec.so is already up to date for both ABIs."
+
+      - name: Skip sync (no source run)
+        if: env.SOURCE_RUN_ID == ''
+        run: echo "No SOURCE_RUN_ID; skipping libbilirec.so sync."
+
+  widget-test:
+    name: Widget Tests
+    needs: sync-libbilirec
+    if: github.event_name != 'schedule' || needs.sync-libbilirec.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+          # After a so-bump push, use branch tip so this job sees the new commit.
+          ref: ${{ needs.sync-libbilirec.outputs.changed == 'true' && github.ref_name || github.sha }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.47.1"
+          cache: true
+
+      - name: Set up Android NDK r28
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r28
+          local-cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run widget tests
+        run: flutter test test/
+
+  build-apk:
+    needs: sync-libbilirec
+    if: github.event_name != 'schedule' || needs.sync-libbilirec.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+          # After a so-bump push, use branch tip so this job sees the new commit.
+          ref: ${{ needs.sync-libbilirec.outputs.changed == 'true' && github.ref_name || github.sha }}
 
       - name: Set up Java
         uses: actions/setup-java@v4
