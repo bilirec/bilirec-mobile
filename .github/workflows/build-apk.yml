@@ -10,11 +10,16 @@ on:
   release:
     types: [created]
   workflow_dispatch:
+    inputs:
+      sync_libbilirec:
+        description: Sync latest nightly libbilirec.so from bilirec/bilirec
+        type: boolean
+        default: false
   schedule:
     - cron: "0 20 * * 1" # Mondays 20:00 UTC = Tuesdays 04:00 UTC+8
 
 concurrency:
-  group: ${{ github.event_name == 'schedule' && format('build-apk-so-bump-{0}', github.ref_name) || format('build-apk-{0}', github.run_id) }}
+  group: ${{ (github.event_name == 'schedule' || inputs.sync_libbilirec == 'true') && format('build-apk-so-bump-{0}', github.ref_name) || format('build-apk-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
@@ -32,7 +37,7 @@ jobs:
           lfs: true
 
       - name: Resolve latest bilirec build
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.sync_libbilirec == 'true')
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.BILIREC_CROSS_REPO_TOKEN }}
