@@ -188,7 +188,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       dialogTitle: l10n.tr('outputPathPermissionDialogTitle'),
       dialogContent: l10n.tr('outputPathPermissionDialogContent'),
       confirmLabel: l10n.tr('outputPathPermissionDialogConfirm'),
-      deniedToastMessage: '⚠️ ${l10n.tr('externalStoragePermissionDenied')}',
+      deniedToastMessage: '⚠️ ${l10n.tr('outputPathPermissionDenied')}',
       showToast: _showToast,
     );
     if (!granted || !mounted) return null;
