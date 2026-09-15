@@ -50,6 +50,7 @@ class AppUpdateService {
     Future<Directory?> Function()? externalStorageDirectoryProvider,
     Future<String> Function()? currentAppVersionProvider,
     Future<bool> Function(String apkPath)? apkSigningMatchesInstalled,
+    bool? updateChecksEnabled,
   })  : _updater = updater ?? GithubReleaseApkUpdater(),
         _apiService = apiService ?? GithubApiService(),
         _apkDownloader = apkDownloader ?? ApkDownloaderService(),
@@ -60,7 +61,9 @@ class AppUpdateService {
             externalStorageDirectoryProvider ?? getExternalStorageDirectory,
         _currentAppVersionProvider = currentAppVersionProvider,
         _apkSigningMatchesInstalled =
-            apkSigningMatchesInstalled ?? _defaultApkSigningMatchesInstalled;
+            apkSigningMatchesInstalled ?? _defaultApkSigningMatchesInstalled,
+        // Debug/test APKs skip the GitHub prompt so CI and local debug are not blocked.
+        _updateChecksEnabled = updateChecksEnabled ?? !kDebugMode;
 
   final GithubReleaseApkUpdater _updater;
   final GithubApiService _apiService;
@@ -70,6 +73,7 @@ class AppUpdateService {
   final Future<Directory?> Function() _externalStorageDirectoryProvider;
   final Future<String> Function()? _currentAppVersionProvider;
   final Future<bool> Function(String apkPath) _apkSigningMatchesInstalled;
+  final bool _updateChecksEnabled;
 
   static String normalizeVersionIdentifier(String value) {
     final trimmed = value.trim();
@@ -229,6 +233,11 @@ class AppUpdateService {
   }
 
   Future<AppUpdateCandidate?> checkForUpdate() async {
+    if (!_updateChecksEnabled) {
+      debugLog('app_update: update checks disabled');
+      return null;
+    }
+
     if (!Platform.isAndroid) {
       return null;
     }

@@ -25,6 +25,56 @@ void main() {
     fakeAsyncPrefs.reset();
   });
 
+  group('AppUpdateService.checkForUpdate skip', () {
+    test('default service does not call GitHub in debug/test builds', () async {
+      final api = _RecordingGithubApiService();
+      final service = AppUpdateService(
+        apiService: api,
+        currentAppVersionProvider: () async => '1.0.1',
+      );
+
+      expect(await service.checkForUpdate(), isNull);
+      expect(api.callCount, 0);
+    });
+
+    test('updateChecksEnabled false does not call GitHub', () async {
+      final api = _RecordingGithubApiService();
+      final service = AppUpdateService(
+        apiService: api,
+        currentAppVersionProvider: () async => '1.0.1',
+        updateChecksEnabled: false,
+      );
+
+      expect(await service.checkForUpdate(), isNull);
+      expect(api.callCount, 0);
+    });
+
+    test('updateChecksEnabled true calls GitHub on Android', () async {
+      if (!Platform.isAndroid) {
+        return;
+      }
+
+      final api = _RecordingGithubApiService(
+        release: GithubAPKRelease(
+          version: '9.9.9',
+          apkUrl: 'https://example.invalid/app.apk',
+          releaseNote: 'test release',
+        ),
+      );
+      final service = AppUpdateService(
+        apiService: api,
+        updater: _FakeUpdater(),
+        currentAppVersionProvider: () async => '1.0.1',
+        updateChecksEnabled: true,
+      );
+
+      final candidate = await service.checkForUpdate();
+
+      expect(api.callCount, 1);
+      expect(candidate?.version, '9.9.9');
+    });
+  });
+
   group('AppUpdateService.normalizeVersionIdentifier', () {
     test('removes v prefix and build suffix', () {
       expect(
@@ -477,4 +527,28 @@ class _RecordingUpdater extends GithubReleaseApkUpdater {
     installCount++;
     lastPath = filePath;
   }
+}
+
+class _RecordingGithubApiService extends GithubApiService {
+  _RecordingGithubApiService({this.release});
+
+  final GithubAPKRelease? release;
+  int callCount = 0;
+
+  @override
+  Future<GithubAPKRelease?> getLatestGithubAPKRelease({
+    required String ownerGithub,
+    required String repositoryGithub,
+    required String apkKeyName,
+    String? tokenGithub,
+    List<String>? supportedAbis,
+  }) async {
+    callCount++;
+    return release;
+  }
+}
+
+class _FakeUpdater extends GithubReleaseApkUpdater {
+  @override
+  Future<List<String>?> getSupportedAbis() async => const ['x86_64'];
 }
