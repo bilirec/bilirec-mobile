@@ -197,6 +197,7 @@ class BilirecSseHandler {
 
     final titleKey = switch (event.type) {
       'live_auto_record_started' => 'sseTitleAutoRecord',
+      'live_auto_record_retry_started' => 'sseTitleAutoRecord',
       'live_auto_record_failed' => 'sseTitleAutoRecordFailed',
       'live_ended' => 'sseTitleLiveEnded',
       'live_record_stopped' => 'sseTitleRecordStopped',
