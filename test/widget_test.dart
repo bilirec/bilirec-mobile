@@ -122,6 +122,8 @@ final _maxConcurrentRecordingsTitleLabels =
     labelsForKey('maxConcurrentRecordingsTitle');
 final _maxConcurrentRecordingsWarningLabels =
     labelsForKey('maxConcurrentRecordingsWarning');
+final _maxConcurrentRecordingsWarningHighLabels =
+    labelsForKey('maxConcurrentRecordingsWarningHigh');
 final _danmakuPolicyTitleLabels = labelsForKey('danmakuPolicyTitle');
 final _danmakuPolicyDescriptionLabels =
     labelsForKey('danmakuPolicyDescription');
@@ -424,6 +426,27 @@ void main() {
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
     expect(envSettings['CONVERT_TO_MP4'], 'true');
     expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
+  });
+
+  testWidgets('同時錄製上限可設定為 15 路並顯示高負載警告', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+
+    final sliders = tester.widgetList<Slider>(find.byType(Slider));
+    sliders.elementAt(3).onChanged?.call(12); // 3..15 -> index 12 = 15
+    sliders.elementAt(3).onChangeEnd?.call(12);
+    await tester.pumpAndSettle();
+
+    expect(
+      _findFirstVisibleText(_maxConcurrentRecordingsWarningHighLabels),
+      findsOneWidget,
+    );
+
+    final envSettings = await Preferences.getManagedEnvironmentSettings();
+    expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '15');
   });
 
   testWidgets('彈幕策略設定變更會更新環境變數', (tester) async {

@@ -71,12 +71,17 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   static const int _bytesPerGb = 1024 * 1024 * 1024;
   static const List<int> _diskSpaceOptionsGb = <int>[2, 5, 10];
   static const List<int> _retryMinuteOptions = <int>[5, 10, 15, 20, 25, 30];
-  static const List<int> _maxConcurrentRecordingOptions = <int>[3, 4, 5, 6];
+  static const int _minMaxConcurrentRecordings = 3;
+  static const int _maxMaxConcurrentRecordings = 15;
+  static final List<int> _maxConcurrentRecordingOptions = List<int>.generate(
+    _maxMaxConcurrentRecordings - _minMaxConcurrentRecordings + 1,
+    (index) => _minMaxConcurrentRecordings + index,
+  );
 
   static const int _defaultMaxRecordingHours = 5;
   static const int _defaultMinDiskSpaceGb = 5;
   static const int _defaultMaxRetryMinutes = 10;
-  static const int _defaultMaxConcurrentRecordings = 3;
+  static const int _defaultMaxConcurrentRecordings = _minMaxConcurrentRecordings;
   static const String _defaultDanmakuOutputFormat = 'jsonl';
   static const String _defaultDanmakuOverflowPolicy = 'drop';
 
@@ -325,18 +330,40 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     return _defaultDanmakuOverflowPolicy;
   }
 
+  bool _isValidMaxConcurrentRecordings(int value) {
+    return value >= _minMaxConcurrentRecordings &&
+        value <= _maxMaxConcurrentRecordings;
+  }
+
   int _readMaxConcurrentRecordings(Map<String, String> env) {
     final value = _readBoundedIntFromEnv(
       env,
       'MAX_CONCURRENT_RECORDINGS',
       fallback: _defaultMaxConcurrentRecordings,
-      min: _maxConcurrentRecordingOptions.first,
-      max: _maxConcurrentRecordingOptions.last,
+      min: _minMaxConcurrentRecordings,
+      max: _maxMaxConcurrentRecordings,
     );
-    if (_maxConcurrentRecordingOptions.contains(value)) {
+    if (_isValidMaxConcurrentRecordings(value)) {
       return value;
     }
     return _defaultMaxConcurrentRecordings;
+  }
+
+  String _maxConcurrentRecordingsWarningText(AppLocalizations l10n, int value) {
+    if (value >= 11) {
+      return l10n.tr('maxConcurrentRecordingsWarningHigh');
+    }
+    if (value >= 7) {
+      return l10n.tr('maxConcurrentRecordingsWarningElevated');
+    }
+    return l10n.tr('maxConcurrentRecordingsWarning');
+  }
+
+  SettingsHintTone _maxConcurrentRecordingsWarningTone(int value) {
+    if (value >= 11) {
+      return SettingsHintTone.error;
+    }
+    return SettingsHintTone.warning;
   }
 
   int _readMinDiskSpaceGb(Map<String, String> env) {
@@ -452,7 +479,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   }
 
   Future<void> _setMaxConcurrentRecordings(int value) async {
-    if (!_maxConcurrentRecordingOptions.contains(value)) return;
+    if (!_isValidMaxConcurrentRecordings(value)) return;
     await _updateManagedEnvironmentSettings((current) {
       current['MAX_CONCURRENT_RECORDINGS'] = '$value';
       if (_microSdProtectionEnabled) {
@@ -1492,8 +1519,13 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         description:
                             l10n.tr('maxConcurrentRecordingsDescription'),
                         hint: SettingsHint(
-                          tone: SettingsHintTone.warning,
-                          text: l10n.tr('maxConcurrentRecordingsWarning'),
+                          tone: _maxConcurrentRecordingsWarningTone(
+                            _maxConcurrentRecordings,
+                          ),
+                          text: _maxConcurrentRecordingsWarningText(
+                            l10n,
+                            _maxConcurrentRecordings,
+                          ),
                         ),
                         options: _maxConcurrentRecordingOptions,
                         value: _maxConcurrentRecordings,

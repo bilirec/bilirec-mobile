@@ -230,6 +230,10 @@ class AppLocalizations {
       'maxConcurrentRecordingsTitle': '同時錄製上限',
       'maxConcurrentRecordingsDescription': '限制同時進行的錄製數量，避免裝置長時間高負載。',
       'maxConcurrentRecordingsWarning': '提高此數值可能明顯增加耗電與發熱，並降低系統穩定性。',
+      'maxConcurrentRecordingsWarningElevated':
+          '提高到此數值可能更明顯增加耗電與發熱，並進一步降低系統穩定性。',
+      'maxConcurrentRecordingsWarningHigh':
+          '提高到此數值可能大幅增加耗電與發熱，系統穩定性也更容易下降。',
       'danmakuPolicyTitle': '彈幕策略',
       'danmakuPolicyDescription':
           '這裡只決定彈幕檔案格式與高峰時的處理方式。是否同時錄製彈幕，請在錄製管理程式中為每次錄製或房間開啟。',
@@ -448,6 +452,10 @@ class AppLocalizations {
       'maxConcurrentRecordingsTitle': '同时录制上限',
       'maxConcurrentRecordingsDescription': '限制同时进行的录制数量，避免设备长时间高负载。',
       'maxConcurrentRecordingsWarning': '提高此数值可能明显增加耗电与发热，并降低系统稳定性。',
+      'maxConcurrentRecordingsWarningElevated':
+          '提高到此数值可能更明显增加耗电与发热，并进一步降低系统稳定性。',
+      'maxConcurrentRecordingsWarningHigh':
+          '提高到此数值可能大幅增加耗电与发热，系统稳定性也更容易下降。',
       'danmakuPolicyTitle': '弹幕策略',
       'danmakuPolicyDescription':
           '这里只决定弹幕文件格式与高峰时的处理方式。是否同时录制弹幕，请在录制管理程序中为每次录制或房间开启。',

@@ -431,7 +431,7 @@ void main() {
       expect(initialSliders[0].value, 5); // MAX_RECORDING_HOURS 預設 5
       expect(initialSliders[1].value, 1); // MIN_DISK_SPACE_BYTES 預設 5GB
       expect(initialSliders[2].value, 1); // MAX_RETRY_MINUTES 預設 5 分鐘
-      expect(initialSliders[3].value, 0); // MAX_CONCURRENT_RECORDINGS 預設無限制
+      expect(initialSliders[3].value, 0); // MAX_CONCURRENT_RECORDINGS 預設 3 路
 
       await _setRecordingPolicyValues(tester);
 

@@ -8,11 +8,12 @@ void main() {
       expect(computeFlushPeriodSecs(4), 20);
       expect(computeFlushPeriodSecs(5), 25);
       expect(computeFlushPeriodSecs(6), 30);
+      expect(computeFlushPeriodSecs(15), 75);
     });
 
     test('clamps to configured bounds', () {
       expect(computeFlushPeriodSecs(1), 15);
-      expect(computeFlushPeriodSecs(100), 45);
+      expect(computeFlushPeriodSecs(100), 75);
     });
   });
 

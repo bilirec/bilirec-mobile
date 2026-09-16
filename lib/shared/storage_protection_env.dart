@@ -1,7 +1,7 @@
 const int kBaseFlushPeriodSecs = 15;
 const int kBaseConcurrentForFlush = 3;
 const int kDefaultMaxConcurrentRecordings = 3;
-const int kMaxFlushPeriodSecs = 45;
+const int kMaxFlushPeriodSecs = 75;
 
 int computeFlushPeriodSecs(int maxConcurrent) {
   final scaled =
