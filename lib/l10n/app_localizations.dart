@@ -217,9 +217,11 @@ class AppLocalizations {
       'maxRecordingHoursTitle': '單次錄製時長上限',
       'maxRecordingHoursDescription': '限制每次錄製最長時長，避免長時間無人值守時占用過多儲存空間。',
       'minDiskSpaceTitle': '啟動前最低可用空間',
-      'minDiskSpaceDescription': '僅在開始錄製前檢查。若可用空間低於門檻，該次錄製將不會啟動。',
+      'minDiskSpaceDescription':
+          '僅在開始錄製前檢查。若可用空間低於門檻，該次錄製將不會啟動。設為「不檢查」表示不以可用空間阻擋啟動。',
       'maxRetryMinutesTitle': '下線後服務重試時長',
-      'maxRetryMinutesDescription': '直播下線後，服務會持續重試到指定時長，再結束此次錄製。',
+      'maxRetryMinutesDescription':
+          '直播下線後，服務會持續重試到指定時長，再結束此次錄製。設為「不等待」表示下線後不進行重試。',
       'recordingRecoveryDurationTitle': '重試成功後的時長計算',
       'recordingRecoveryDurationDescription':
           '斷流後若重試成功並恢復錄製，可選擇從頭起算錄製時長，或沿用開始錄製時的總時長。',
@@ -232,8 +234,7 @@ class AppLocalizations {
       'maxConcurrentRecordingsWarning': '提高此數值可能明顯增加耗電與發熱，並降低系統穩定性。',
       'maxConcurrentRecordingsWarningElevated':
           '提高到此數值可能更明顯增加耗電與發熱，並進一步降低系統穩定性。',
-      'maxConcurrentRecordingsWarningHigh':
-          '提高到此數值可能大幅增加耗電與發熱，系統穩定性也更容易下降。',
+      'maxConcurrentRecordingsWarningHigh': '提高到此數值可能大幅增加耗電與發熱，系統穩定性也更容易下降。',
       'danmakuPolicyTitle': '彈幕策略',
       'danmakuPolicyDescription':
           '這裡只決定彈幕檔案格式與高峰時的處理方式。是否同時錄製彈幕，請在錄製管理程式中為每次錄製或房間開啟。',
@@ -273,7 +274,9 @@ class AppLocalizations {
       'hoursOption': '{value} 小時',
       'hoursUnlimitedOption': '不限',
       'minutesOption': '{value} 分鐘',
+      'maxRetryMinutesNoWaitOption': '不等待',
       'diskSpaceOption': '{value} GB',
+      'diskSpaceNoMinimumOption': '不檢查',
       'concurrentRecordingOption': '{value} 路',
       'notificationTitleRunning': 'Bilirec 系統服務運行中',
       'notificationTextRunning': '開啟錄製管理程式即可開始錄製',
@@ -439,9 +442,11 @@ class AppLocalizations {
       'maxRecordingHoursTitle': '单次录制时长上限',
       'maxRecordingHoursDescription': '限制每次录制最长时长，避免长时间无人值守时占用过多存储空间。',
       'minDiskSpaceTitle': '启动前最低可用空间',
-      'minDiskSpaceDescription': '仅在开始录制前检查。若可用空间低于门槛，本次录制将不会启动。',
+      'minDiskSpaceDescription':
+          '仅在开始录制前检查。若可用空间低于门槛，本次录制将不会启动。设置为“不检查”表示不以可用空间阻止启动。',
       'maxRetryMinutesTitle': '下线后服务重试时长',
-      'maxRetryMinutesDescription': '直播下线后，服务会持续重试到指定时长，再结束此次录制。',
+      'maxRetryMinutesDescription':
+          '直播下线后，服务会持续重试到指定时长，再结束此次录制。设置为“不等待”表示下线后不进行重试。',
       'recordingRecoveryDurationTitle': '重试成功后的时长计算',
       'recordingRecoveryDurationDescription':
           '断流后若重试成功并恢复录制，可选择从头起算录制时长，或沿用开始录制时的总时长。',
@@ -454,8 +459,7 @@ class AppLocalizations {
       'maxConcurrentRecordingsWarning': '提高此数值可能明显增加耗电与发热，并降低系统稳定性。',
       'maxConcurrentRecordingsWarningElevated':
           '提高到此数值可能更明显增加耗电与发热，并进一步降低系统稳定性。',
-      'maxConcurrentRecordingsWarningHigh':
-          '提高到此数值可能大幅增加耗电与发热，系统稳定性也更容易下降。',
+      'maxConcurrentRecordingsWarningHigh': '提高到此数值可能大幅增加耗电与发热，系统稳定性也更容易下降。',
       'danmakuPolicyTitle': '弹幕策略',
       'danmakuPolicyDescription':
           '这里只决定弹幕文件格式与高峰时的处理方式。是否同时录制弹幕，请在录制管理程序中为每次录制或房间开启。',
@@ -495,7 +499,9 @@ class AppLocalizations {
       'hoursOption': '{value} 小时',
       'hoursUnlimitedOption': '不限',
       'minutesOption': '{value} 分钟',
+      'maxRetryMinutesNoWaitOption': '不等待',
       'diskSpaceOption': '{value} GB',
+      'diskSpaceNoMinimumOption': '不检查',
       'concurrentRecordingOption': '{value} 路',
       'notificationTitleRunning': 'Bilirec 系统服务运行中',
       'notificationTextRunning': '打开录制管理程序即可开始录制',

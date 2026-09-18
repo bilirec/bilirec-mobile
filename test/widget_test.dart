@@ -116,6 +116,9 @@ final _recordingPolicyDescriptionLabels =
 final _maxRecordingHoursTitleLabels = labelsForKey('maxRecordingHoursTitle');
 final _minDiskSpaceTitleLabels = labelsForKey('minDiskSpaceTitle');
 final _maxRetryMinutesTitleLabels = labelsForKey('maxRetryMinutesTitle');
+final _diskSpaceNoMinimumLabels = labelsForKey('diskSpaceNoMinimumOption');
+final _maxRetryMinutesNoWaitLabels =
+    labelsForKey('maxRetryMinutesNoWaitOption');
 final _recordingRecoveryDurationTitleLabels =
     labelsForKey('recordingRecoveryDurationTitle');
 final _maxConcurrentRecordingsTitleLabels =
@@ -388,11 +391,11 @@ void main() {
     sliders.elementAt(0).onChanged?.call(12);
     sliders.elementAt(0).onChangeEnd?.call(12);
     await tester.pumpAndSettle();
-    sliders.elementAt(1).onChanged?.call(2); // 2GB,5GB,10GB -> index 2
-    sliders.elementAt(1).onChangeEnd?.call(2);
+    sliders.elementAt(1).onChanged?.call(3); // 0GB,2GB,5GB,10GB -> index 3
+    sliders.elementAt(1).onChangeEnd?.call(3);
     await tester.pumpAndSettle();
-    sliders.elementAt(2).onChanged?.call(5); // 5,10,15,20,25,30 -> index 5
-    sliders.elementAt(2).onChangeEnd?.call(5);
+    sliders.elementAt(2).onChanged?.call(6); // 0,5,10,15,20,25,30 -> index 6
+    sliders.elementAt(2).onChangeEnd?.call(6);
     await tester.pumpAndSettle();
     sliders.elementAt(3).onChanged?.call(3); // 3,4,5,6 -> index 3
     sliders.elementAt(3).onChangeEnd?.call(3);
@@ -426,6 +429,42 @@ void main() {
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
     expect(envSettings['CONVERT_TO_MP4'], 'true');
     expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
+  });
+
+  testWidgets('錄製策略可設定不等待重試與不檢查空間', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+
+    final sliders = tester.widgetList<Slider>(find.byType(Slider)).toList();
+    sliders.elementAt(1).onChanged?.call(0);
+    sliders.elementAt(1).onChangeEnd?.call(0);
+    await tester.pumpAndSettle();
+    sliders.elementAt(2).onChanged?.call(0);
+    sliders.elementAt(2).onChangeEnd?.call(0);
+    await tester.pumpAndSettle();
+
+    final envSettings = await Preferences.getManagedEnvironmentSettings();
+    expect(envSettings['MIN_DISK_SPACE_BYTES'], '0');
+    expect(envSettings['MAX_RETRY_MINUTES'], '0');
+    expect(_findFirstVisibleText(_diskSpaceNoMinimumLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_maxRetryMinutesNoWaitLabels), findsOneWidget);
+
+    final sheetFinder = find.byType(BottomSheet);
+    if (sheetFinder.evaluate().isNotEmpty) {
+      Navigator.of(tester.element(sheetFinder.first)).pop();
+      await tester.pumpAndSettle();
+    }
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+    final reloadedSliders =
+        tester.widgetList<Slider>(find.byType(Slider)).toList();
+    expect(reloadedSliders.elementAt(1).value, 0);
+    expect(reloadedSliders.elementAt(2).value, 0);
   });
 
   testWidgets('同時錄製上限可設定為 15 路並顯示高負載警告', (tester) async {

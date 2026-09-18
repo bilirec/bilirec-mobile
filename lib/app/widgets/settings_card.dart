@@ -69,8 +69,16 @@ class SettingsDrawerSheet extends StatefulWidget {
 
 class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   static const int _bytesPerGb = 1024 * 1024 * 1024;
-  static const List<int> _diskSpaceOptionsGb = <int>[2, 5, 10];
-  static const List<int> _retryMinuteOptions = <int>[5, 10, 15, 20, 25, 30];
+  static const List<int> _diskSpaceOptionsGb = <int>[0, 2, 5, 10];
+  static const List<int> _retryMinuteOptions = <int>[
+    0,
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+  ];
   static const int _minMaxConcurrentRecordings = 3;
   static const int _maxMaxConcurrentRecordings = 15;
   static final List<int> _maxConcurrentRecordingOptions = List<int>.generate(
@@ -81,7 +89,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   static const int _defaultMaxRecordingHours = 5;
   static const int _defaultMinDiskSpaceGb = 5;
   static const int _defaultMaxRetryMinutes = 10;
-  static const int _defaultMaxConcurrentRecordings = _minMaxConcurrentRecordings;
+  static const int _defaultMaxConcurrentRecordings =
+      _minMaxConcurrentRecordings;
   static const String _defaultDanmakuOutputFormat = 'jsonl';
   static const String _defaultDanmakuOverflowPolicy = 'drop';
 
@@ -299,7 +308,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     final parsed = int.tryParse(env['MAX_RETRY_MINUTES'] ?? '');
     if (parsed == null) return fallback;
 
-    final stepped = ((parsed / 5).round() * 5).clamp(5, 30);
+    final stepped = ((parsed / 5).round() * 5).clamp(0, 30);
     if (_retryMinuteOptions.contains(stepped)) {
       return stepped;
     }
@@ -368,7 +377,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
   int _readMinDiskSpaceGb(Map<String, String> env) {
     final bytes = int.tryParse(env['MIN_DISK_SPACE_BYTES'] ?? '');
-    if (bytes == null || bytes <= 0) {
+    if (bytes == null || bytes < 0) {
       return _defaultMinDiskSpaceGb;
     }
 
@@ -1445,10 +1454,12 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         description: l10n.tr('minDiskSpaceDescription'),
                         options: _diskSpaceOptionsGb,
                         value: _minDiskSpaceGb,
-                        valueLabel: l10n.tr(
-                          'diskSpaceOption',
-                          params: {'value': '$_minDiskSpaceGb'},
-                        ),
+                        valueLabel: _minDiskSpaceGb == 0
+                            ? l10n.tr('diskSpaceNoMinimumOption')
+                            : l10n.tr(
+                                'diskSpaceOption',
+                                params: {'value': '$_minDiskSpaceGb'},
+                              ),
                         enabled: widget.controlsEnabled,
                         onChanged: (value) {
                           setState(() {
@@ -1465,10 +1476,12 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         description: l10n.tr('maxRetryMinutesDescription'),
                         options: _retryMinuteOptions,
                         value: _maxRetryMinutes,
-                        valueLabel: l10n.tr(
-                          'minutesOption',
-                          params: {'value': '$_maxRetryMinutes'},
-                        ),
+                        valueLabel: _maxRetryMinutes == 0
+                            ? l10n.tr('maxRetryMinutesNoWaitOption')
+                            : l10n.tr(
+                                'minutesOption',
+                                params: {'value': '$_maxRetryMinutes'},
+                              ),
                         enabled: widget.controlsEnabled,
                         onChanged: (value) {
                           setState(() {

@@ -36,14 +36,15 @@ final _ssePushSwitchTitleLabels = labelsForKey('ssePushSwitchTitle');
 final _antiSleepTitleLabels = labelsForKey('antiSleepTitle');
 final _danmakuPolicyTitleLabels = labelsForKey('danmakuPolicyTitle');
 final _developerSettingsTitleLabels = labelsForKey('developerSettingsTitle');
-final _environmentSettingsTitleLabels = labelsForKey('environmentSettingsTitle');
+final _environmentSettingsTitleLabels =
+    labelsForKey('environmentSettingsTitle');
 final _addEnvironmentSettingLabels = labelsForKey('addEnvironmentSetting');
 final _savedEnvironmentSettingsTitleLabels =
     labelsForKey('savedEnvironmentSettingsTitle');
 final _batteryDialogTitleLabels = labelsForKey('batteryDialogTitle');
 final _goToSettingsLabels = labelsForKey('goToSettings');
 const _logTag = 'BASIC_FUNCTIONAL_TEST';
-final _expectedRecordingPolicySliderValues = <double>[0, 2, 5, 1];
+final _expectedRecordingPolicySliderValues = <double>[0, 3, 6, 1];
 final _expectedManagedEnvironmentAfterPolicy = <String, String>{
   'MAX_RECORDING_HOURS': '0',
   'MIN_DISK_SPACE_BYTES': '${10 * 1024 * 1024 * 1024}',
@@ -78,11 +79,11 @@ Future<void> _setRecordingPolicyValues(WidgetTester tester) async {
   sliders[0].onChanged?.call(0);
   sliders[0].onChangeEnd?.call(0);
   await tester.pumpAndSettle();
-  sliders[1].onChanged?.call(2);
-  sliders[1].onChangeEnd?.call(2);
+  sliders[1].onChanged?.call(3);
+  sliders[1].onChangeEnd?.call(3);
   await tester.pumpAndSettle();
-  sliders[2].onChanged?.call(5);
-  sliders[2].onChangeEnd?.call(5);
+  sliders[2].onChanged?.call(6);
+  sliders[2].onChangeEnd?.call(6);
   await tester.pumpAndSettle();
   sliders[3].onChanged?.call(1);
   sliders[3].onChangeEnd?.call(1);
@@ -114,7 +115,8 @@ Future<List<Slider>> _waitForRecordingPolicySliders(
   final maxTicks = timeout.inMilliseconds ~/ step.inMilliseconds;
   List<Slider> latest = <Slider>[];
   for (var i = 0; i < maxTicks; i++) {
-    latest = tester.widgetList<Slider>(find.byType(Slider)).toList(growable: false);
+    latest =
+        tester.widgetList<Slider>(find.byType(Slider)).toList(growable: false);
     if (_recordingPolicySlidersMatch(latest, expectedValues)) {
       return latest;
     }
@@ -254,14 +256,18 @@ void main() {
       expect(findFirstVisibleText(_generalSettingsTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_storagePolicyTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_storagePathTitleLabels), findsOneWidget);
-      expect(findFirstVisibleText(_microSdWearProtectionTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_microSdWearProtectionTitleLabels),
+          findsOneWidget);
       expect(findFirstVisibleText(_changePathLabels), findsOneWidget);
       expect(findFirstVisibleText(_ssePushSwitchTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_antiSleepTitleLabels), findsOneWidget);
       expect(findFirstVisibleText(_danmakuPolicyTitleLabels), findsOneWidget);
-      expect(findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
-      expect(findFirstVisibleText(_environmentSettingsTitleLabels), findsOneWidget);
-      expect(findFirstVisibleText(_addEnvironmentSettingLabels), findsOneWidget);
+      expect(
+          findFirstVisibleText(_developerSettingsTitleLabels), findsOneWidget);
+      expect(findFirstVisibleText(_environmentSettingsTitleLabels),
+          findsOneWidget);
+      expect(
+          findFirstVisibleText(_addEnvironmentSettingLabels), findsOneWidget);
       expect(
         findFirstVisibleText(_savedEnvironmentSettingsTitleLabels),
         findsOneWidget,
@@ -425,12 +431,13 @@ void main() {
       await _openSettingsSheet(tester);
 
       // 驗證錄製策略滑動條的預設值（這是功能契約）
-      final initialSliders =
-          tester.widgetList<Slider>(find.byType(Slider)).toList(growable: false);
+      final initialSliders = tester
+          .widgetList<Slider>(find.byType(Slider))
+          .toList(growable: false);
       expect(initialSliders.length, greaterThanOrEqualTo(4));
       expect(initialSliders[0].value, 5); // MAX_RECORDING_HOURS 預設 5
-      expect(initialSliders[1].value, 1); // MIN_DISK_SPACE_BYTES 預設 5GB
-      expect(initialSliders[2].value, 1); // MAX_RETRY_MINUTES 預設 5 分鐘
+      expect(initialSliders[1].value, 2); // MIN_DISK_SPACE_BYTES 預設 5GB
+      expect(initialSliders[2].value, 2); // MAX_RETRY_MINUTES 預設 10 分鐘
       expect(initialSliders[3].value, 0); // MAX_CONCURRENT_RECORDINGS 預設 3 路
 
       await _setRecordingPolicyValues(tester);
@@ -455,8 +462,8 @@ void main() {
       );
       expect(slidersAfterRestart.length, greaterThanOrEqualTo(4));
       expect(slidersAfterRestart[0].value, 0); // MAX_RECORDING_HOURS 改為 0（無限制）
-      expect(slidersAfterRestart[1].value, 2); // MIN_DISK_SPACE_BYTES 改為 10GB
-      expect(slidersAfterRestart[2].value, 5); // MAX_RETRY_MINUTES 改為 30 分鐘
+      expect(slidersAfterRestart[1].value, 3); // MIN_DISK_SPACE_BYTES 改為 10GB
+      expect(slidersAfterRestart[2].value, 6); // MAX_RETRY_MINUTES 改為 30 分鐘
       expect(slidersAfterRestart[3].value, 1); // MAX_CONCURRENT_RECORDINGS 改為 4
 
       // 驗證資料庫層：確認持久化值正確寫入
