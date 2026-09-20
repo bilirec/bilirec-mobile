@@ -11,6 +11,7 @@ const String _skippedUpdateVersionKey = 'skipped_update_version';
 const String _lastSeenInstalledVersionKey = 'last_seen_installed_version';
 const String _managedEnvironmentSettingsKey = 'managed_environment_settings';
 const String _developEnvironmentSettingsKey = 'develop_environment_settings';
+const String _githubApiBaseUrlKey = 'github_api_base_url';
 
 const String coreRunningKey = 'core_running';
 
@@ -141,6 +142,21 @@ sealed class Preferences {
       return;
     }
     await prefs.setString(_developEnvironmentSettingsKey, jsonEncode(settings));
+  }
+
+  static Future<void> setGitHubApiBaseUrl(String? value) async {
+    final prefs = _prefs;
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      await prefs.remove(_githubApiBaseUrlKey);
+      return;
+    }
+    await prefs.setString(_githubApiBaseUrlKey, trimmed);
+  }
+
+  static Future<String?> getGitHubApiBaseUrl() async {
+    final prefs = _prefs;
+    return prefs.getString(_githubApiBaseUrlKey);
   }
 
   static Future<Map<String, String>> getDevelopEnvironmentSettings() async {

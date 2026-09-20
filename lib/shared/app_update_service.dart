@@ -6,14 +6,14 @@ import 'package:github_release_apk_updater/github_release_apk_updater.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:bilirec/shared/browser_launcher.dart';
+import 'package:bilirec/shared/configurable_github_api_service.dart';
 import 'package:bilirec/shared/debugger.dart';
+import 'package:bilirec/shared/github_api_base.dart';
 import 'package:bilirec/shared/preferences.dart';
 
 const String _ownerGithub = 'bilirec';
 const String _repositoryGithub = 'bilirec-mobile';
 const String _apiKeyName = 'bilirec-release';
-const String _releasePageUrl =
-    'https://github.com/$_ownerGithub/$_repositoryGithub/releases/latest';
 const MethodChannel _apkSignatureChannel =
     MethodChannel('org.bilirec.bilirec/apk_signature');
 
@@ -52,7 +52,7 @@ class AppUpdateService {
     Future<bool> Function(String apkPath)? apkSigningMatchesInstalled,
     bool? updateChecksEnabled,
   })  : _updater = updater ?? GithubReleaseApkUpdater(),
-        _apiService = apiService ?? GithubApiService(),
+        _apiServiceOverride = apiService,
         _apkDownloader = apkDownloader ?? ApkDownloaderService(),
         _versionComparator = versionComparator ?? VersionComparator(),
         _temporaryDirectoryProvider =
@@ -66,7 +66,7 @@ class AppUpdateService {
         _updateChecksEnabled = updateChecksEnabled ?? !kDebugMode;
 
   final GithubReleaseApkUpdater _updater;
-  final GithubApiService _apiService;
+  final GithubApiService? _apiServiceOverride;
   final ApkDownloaderService _apkDownloader;
   final VersionComparator _versionComparator;
   final Future<Directory> Function() _temporaryDirectoryProvider;
@@ -74,6 +74,15 @@ class AppUpdateService {
   final Future<String> Function()? _currentAppVersionProvider;
   final Future<bool> Function(String apkPath) _apkSigningMatchesInstalled;
   final bool _updateChecksEnabled;
+
+  Future<GithubApiService> _apiServiceForCheck() async {
+    final override = _apiServiceOverride;
+    if (override != null) {
+      return override;
+    }
+    final stored = await Preferences.getGitHubApiBaseUrl();
+    return ConfigurableGithubApiService(apiBaseUrl: stored ?? '');
+  }
 
   static String normalizeVersionIdentifier(String value) {
     final trimmed = value.trim();
@@ -244,7 +253,8 @@ class AppUpdateService {
 
     try {
       final supportedAbis = await _updater.getSupportedAbis();
-      final release = await _apiService.getLatestGithubAPKRelease(
+      final apiService = await _apiServiceForCheck();
+      final release = await apiService.getLatestGithubAPKRelease(
         ownerGithub: _ownerGithub,
         repositoryGithub: _repositoryGithub,
         apkKeyName: _apiKeyName,
@@ -294,7 +304,7 @@ class AppUpdateService {
         version: latestVersion,
         releaseNote: release.releaseNote.trim(),
         apkUrl: release.apkUrl,
-        releasePageUrl: _releasePageUrl,
+        releasePageUrl: releasePageFallbackUrl,
       );
     } catch (e) {
       debugLog('app_update: failed to check updates: $e');
@@ -333,10 +343,16 @@ class AppUpdateService {
   }
 
   Future<bool> openReleasePage([String? releasePageUrl]) async {
-    final target = (releasePageUrl == null || releasePageUrl.isEmpty)
-        ? _releasePageUrl
+    final primary = (releasePageUrl == null || releasePageUrl.isEmpty)
+        ? releasePageFallbackUrl
         : releasePageUrl;
-    return openUrlPreferChrome(Uri.parse(target));
+    if (await openUrlPreferChrome(Uri.parse(primary))) {
+      return true;
+    }
+    if (primary != releasePageFallbackUrl) {
+      return openUrlPreferChrome(Uri.parse(releasePageFallbackUrl));
+    }
+    return false;
   }
 
   Future<_DownloadInstallOutcome> _downloadAndInstall(

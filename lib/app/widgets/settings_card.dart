@@ -14,6 +14,7 @@ import 'package:bilirec/shared/external_storage_permission_prompt.dart';
 import 'package:bilirec/shared/file_exporter.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
+import 'package:bilirec/shared/github_api_proxy_presets.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/saf_export_gateway.dart';
 import 'package:bilirec/shared/storage_protection_env.dart';
@@ -116,6 +117,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   Map<String, String> _developEnvironmentSettings = <String, String>{};
   Future<void> _managedEnvironmentWriteQueue = Future<void>.value();
 
+  String _githubApiProxyPreset = githubApiProxyPresetOfficial;
+  final TextEditingController _githubApiCustomController =
+      TextEditingController();
+
   final TextEditingController _outputDirController = TextEditingController();
   final FileExporter _fileExporter = FileExporter();
   final SafExportGateway _safExportGateway = SafExportGateway();
@@ -150,8 +155,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         await Preferences.getManagedEnvironmentSettings();
     final developEnvironmentSettings =
         await Preferences.getDevelopEnvironmentSettings();
+    final githubApiBase = await Preferences.getGitHubApiBaseUrl() ?? '';
     if (!mounted) return;
     _outputDirController.text = outputPath;
+    _applyGitHubApiBaseToUi(githubApiBase);
     setState(() {
       _useSsePush = useSsePush;
       _useAntiSleep = useAntiSleep;
@@ -193,7 +200,32 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   @override
   void dispose() {
     _outputDirController.dispose();
+    _githubApiCustomController.dispose();
     super.dispose();
+  }
+
+  void _applyGitHubApiBaseToUi(String stored) {
+    _githubApiProxyPreset = githubApiProxyPresetIdFromStored(stored);
+    if (_githubApiProxyPreset == githubApiProxyPresetCustom) {
+      _githubApiCustomController.text = stored.trim();
+    } else {
+      _githubApiCustomController.text = '';
+    }
+  }
+
+  Future<void> _persistGitHubApiBase(String preset) async {
+    final base = githubApiBaseUrlForPresetId(
+      preset,
+      _githubApiCustomController.text,
+    );
+    await Preferences.setGitHubApiBaseUrl(base.isEmpty ? null : base);
+  }
+
+  String _versionApiDocsUrl() {
+    final languageCode = AppLocaleConfig.codeForLocale(l10n.locale);
+    final localeSegment =
+        languageCode == AppLocaleConfig.simplifiedCode ? 'zh-cn' : 'zh-tw';
+    return 'https://www.bilirec.org/$localeSegment/api/version/';
   }
 
   Future<String?> _browseBasePath() async {
@@ -1368,6 +1400,79 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                       const SizedBox(height: 12),
                       SettingsHint(
                         text: l10n.tr('autoRunOnBootHint'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SettingsSectionCard(
+                    icon: Icons.system_update_alt_outlined,
+                    title: l10n.tr('updatePolicyTitle'),
+                    description: l10n.tr('updatePolicyDescription'),
+                    children: [
+                      Text(
+                        l10n.tr('githubApiProxyTitle'),
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: _githubApiProxyPreset,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: githubApiProxyPresetOfficial,
+                            child: Text(
+                              l10n.tr('githubApiProxyOptionOfficial'),
+                            ),
+                          ),
+                          ...kGitHubApiProxyPresets.map(
+                            (preset) => DropdownMenuItem(
+                              value: preset.id,
+                              child: Text(preset.label),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: githubApiProxyPresetCustom,
+                            child: Text(
+                              l10n.tr('githubApiProxyOptionCustom'),
+                            ),
+                          ),
+                        ],
+                        onChanged: widget.controlsEnabled
+                            ? (value) async {
+                                if (value == null) return;
+                                setState(() {
+                                  _githubApiProxyPreset = value;
+                                });
+                                await _persistGitHubApiBase(value);
+                              }
+                            : null,
+                      ),
+                      if (_githubApiProxyPreset ==
+                          githubApiProxyPresetCustom) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _githubApiCustomController,
+                          enabled: widget.controlsEnabled,
+                          decoration: InputDecoration(
+                            labelText: l10n.tr('githubApiProxyCustomLabel'),
+                            border: const OutlineInputBorder(),
+                          ),
+                          onSubmitted: (_) async {
+                            await _persistGitHubApiBase(
+                              githubApiProxyPresetCustom,
+                            );
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      SettingsHint(
+                        text: l10n.tr(
+                          'githubApiProxyHint',
+                          params: {'docsUrl': _versionApiDocsUrl()},
+                        ),
                       ),
                     ],
                   ),

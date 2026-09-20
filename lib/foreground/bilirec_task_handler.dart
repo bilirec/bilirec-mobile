@@ -6,6 +6,7 @@ import 'package:bilirec/foreground/network_lock_service.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/device_uptime.dart';
+import 'package:bilirec/shared/github_api_proxy_presets.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/unexpected_stop_preferences.dart';
 import 'package:flutter/material.dart';
@@ -44,6 +45,7 @@ class BilirecTaskHandler extends TaskHandler {
     final appSupport = await getApplicationSupportDirectory();
     final basePath = appSupport.path;
     String? outputDir;
+    String? githubApiBase;
     try {
       final saved = await Preferences.getOutputDir() ?? '';
       outputDir = saved.isNotEmpty ? saved : null;
@@ -54,6 +56,7 @@ class BilirecTaskHandler extends TaskHandler {
           await Preferences.getManagedEnvironmentSettings();
       _developEnvironmentSettings =
           await Preferences.getDevelopEnvironmentSettings();
+      githubApiBase = await Preferences.getGitHubApiBaseUrl();
       await UnexpectedStopPreferences.setStoppedByUser(false);
     } catch (_) {}
 
@@ -82,6 +85,7 @@ class BilirecTaskHandler extends TaskHandler {
     if (_sseToken != null && _sseToken!.isNotEmpty) {
       startEnv['NOTIFY_SSE_TOKEN'] = _sseToken!;
     }
+    startEnv.addAll(githubApiUrlEnvFromStored(githubApiBase));
     // Developer environment settings should have higher priority than managed settings.
     startEnv.addAll(_developEnvironmentSettings);
 
