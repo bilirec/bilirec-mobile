@@ -151,8 +151,8 @@ class AppLocalizations {
       'githubApiProxyOptionOfficial': '官方 GitHub（預設）',
       'githubApiProxyOptionCustom': '自訂',
       'githubApiProxyCustomLabel': '自訂反代地址',
-      'githubApiProxyHint':
-          '填法與可用節點見說明：{docsUrl}。公益反代可能隨時失效。',
+      'githubApiProxyHint': '填法與可用節點見{link}。公益反代可能隨時失效。',
+      'githubApiProxyHintLink': '說明文件',
       'developerSettingsTitle': '開發者選項',
       'developerSectionDescription': '以下選項用於調整底層行為，不影響一般錄製功能。',
       'bootstrapLogTitle': '啟動日誌',
@@ -229,10 +229,10 @@ class AppLocalizations {
       'maxRecordingHoursDescription': '限制每次錄製最長時長，避免長時間無人值守時占用過多儲存空間。',
       'minDiskSpaceTitle': '啟動前最低可用空間',
       'minDiskSpaceDescription':
-          '僅在開始錄製前檢查。若可用空間低於門檻，該次錄製將不會啟動。設為「不檢查」表示不以可用空間阻擋啟動。',
+          '僅在開始錄製前檢查。若可用空間低於門檻，該次錄製將不會啟動。',
       'maxRetryMinutesTitle': '下線後服務重試時長',
       'maxRetryMinutesDescription':
-          '直播下線後，服務會持續重試到指定時長，再結束此次錄製。設為「不等待」表示下線後不進行重試。',
+          '直播下線後，服務會持續重試到指定時長，再結束此次錄製。',
       'recordingRecoveryDurationTitle': '重試成功後的時長計算',
       'recordingRecoveryDurationDescription':
           '斷流後若重試成功並恢復錄製，可選擇從頭起算錄製時長，或沿用開始錄製時的總時長。',
@@ -387,8 +387,8 @@ class AppLocalizations {
       'githubApiProxyOptionOfficial': '官方 GitHub（默认）',
       'githubApiProxyOptionCustom': '自定义',
       'githubApiProxyCustomLabel': '自定义反代地址',
-      'githubApiProxyHint':
-          '填写方式与可用节点见说明：{docsUrl}。公益反代可能随时失效。',
+      'githubApiProxyHint': '填写方式与可用节点见{link}。公益反代可能随时失效。',
+      'githubApiProxyHintLink': '说明文档',
       'developerSettingsTitle': '开发者选项',
       'developerSectionDescription': '以下选项用于调整底层行为，不影响一般录制功能。',
       'bootstrapLogTitle': '启动日志',
@@ -465,10 +465,10 @@ class AppLocalizations {
       'maxRecordingHoursDescription': '限制每次录制最长时长，避免长时间无人值守时占用过多存储空间。',
       'minDiskSpaceTitle': '启动前最低可用空间',
       'minDiskSpaceDescription':
-          '仅在开始录制前检查。若可用空间低于门槛，本次录制将不会启动。设置为“不检查”表示不以可用空间阻止启动。',
+          '仅在开始录制前检查。若可用空间低于门槛，本次录制将不会启动。',
       'maxRetryMinutesTitle': '下线后服务重试时长',
       'maxRetryMinutesDescription':
-          '直播下线后，服务会持续重试到指定时长，再结束此次录制。设置为“不等待”表示下线后不进行重试。',
+          '直播下线后，服务会持续重试到指定时长，再结束此次录制。',
       'recordingRecoveryDurationTitle': '重试成功后的时长计算',
       'recordingRecoveryDurationDescription':
           '断流后若重试成功并恢复录制，可选择从头起算录制时长，或沿用开始录制时的总时长。',

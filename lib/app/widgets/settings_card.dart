@@ -14,6 +14,7 @@ import 'package:bilirec/shared/external_storage_permission_prompt.dart';
 import 'package:bilirec/shared/file_exporter.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
+import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/github_api_proxy_presets.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/saf_export_gateway.dart';
@@ -1405,79 +1406,6 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                   ),
                   const SizedBox(height: 20),
                   SettingsSectionCard(
-                    icon: Icons.system_update_alt_outlined,
-                    title: l10n.tr('updatePolicyTitle'),
-                    description: l10n.tr('updatePolicyDescription'),
-                    children: [
-                      Text(
-                        l10n.tr('githubApiProxyTitle'),
-                        style: theme.textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: _githubApiProxyPreset,
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                            value: githubApiProxyPresetOfficial,
-                            child: Text(
-                              l10n.tr('githubApiProxyOptionOfficial'),
-                            ),
-                          ),
-                          ...kGitHubApiProxyPresets.map(
-                            (preset) => DropdownMenuItem(
-                              value: preset.id,
-                              child: Text(preset.label),
-                            ),
-                          ),
-                          DropdownMenuItem(
-                            value: githubApiProxyPresetCustom,
-                            child: Text(
-                              l10n.tr('githubApiProxyOptionCustom'),
-                            ),
-                          ),
-                        ],
-                        onChanged: widget.controlsEnabled
-                            ? (value) async {
-                                if (value == null) return;
-                                setState(() {
-                                  _githubApiProxyPreset = value;
-                                });
-                                await _persistGitHubApiBase(value);
-                              }
-                            : null,
-                      ),
-                      if (_githubApiProxyPreset ==
-                          githubApiProxyPresetCustom) ...[
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _githubApiCustomController,
-                          enabled: widget.controlsEnabled,
-                          decoration: InputDecoration(
-                            labelText: l10n.tr('githubApiProxyCustomLabel'),
-                            border: const OutlineInputBorder(),
-                          ),
-                          onSubmitted: (_) async {
-                            await _persistGitHubApiBase(
-                              githubApiProxyPresetCustom,
-                            );
-                          },
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      SettingsHint(
-                        text: l10n.tr(
-                          'githubApiProxyHint',
-                          params: {'docsUrl': _versionApiDocsUrl()},
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SettingsSectionCard(
                     icon: Icons.storage_outlined,
                     title: l10n.tr('storagePolicyTitle'),
                     description: l10n.tr('storagePolicyDescription'),
@@ -1805,6 +1733,82 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         },
                         onChangeEnd: (value) {
                           _setFfmpegAllowDuringRecordingMaxActive(value);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SettingsSectionCard(
+                    icon: Icons.system_update_alt_outlined,
+                    title: l10n.tr('updatePolicyTitle'),
+                    description: l10n.tr('updatePolicyDescription'),
+                    children: [
+                      Text(
+                        l10n.tr('githubApiProxyTitle'),
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: _githubApiProxyPreset,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: githubApiProxyPresetOfficial,
+                            child: Text(
+                              l10n.tr('githubApiProxyOptionOfficial'),
+                            ),
+                          ),
+                          ...kGitHubApiProxyPresets.map(
+                            (preset) => DropdownMenuItem(
+                              value: preset.id,
+                              child: Text(preset.label),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: githubApiProxyPresetCustom,
+                            child: Text(
+                              l10n.tr('githubApiProxyOptionCustom'),
+                            ),
+                          ),
+                        ],
+                        onChanged: widget.controlsEnabled
+                            ? (value) async {
+                                if (value == null) return;
+                                setState(() {
+                                  _githubApiProxyPreset = value;
+                                });
+                                await _persistGitHubApiBase(value);
+                              }
+                            : null,
+                      ),
+                      if (_githubApiProxyPreset ==
+                          githubApiProxyPresetCustom) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _githubApiCustomController,
+                          enabled: widget.controlsEnabled,
+                          decoration: InputDecoration(
+                            labelText: l10n.tr('githubApiProxyCustomLabel'),
+                            border: const OutlineInputBorder(),
+                          ),
+                          onSubmitted: (_) async {
+                            await _persistGitHubApiBase(
+                              githubApiProxyPresetCustom,
+                            );
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      SettingsHint(
+                        text: l10n.tr('githubApiProxyHint'),
+                        inlineLinkLabel: l10n.tr('githubApiProxyHintLink'),
+                        onInlineLinkTap: () {
+                          openUrlPreferChrome(
+                            Uri.parse(_versionApiDocsUrl()),
+                          );
                         },
                       ),
                     ],
