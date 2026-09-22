@@ -4,8 +4,8 @@ import 'dart:io';
 import 'dart:math';
 
 const defaultBackendBaseUrl = 'http://127.0.0.1:8080';
-const defaultBroadcastsEndpoint =
-    'https://workers.vrp.moe/laplace/ranking?type=danmakus';
+const defaultListRecordingEndpoint =
+    'https://api.ukamnads.icu/api/info/listrecording';
 
 class TaskQueue {
   TaskQueue({
@@ -204,7 +204,7 @@ Future<int> updateRoomConfig(
 }
 
 Future<List<int>> fetchLiveBroadcastRoomIDs({
-  String endpoint = defaultBroadcastsEndpoint,
+  String endpoint = defaultListRecordingEndpoint,
   int maxAttempts = 3,
 }) async {
   Object? lastError;
@@ -229,12 +229,12 @@ Future<List<int>> fetchLiveBroadcastRoomIDs({
 
   final error = lastError;
   if (error is FormatException) {
-    throw StateError('broadcast API 回傳非 JSON: $error');
+    throw StateError('listrecording API 回傳非 JSON: $error');
   }
   if (error != null && lastStack != null) {
     Error.throwWithStackTrace(error, lastStack);
   }
-  throw StateError('broadcast API 失敗');
+  throw StateError('listrecording API 失敗');
 }
 
 Future<List<int>> _fetchLiveBroadcastRoomIDsOnce(String endpoint) async {
@@ -247,13 +247,13 @@ Future<List<int>> _fetchLiveBroadcastRoomIDsOnce(String endpoint) async {
     final response = await request.close().timeout(const Duration(seconds: 90));
 
     if (response.statusCode != HttpStatus.ok) {
-      throw StateError('broadcast API status=${response.statusCode}');
+      throw StateError('listrecording API status=${response.statusCode}');
     }
 
     final body = await response.transform(utf8.decoder).join();
     final trimmed = body.trim();
     if (trimmed.isEmpty) {
-      throw StateError('broadcast API empty body');
+      throw StateError('listrecording API empty body');
     }
 
     Object? decoded;
@@ -261,20 +261,35 @@ Future<List<int>> _fetchLiveBroadcastRoomIDsOnce(String endpoint) async {
       decoded = jsonDecode(trimmed);
     } on FormatException catch (error) {
       throw StateError(
-        'broadcast API 回傳非 JSON: $error; body="${_previewText(trimmed)}"',
+        'listrecording API 回傳非 JSON: $error; body="${_previewText(trimmed)}"',
       );
     }
-    if (decoded is! List) {
+    if (decoded is! Map) {
       throw StateError(
-        'broadcast API response is not a list; body="${_previewText(trimmed)}"',
+        'listrecording API response is not an object; body="${_previewText(trimmed)}"',
+      );
+    }
+
+    final code = decoded['code'];
+    if (code != 200 && code != '200') {
+      final message = decoded['message']?.toString() ?? '';
+      throw StateError('listrecording API code=$code message=$message');
+    }
+
+    final data = decoded['data'];
+    if (data is! List) {
+      throw StateError(
+        'listrecording API data is not a list; body="${_previewText(trimmed)}"',
       );
     }
 
     final ids = <int>{};
-    for (final item in decoded) {
+    for (final item in data) {
       if (item is! Map) continue;
-      if (item['isDeleted'] == true) continue;
-      final raw = item['roomid'] ?? item['roomId'];
+      final channel = item['channel'];
+      if (channel is! Map) continue;
+      if (channel['isLiving'] != true) continue;
+      final raw = channel['roomId'] ?? channel['roomid'];
       final id = raw is int ? raw : int.tryParse(raw?.toString() ?? '');
       if (id != null && id > 0) {
         ids.add(id);

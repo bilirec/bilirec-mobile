@@ -122,7 +122,7 @@ Future<List<int>> fetchLiveBroadcastRoomIDsForTest({
     return ids;
   } catch (error, stack) {
     final reason =
-        'broadcast API 失敗（第三方不可抗力），略過測試: ${error.runtimeType}: $error';
+        'listrecording API 失敗（第三方不可抗力），略過測試: ${error.runtimeType}: $error';
     testLog(logTag, reason);
     testLog(logTag, '$stack');
     markTestSkipped(reason);

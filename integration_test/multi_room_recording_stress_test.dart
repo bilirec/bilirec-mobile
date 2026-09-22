@@ -275,7 +275,7 @@ void main() {
               await fetchLiveBroadcastRoomIDsForTest(logTag: _logTag);
           if (liveRoomPool.length < _targetRecordingRooms) {
             final reason =
-                'broadcast API 回傳可用直播間不足 $_targetRecordingRooms 個，fetched=${liveRoomPool.length}';
+                'listrecording API 回傳可用直播間不足 $_targetRecordingRooms 個，fetched=${liveRoomPool.length}';
             _log('skip scenario: $reason');
             markTestSkipped(reason);
             return;
