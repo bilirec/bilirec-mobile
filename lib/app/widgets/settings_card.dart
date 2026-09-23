@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -15,6 +16,7 @@ import 'package:bilirec/shared/file_exporter.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
+import 'package:bilirec/shared/github_api_probe.dart';
 import 'package:bilirec/shared/github_api_proxy_presets.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/saf_export_gateway.dart';
@@ -121,6 +123,13 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   String _githubApiProxyPreset = githubApiProxyPresetOfficial;
   final TextEditingController _githubApiCustomController =
       TextEditingController();
+  static const Duration _githubApiCustomDebounce = Duration(milliseconds: 600);
+  Timer? _githubApiCustomDebounceTimer;
+  int _githubApiCustomCheckGeneration = 0;
+  bool _githubApiCustomChecking = false;
+  String? _githubApiCustomFieldError;
+  bool _githubApiCustomFieldOk = false;
+  bool _muteGitHubApiCustomListener = false;
 
   final TextEditingController _outputDirController = TextEditingController();
   final FileExporter _fileExporter = FileExporter();
@@ -144,7 +153,14 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   @override
   void initState() {
     super.initState();
+    _githubApiCustomController.addListener(_onGitHubApiCustomControllerChanged);
     _bootstrap();
+  }
+
+  void _onGitHubApiCustomControllerChanged() {
+    if (_muteGitHubApiCustomListener) return;
+    if (_githubApiProxyPreset != githubApiProxyPresetCustom) return;
+    _scheduleGitHubApiCustomCheck();
   }
 
   Future<void> _bootstrap() async {
@@ -159,7 +175,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     final githubApiBase = await Preferences.getGitHubApiBaseUrl() ?? '';
     if (!mounted) return;
     _outputDirController.text = outputPath;
-    _applyGitHubApiBaseToUi(githubApiBase);
+    _applyGitHubApiBaseToUi(githubApiBase, scheduleCheck: true);
     setState(() {
       _useSsePush = useSsePush;
       _useAntiSleep = useAntiSleep;
@@ -200,21 +216,101 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
   @override
   void dispose() {
+    _githubApiCustomDebounceTimer?.cancel();
+    _githubApiCustomController.removeListener(_onGitHubApiCustomControllerChanged);
     _outputDirController.dispose();
     _githubApiCustomController.dispose();
     super.dispose();
   }
 
-  void _applyGitHubApiBaseToUi(String stored) {
+  void _applyGitHubApiBaseToUi(String stored, {bool scheduleCheck = false}) {
+    _muteGitHubApiCustomListener = true;
     _githubApiProxyPreset = githubApiProxyPresetIdFromStored(stored);
     if (_githubApiProxyPreset == githubApiProxyPresetCustom) {
       _githubApiCustomController.text = stored.trim();
     } else {
       _githubApiCustomController.text = '';
     }
+    _muteGitHubApiCustomListener = false;
+    if (!scheduleCheck || stored.trim().isEmpty) {
+      return;
+    }
+    if (_githubApiProxyPreset == githubApiProxyPresetCustom) {
+      _scheduleGitHubApiCustomCheck();
+    } else if (_githubApiProxyPreset != githubApiProxyPresetOfficial) {
+      _scheduleGitHubApiPresetCheck(_githubApiProxyPreset);
+    }
   }
 
-  Future<void> _persistGitHubApiBase(String preset) async {
+  void _resetGitHubApiCustomFieldState() {
+    _githubApiCustomCheckGeneration++;
+    _githubApiCustomChecking = false;
+    _githubApiCustomFieldError = null;
+    _githubApiCustomFieldOk = false;
+  }
+
+  void _scheduleGitHubApiCustomCheck() {
+    _githubApiCustomDebounceTimer?.cancel();
+    _githubApiCustomCheckGeneration++;
+    if (mounted) {
+      setState(() {
+        _githubApiCustomChecking = false;
+        _githubApiCustomFieldError = null;
+        _githubApiCustomFieldOk = false;
+      });
+    }
+
+    final base = githubApiBaseUrlForPresetId(
+      githubApiProxyPresetCustom,
+      _githubApiCustomController.text,
+    );
+    if (base.isEmpty) {
+      unawaited(_saveGitHubApiPreference(githubApiProxyPresetCustom));
+      return;
+    }
+
+    final generation = _githubApiCustomCheckGeneration;
+    _githubApiCustomDebounceTimer = Timer(_githubApiCustomDebounce, () {
+      unawaited(
+        _runGitHubApiProxyCheck(
+          apiBase: base,
+          generation: generation,
+          presetId: githubApiProxyPresetCustom,
+        ),
+      );
+    });
+  }
+
+  void _scheduleGitHubApiPresetCheck(String presetId) {
+    _githubApiCustomDebounceTimer?.cancel();
+    _githubApiCustomCheckGeneration++;
+    if (mounted) {
+      setState(() {
+        _githubApiCustomChecking = false;
+        _githubApiCustomFieldError = null;
+        _githubApiCustomFieldOk = false;
+      });
+    }
+
+    final base = githubApiBaseUrlForPresetId(
+      presetId,
+      _githubApiCustomController.text,
+    );
+    if (base.isEmpty) {
+      return;
+    }
+
+    final generation = _githubApiCustomCheckGeneration;
+    unawaited(
+      _runGitHubApiProxyCheck(
+        apiBase: base,
+        generation: generation,
+        presetId: presetId,
+      ),
+    );
+  }
+
+  Future<void> _saveGitHubApiPreference(String preset) async {
     final base = githubApiBaseUrlForPresetId(
       preset,
       _githubApiCustomController.text,
@@ -222,11 +318,107 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     await Preferences.setGitHubApiBaseUrl(base.isEmpty ? null : base);
   }
 
-  String _versionApiDocsUrl() {
+  Future<void> _persistGitHubApiBase(String preset) async {
+    _githubApiCustomDebounceTimer?.cancel();
+    if (preset == githubApiProxyPresetOfficial) {
+      if (mounted) {
+        setState(_resetGitHubApiCustomFieldState);
+      }
+      await _saveGitHubApiPreference(preset);
+      return;
+    }
+    if (preset == githubApiProxyPresetCustom) {
+      _scheduleGitHubApiCustomCheck();
+      return;
+    }
+    if (mounted) {
+      setState(_resetGitHubApiCustomFieldState);
+    }
+    _scheduleGitHubApiPresetCheck(preset);
+  }
+
+  bool _githubApiProxySelectionMatches(String presetId, String apiBase) {
+    if (_githubApiProxyPreset != presetId) {
+      return false;
+    }
+    return githubApiBaseUrlForPresetId(
+          presetId,
+          _githubApiCustomController.text,
+        ) ==
+        apiBase;
+  }
+
+  Future<void> _runGitHubApiProxyCheck({
+    required String apiBase,
+    required int generation,
+    required String presetId,
+  }) async {
+    if (!mounted || generation != _githubApiCustomCheckGeneration) return;
+    setState(() {
+      _githubApiCustomChecking = true;
+      _githubApiCustomFieldError = null;
+      _githubApiCustomFieldOk = false;
+    });
+
+    final reachable = await probeGitHubApiBase(apiBase: apiBase);
+    if (!mounted || generation != _githubApiCustomCheckGeneration) return;
+
+    if (!_githubApiProxySelectionMatches(presetId, apiBase)) {
+      setState(() => _githubApiCustomChecking = false);
+      return;
+    }
+
+    if (reachable) {
+      await Preferences.setGitHubApiBaseUrl(apiBase);
+    }
+
+    setState(() {
+      _githubApiCustomChecking = false;
+      if (reachable) {
+        _githubApiCustomFieldError = null;
+        _githubApiCustomFieldOk = true;
+      } else {
+        _githubApiCustomFieldError =
+            l10n.tr('githubApiProxyCustomUnreachable');
+        _githubApiCustomFieldOk = false;
+      }
+    });
+  }
+
+  String? _githubApiProxyDropdownError() {
+    if (_githubApiProxyPreset == githubApiProxyPresetOfficial ||
+        _githubApiProxyPreset == githubApiProxyPresetCustom) {
+      return null;
+    }
+    return _githubApiCustomFieldError;
+  }
+
+  String? _githubApiProxyDropdownHelper() {
+    if (_githubApiProxyPreset == githubApiProxyPresetOfficial ||
+        _githubApiProxyPreset == githubApiProxyPresetCustom) {
+      return null;
+    }
+    return _githubApiCustomFieldHelperText();
+  }
+
+  String? _githubApiCustomFieldHelperText() {
+    if (_githubApiCustomChecking) {
+      return l10n.tr('githubApiProxyCustomChecking');
+    }
+    if (_githubApiCustomFieldOk && _githubApiCustomFieldError == null) {
+      return l10n.tr('githubApiProxyCustomReachable');
+    }
+    return null;
+  }
+
+  String _githubApiProxyDocsUrl() {
     final languageCode = AppLocaleConfig.codeForLocale(l10n.locale);
     final localeSegment =
         languageCode == AppLocaleConfig.simplifiedCode ? 'zh-cn' : 'zh-tw';
-    return 'https://www.bilirec.org/$localeSegment/api/version/';
+    final anchor = languageCode == AppLocaleConfig.simplifiedCode
+        ? '无法直连-github-时github_api_url'
+        : '無法直連-github-時github_api_url';
+    return 'https://www.bilirec.org/$localeSegment/api/version/#$anchor';
   }
 
   Future<String?> _browseBasePath() async {
@@ -1750,9 +1942,35 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         value: _githubApiProxyPreset,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           isDense: true,
-                          border: OutlineInputBorder(),
+                          border: const OutlineInputBorder(),
+                          errorText: _githubApiProxyDropdownError(),
+                          errorMaxLines: 3,
+                          helperText: _githubApiProxyDropdownHelper(),
+                          helperMaxLines: 3,
+                          helperStyle: theme.textTheme.bodySmall?.copyWith(
+                            color: _githubApiCustomChecking
+                                ? colorScheme.onSurfaceVariant
+                                : colorScheme.primary,
+                          ),
+                          suffixIcon: _githubApiCustomChecking &&
+                                  _githubApiProxyPreset !=
+                                      githubApiProxyPresetOfficial &&
+                                  _githubApiProxyPreset !=
+                                      githubApiProxyPresetCustom
+                              ? Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                )
+                              : null,
                         ),
                         items: [
                           DropdownMenuItem(
@@ -1793,12 +2011,29 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                           decoration: InputDecoration(
                             labelText: l10n.tr('githubApiProxyCustomLabel'),
                             border: const OutlineInputBorder(),
+                            errorText: _githubApiCustomFieldError,
+                            errorMaxLines: 3,
+                            helperText: _githubApiCustomFieldHelperText(),
+                            helperMaxLines: 3,
+                            helperStyle: theme.textTheme.bodySmall?.copyWith(
+                              color: _githubApiCustomChecking
+                                  ? colorScheme.onSurfaceVariant
+                                  : colorScheme.primary,
+                            ),
+                            suffixIcon: _githubApiCustomChecking
+                                ? Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: colorScheme.primary,
+                                      ),
+                                    ),
+                                  )
+                                : null,
                           ),
-                          onSubmitted: (_) async {
-                            await _persistGitHubApiBase(
-                              githubApiProxyPresetCustom,
-                            );
-                          },
                         ),
                       ],
                       const SizedBox(height: 12),
@@ -1807,7 +2042,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         inlineLinkLabel: l10n.tr('githubApiProxyHintLink'),
                         onInlineLinkTap: () {
                           openUrlPreferChrome(
-                            Uri.parse(_versionApiDocsUrl()),
+                            Uri.parse(_githubApiProxyDocsUrl()),
                           );
                         },
                       ),
