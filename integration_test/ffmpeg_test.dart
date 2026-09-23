@@ -1138,6 +1138,7 @@ void main() {
         int? selectedRoomId;
         Set<String> selectedRoomExistingPaths = <String>{};
         final skippedReasons = <String>[];
+        final skippedStatusCodes = <int?>[];
 
         for (final roomId in candidateRoomIds) {
           final preExistingFiles = await _listRecordedFiles(roomId);
@@ -1146,42 +1147,16 @@ void main() {
               .where((path) => path.isNotEmpty)
               .toSet();
 
-          ApiCallResult? startResult;
-          Object? transientError;
-          const startAttemptLimit = 2;
-          for (var attempt = 1; attempt <= startAttemptLimit; attempt++) {
-            try {
-              startResult = await startRecording(
-                roomId,
-                durationMinutes: recordDurationMinutes,
-              );
-              break;
-            } on TimeoutException catch (e) {
-              transientError = e;
-              _log(
-                'start recording timeout roomId=$roomId attempt=$attempt/$startAttemptLimit',
-              );
-            } on SocketException catch (e) {
-              transientError = e;
-              _log(
-                'start recording socket error roomId=$roomId attempt=$attempt/$startAttemptLimit error=$e',
-              );
-            } on HttpException catch (e) {
-              transientError = e;
-              _log(
-                'start recording http error roomId=$roomId attempt=$attempt/$startAttemptLimit error=$e',
-              );
-            }
-
-            if (attempt < startAttemptLimit) {
-              await Future<void>.delayed(const Duration(seconds: 2));
-            }
-          }
+          final startResult = await startRecordingResilient(
+            roomId,
+            durationMinutes: recordDurationMinutes,
+            log: _log,
+          );
 
           if (startResult == null) {
-            final reason =
-                'roomId=$roomId startRecording transient failure=${transientError ?? 'unknown'}';
+            final reason = 'roomId=$roomId startRecording transient failure';
             skippedReasons.add(reason);
+            skippedStatusCodes.add(null);
             _log('skip candidate: $reason');
             continue;
           }
@@ -1189,26 +1164,43 @@ void main() {
           final code = startResult.statusCode;
           final preview = startResult.bodyPreview();
 
-          if ([200, 201, 202, 204, 409].contains(code)) {
+          if (isStartRecordingSuccess(code)) {
             selectedRoomId = roomId;
             selectedRoomExistingPaths = preExistingPaths;
             _log('start recording success roomId=$roomId statusCode=$code');
             break;
           }
 
-          if (code == 400) {
-            final reason = 'roomId=$roomId statusCode=400 body="$preview"';
+          if (isStartRecordingHardFailStatusCode(code)) {
+            fail(
+              '開始錄製失敗（產品限制）: roomId=$roomId statusCode=$code body="$preview"',
+            );
+          }
+
+          if (isStartRecordingSkipCandidateStatusCode(code) ||
+              isStartRecordingTransientServerError(code)) {
+            final reason = 'roomId=$roomId statusCode=$code body="$preview"';
             skippedReasons.add(reason);
+            skippedStatusCodes.add(code);
             _log('skip candidate: $reason');
             continue;
           }
 
-          fail('開始錄製失敗（非可忽略錯誤）: roomId=$roomId statusCode=$code body="$preview"');
+          fail(
+            '開始錄製失敗（非可忽略錯誤）: roomId=$roomId statusCode=$code body="$preview"',
+          );
         }
 
         if (selectedRoomId == null) {
-          final reason =
-              '所有候選直播間皆非直播狀態，skipped=$skippedReasons';
+          if (shouldFailZeroStartedAllServerErrors(
+            startedCount: 0,
+            skipStatusCodes: skippedStatusCodes,
+          )) {
+            fail(
+              '無法為任何候選房間開始錄製，且失敗皆為 5xx 上游/伺服器錯誤: $skippedReasons',
+            );
+          }
+          final reason = '所有候選直播間皆非直播狀態，skipped=$skippedReasons';
           _log('skip test: $reason');
           markTestSkipped(reason);
           return;

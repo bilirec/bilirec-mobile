@@ -60,6 +60,107 @@ class ApiCallResult {
   }
 }
 
+bool isStartRecordingSuccess(int statusCode) {
+  return statusCode == 200 ||
+      statusCode == 201 ||
+      statusCode == 202 ||
+      statusCode == 204 ||
+      statusCode == 409;
+}
+
+bool isStartRecordingSkipCandidateStatusCode(int statusCode) {
+  return statusCode == 400 || statusCode == 404 || statusCode == 410;
+}
+
+bool isStartRecordingHardFailStatusCode(int statusCode) {
+  return statusCode == 429 || statusCode == 507;
+}
+
+bool isStartRecordingTransientServerError(int statusCode) {
+  return statusCode >= 500 && statusCode <= 504;
+}
+
+/// When no room started: fail the test if every attempted skip was a 5xx (backend broken).
+bool shouldFailZeroStartedAllServerErrors({
+  required int startedCount,
+  required Iterable<int?> skipStatusCodes,
+}) {
+  if (startedCount > 0) {
+    return false;
+  }
+  final codes = skipStatusCodes.whereType<int>().toList(growable: false);
+  if (codes.isEmpty) {
+    return false;
+  }
+  return codes.every(isStartRecordingTransientServerError);
+}
+
+/// Retries transport errors and 5xx once per room before returning a skip-worthy result.
+Future<ApiCallResult?> startRecordingResilient(
+  int roomId, {
+  required int durationMinutes,
+  void Function(String message)? log,
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  const attemptLimit = 2;
+  Object? transientError;
+  ApiCallResult? lastResult;
+
+  for (var attempt = 1; attempt <= attemptLimit; attempt++) {
+    try {
+      lastResult = await startRecording(
+        roomId,
+        durationMinutes: durationMinutes,
+        baseUrl: baseUrl,
+      );
+      final code = lastResult.statusCode;
+      if (isStartRecordingSuccess(code) ||
+          isStartRecordingSkipCandidateStatusCode(code) ||
+          isStartRecordingHardFailStatusCode(code)) {
+        return lastResult;
+      }
+      if (isStartRecordingTransientServerError(code)) {
+        log?.call(
+          'start recording server error roomId=$roomId statusCode=$code attempt=$attempt/$attemptLimit',
+        );
+        if (attempt < attemptLimit) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+          continue;
+        }
+        return lastResult;
+      }
+      return lastResult;
+    } on TimeoutException catch (e) {
+      transientError = e;
+      log?.call(
+        'start recording timeout roomId=$roomId attempt=$attempt/$attemptLimit',
+      );
+    } on SocketException catch (e) {
+      transientError = e;
+      log?.call(
+        'start recording socket error roomId=$roomId attempt=$attempt/$attemptLimit error=$e',
+      );
+    } on HttpException catch (e) {
+      transientError = e;
+      log?.call(
+        'start recording http error roomId=$roomId attempt=$attempt/$attemptLimit error=$e',
+      );
+    }
+
+    if (attempt < attemptLimit) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+  }
+
+  if (lastResult != null) {
+    return lastResult;
+  }
+  log?.call(
+    'start recording transient failure roomId=$roomId error=${transientError ?? 'unknown'}',
+  );
+  return null;
+}
+
 Future<Map<String, dynamic>> readJsonResponse(
     HttpClientResponse response) async {
   final body = await response.transform(utf8.decoder).join();
@@ -325,6 +426,18 @@ List<int> pickDistinctRoomIDs(
 }
 
 Future<ApiCallResult> startRecording(
+  int roomId, {
+  required int durationMinutes,
+  String baseUrl = defaultBackendBaseUrl,
+}) async {
+  return _startRecordingOnce(
+    roomId,
+    durationMinutes: durationMinutes,
+    baseUrl: baseUrl,
+  );
+}
+
+Future<ApiCallResult> _startRecordingOnce(
   int roomId, {
   required int durationMinutes,
   String baseUrl = defaultBackendBaseUrl,

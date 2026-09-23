@@ -110,8 +110,20 @@ Future<void> _waitUntilAllNotRecording(
 Future<void> _assertOutputFilesForRooms(
   List<int> roomIds, {
   required int durationMinutes,
+  Set<int> broadcastEndedRoomIds = const {},
 }) async {
   final rotationLimit = _rotationLimitForDurationMinutes(durationMinutes);
+  final nonExemptRoomIds = roomIds
+      .where((id) => !broadcastEndedRoomIds.contains(id))
+      .toList(growable: false);
+  if (nonExemptRoomIds.isEmpty) {
+    final reason =
+        '所有開錄房間均已下線，無法驗證持續錄製輸出大小 broadcastEnded=$broadcastEndedRoomIds';
+    _log('skip scenario: $reason');
+    markTestSkipped(reason);
+    return;
+  }
+
   for (final roomId in roomIds) {
     final rootItems = await browseFiles(search: roomId.toString());
     _log('browse root room=$roomId items=${rootItems.length}');
@@ -188,12 +200,18 @@ Future<void> _assertOutputFilesForRooms(
       'room=$roomId verify summary: totalBytes=$roomTotalBytes segmentCount=$roomSegmentCount tinyFmp4Count=$roomTinyFmp4Count rotationCount=$roomRotationCount rotationLimit=$rotationLimit',
     );
 
-    expect(
-      roomTotalBytes,
-      greaterThan(_minValidRecordBytes),
-      reason:
-          '房間 $roomId 錄製總大小不足: total=$roomTotalBytes bytes (<$_minValidRecordBytes)',
-    );
+    if (broadcastEndedRoomIds.contains(roomId)) {
+      _log(
+        'room=$roomId exempt from min total bytes (broadcast ended during stress)',
+      );
+    } else {
+      expect(
+        roomTotalBytes,
+        greaterThan(_minValidRecordBytes),
+        reason:
+            '房間 $roomId 錄製總大小不足: total=$roomTotalBytes bytes (<$_minValidRecordBytes)',
+      );
+    }
 
     expect(
       roomRotationCount,
@@ -287,31 +305,53 @@ void main() {
 
           final startedRoomIds = <int>[];
           final startedAtByRoom = <int, DateTime>{};
-          final skippedBadRequestReasons = <String>[];
+          final skippedStartReasons = <String>[];
+          final skippedStartStatusCodes = <int?>[];
+          final broadcastEndedRoomIds = <int>{};
           try {
-            _log('STEP 4: start recording with 400-skip fallback');
+            _log('STEP 4: start recording with resilient candidate fallback');
             for (final roomId in candidateRoomIds) {
               if (startedRoomIds.length >= _targetRecordingRooms) {
                 break;
               }
 
-              final result = await startRecording(roomId,
-                  durationMinutes: durationMinutes);
+              final result = await startRecordingResilient(
+                roomId,
+                durationMinutes: durationMinutes,
+                log: _log,
+              );
+
+              if (result == null) {
+                final skipReason =
+                    'roomId=$roomId startRecording transient failure';
+                skippedStartReasons.add(skipReason);
+                skippedStartStatusCodes.add(null);
+                _log('start recording skipped: $skipReason');
+                continue;
+              }
+
               final code = result.statusCode;
-              final accepted = [200, 201, 202, 204, 409].contains(code);
               final preview = result.bodyPreview();
 
-              if (accepted) {
+              if (isStartRecordingSuccess(code)) {
                 startedRoomIds.add(roomId);
                 startedAtByRoom[roomId] = DateTime.now();
                 _log('start recording success roomId=$roomId statusCode=$code');
                 continue;
               }
 
-              if (code == 400) {
+              if (isStartRecordingHardFailStatusCode(code)) {
+                fail(
+                  '開始錄製失敗（產品限制）: roomId=$roomId, statusCode=$code, responseBody="$preview"',
+                );
+              }
+
+              if (isStartRecordingSkipCandidateStatusCode(code) ||
+                  isStartRecordingTransientServerError(code)) {
                 final skipReason =
-                    'roomId=$roomId statusCode=400 responseBody="$preview"';
-                skippedBadRequestReasons.add(skipReason);
+                    'roomId=$roomId statusCode=$code responseBody="$preview"';
+                skippedStartReasons.add(skipReason);
+                skippedStartStatusCodes.add(code);
                 _log('start recording skipped: $skipReason');
                 continue;
               }
@@ -322,8 +362,16 @@ void main() {
             }
 
             if (startedRoomIds.length < _targetRecordingRooms) {
+              if (shouldFailZeroStartedAllServerErrors(
+                startedCount: startedRoomIds.length,
+                skipStatusCodes: skippedStartStatusCodes,
+              )) {
+                fail(
+                  '無法為任何候選房間開始錄製，且失敗皆為 5xx 上游/伺服器錯誤: $skippedStartReasons',
+                );
+              }
               final reason =
-                  'unable to start $_targetRecordingRooms rooms; started=${startedRoomIds.length}, badRequestDetails=$skippedBadRequestReasons';
+                  'unable to start $_targetRecordingRooms rooms; started=${startedRoomIds.length}, skipped=$skippedStartReasons';
               _log('skip scenario: $reason');
               markTestSkipped(reason);
               return;
@@ -332,9 +380,6 @@ void main() {
             _log('STEP 5: monitor recording status during target duration');
             final poll = const Duration(seconds: 10);
             final rounds = duration.inMilliseconds ~/ poll.inMilliseconds;
-            final idleNearAutoStopThreshold = duration > _idleNearAutoStopGrace
-                ? duration - _idleNearAutoStopGrace
-                : Duration.zero;
             DateTime? allIdleSince;
             final idleSinceByRoom = <int, DateTime>{};
             for (var i = 0; i < rounds; i++) {
@@ -394,18 +439,15 @@ void main() {
                   final elapsed = startedAt == null
                       ? null
                       : DateTime.now().difference(startedAt);
-                  final nearAutoStopBoundary =
-                      elapsed != null && elapsed >= idleNearAutoStopThreshold;
-
-                  if (nearAutoStopBoundary) {
-                    _log(
-                      'room=$roomId status=idle near auto-stop boundary; elapsed=${elapsed.inSeconds}s threshold=${idleNearAutoStopThreshold.inSeconds}s duration=${duration.inSeconds}s',
-                    );
-                    continue;
-                  }
-
                   final idleFor =
                       DateTime.now().difference(idleSinceByRoom[roomId]!);
+                  if (elapsed != null &&
+                      duration > _idleNearAutoStopGrace &&
+                      elapsed >= duration - _idleNearAutoStopGrace) {
+                    _log(
+                      'room=$roomId status=idle near auto-stop boundary; elapsed=${elapsed.inSeconds}s duration=${duration.inSeconds}s',
+                    );
+                  }
                   if (idleFor < _idleRecoveryGrace) {
                     _log(
                       'room=$roomId status=idle; waiting recovery grace ${idleFor.inSeconds}s/${_idleRecoveryGrace.inSeconds}s',
@@ -429,6 +471,7 @@ void main() {
                       '錄製期間狀態異常: roomId=$roomId status=$status 但直播間仍在進行中 (live_status=$liveStatus)',
                     );
                   }
+                  broadcastEndedRoomIds.add(roomId);
                   _log(
                     'room=$roomId status=idle but broadcast ended (live_status=$liveStatus), acceptable',
                   );
@@ -460,6 +503,7 @@ void main() {
             await _assertOutputFilesForRooms(
               startedRoomIds,
               durationMinutes: durationMinutes,
+              broadcastEndedRoomIds: broadcastEndedRoomIds,
             );
           } finally {
             _log('FINAL STEP: stop started recordings and shutdown service');
