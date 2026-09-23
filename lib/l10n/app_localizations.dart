@@ -153,6 +153,8 @@ class AppLocalizations {
       'githubApiProxyCustomLabel': '自訂反代地址',
       'githubApiProxyHint': '填法與可用節點見{link}。公益反代可能隨時失效。',
       'githubApiProxyHintLink': '說明文件',
+      'githubApiProxyCustomUnreachable':
+          '無法透過此反代取得版本資訊，請檢查地址或網路後再試。',
       'developerSettingsTitle': '開發者選項',
       'developerSectionDescription': '以下選項用於調整底層行為，不影響一般錄製功能。',
       'bootstrapLogTitle': '啟動日誌',
@@ -389,6 +391,8 @@ class AppLocalizations {
       'githubApiProxyCustomLabel': '自定义反代地址',
       'githubApiProxyHint': '填写方式与可用节点见{link}。公益反代可能随时失效。',
       'githubApiProxyHintLink': '说明文档',
+      'githubApiProxyCustomUnreachable':
+          '无法通过此反代获取版本信息，请检查地址或网络后再试。',
       'developerSettingsTitle': '开发者选项',
       'developerSectionDescription': '以下选项用于调整底层行为，不影响一般录制功能。',
       'bootstrapLogTitle': '启动日志',

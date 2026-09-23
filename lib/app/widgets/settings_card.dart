@@ -15,6 +15,7 @@ import 'package:bilirec/shared/file_exporter.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
+import 'package:bilirec/shared/github_api_probe.dart';
 import 'package:bilirec/shared/github_api_proxy_presets.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/saf_export_gateway.dart';
@@ -220,6 +221,16 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       _githubApiCustomController.text,
     );
     await Preferences.setGitHubApiBaseUrl(base.isEmpty ? null : base);
+    if (preset == githubApiProxyPresetCustom && base.isNotEmpty) {
+      await _verifyCustomGitHubApiBase(base);
+    }
+  }
+
+  Future<void> _verifyCustomGitHubApiBase(String apiBase) async {
+    final reachable = await probeGitHubApiBase(apiBase: apiBase);
+    if (!reachable && mounted) {
+      _showToast('⚠️ ${l10n.tr('githubApiProxyCustomUnreachable')}');
+    }
   }
 
   String _versionApiDocsUrl() {
