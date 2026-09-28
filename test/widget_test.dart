@@ -387,7 +387,7 @@ void main() {
 
     final sliders = tester.widgetList<Slider>(find.byType(Slider));
 
-    // 設定順序：時長上限、啟動前可用空間、斷線等待、同時錄製上限。
+    // 設定順序：時長上限、啟動前可用空間、斷線等待、流無數據等待、同時錄製上限。
     sliders.elementAt(0).onChanged?.call(12);
     sliders.elementAt(0).onChangeEnd?.call(12);
     await tester.pumpAndSettle();
@@ -397,8 +397,11 @@ void main() {
     sliders.elementAt(2).onChanged?.call(6); // 0,5,10,15,20,25,30 -> index 6
     sliders.elementAt(2).onChangeEnd?.call(6);
     await tester.pumpAndSettle();
-    sliders.elementAt(3).onChanged?.call(3); // 3,4,5,6 -> index 3
-    sliders.elementAt(3).onChangeEnd?.call(3);
+    sliders.elementAt(3).onChanged?.call(6); // 0,10,15,20,30,45,60 -> 60s
+    sliders.elementAt(3).onChangeEnd?.call(6);
+    await tester.pumpAndSettle();
+    sliders.elementAt(4).onChanged?.call(3); // 3,4,5,6 -> index 3
+    sliders.elementAt(4).onChangeEnd?.call(3);
     await tester.pumpAndSettle();
 
     final recoveryButton = tester.widget<SegmentedButton<String>>(
@@ -425,6 +428,7 @@ void main() {
       '${10 * 1024 * 1024 * 1024}',
     );
     expect(envSettings['MAX_RETRY_MINUTES'], '30');
+    expect(envSettings['STREAM_IDLE_TIMEOUT'], '60');
     expect(envSettings['RECORDING_RECOVERY_DURATION'], 'reset');
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
     expect(envSettings['CONVERT_TO_MP4'], 'true');
@@ -475,8 +479,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final sliders = tester.widgetList<Slider>(find.byType(Slider));
-    sliders.elementAt(3).onChanged?.call(12); // 3..15 -> index 12 = 15
-    sliders.elementAt(3).onChangeEnd?.call(12);
+    // 設定順序：時長上限、啟動前可用空間、斷線等待、流無數據等待、同時錄製上限。
+    sliders.elementAt(4).onChanged?.call(12); // 3..15 -> index 12 = 15
+    sliders.elementAt(4).onChangeEnd?.call(12);
     await tester.pumpAndSettle();
 
     expect(

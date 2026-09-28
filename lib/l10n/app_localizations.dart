@@ -237,6 +237,10 @@ class AppLocalizations {
       'maxRetryMinutesTitle': '下線後服務重試時長',
       'maxRetryMinutesDescription':
           '直播下線後，服務會持續重試到指定時長，再結束此次錄製。',
+      'streamIdleTimeoutTitle': '流無數據等待',
+      'streamIdleTimeoutDescription':
+          '讀取直播流時，若長時間沒有新資料則斷線重連。',
+      'streamIdleTimeoutOffOption': '關閉',
       'recordingRecoveryDurationTitle': '重試成功後的時長計算',
       'recordingRecoveryDurationDescription':
           '斷流後若重試成功並恢復錄製，可選擇從頭起算錄製時長，或沿用開始錄製時的總時長。',
@@ -289,6 +293,7 @@ class AppLocalizations {
       'hoursOption': '{value} 小時',
       'hoursUnlimitedOption': '不限',
       'minutesOption': '{value} 分鐘',
+      'secondsOption': '{value} 秒',
       'maxRetryMinutesNoWaitOption': '不等待',
       'diskSpaceOption': '{value} GB',
       'diskSpaceNoMinimumOption': '不檢查',
@@ -477,6 +482,10 @@ class AppLocalizations {
       'maxRetryMinutesTitle': '下线后服务重试时长',
       'maxRetryMinutesDescription':
           '直播下线后，服务会持续重试到指定时长，再结束此次录制。',
+      'streamIdleTimeoutTitle': '流无数据等待',
+      'streamIdleTimeoutDescription':
+          '读取直播流时，若长时间没有新数据则断线重连。',
+      'streamIdleTimeoutOffOption': '关闭',
       'recordingRecoveryDurationTitle': '重试成功后的时长计算',
       'recordingRecoveryDurationDescription':
           '断流后若重试成功并恢复录制，可选择从头起算录制时长，或沿用开始录制时的总时长。',
@@ -529,6 +538,7 @@ class AppLocalizations {
       'hoursOption': '{value} 小时',
       'hoursUnlimitedOption': '不限',
       'minutesOption': '{value} 分钟',
+      'secondsOption': '{value} 秒',
       'maxRetryMinutesNoWaitOption': '不等待',
       'diskSpaceOption': '{value} GB',
       'diskSpaceNoMinimumOption': '不检查',

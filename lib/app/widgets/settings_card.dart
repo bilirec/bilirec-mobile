@@ -83,6 +83,15 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     25,
     30,
   ];
+  static const List<int> _streamIdleTimeoutOptions = <int>[
+    0,
+    10,
+    15,
+    20,
+    30,
+    45,
+    60,
+  ];
   static const int _minMaxConcurrentRecordings = 3;
   static const int _maxMaxConcurrentRecordings = 15;
   static final List<int> _maxConcurrentRecordingOptions = List<int>.generate(
@@ -93,6 +102,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   static const int _defaultMaxRecordingHours = 5;
   static const int _defaultMinDiskSpaceGb = 5;
   static const int _defaultMaxRetryMinutes = 10;
+  static const int _defaultStreamIdleTimeoutSecs = 20;
   static const int _defaultMaxConcurrentRecordings =
       _minMaxConcurrentRecordings;
   static const String _defaultDanmakuOutputFormat = 'jsonl';
@@ -113,6 +123,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   int _maxRecordingHours = _defaultMaxRecordingHours;
   int _minDiskSpaceGb = _defaultMinDiskSpaceGb;
   int _maxRetryMinutes = _defaultMaxRetryMinutes;
+  int _streamIdleTimeoutSecs = _defaultStreamIdleTimeoutSecs;
   int _maxConcurrentRecordings = _defaultMaxConcurrentRecordings;
   String _recordingRecoveryDuration = 'preserve';
   String _danmakuOutputFormat = _defaultDanmakuOutputFormat;
@@ -186,6 +197,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       _maxRecordingHours = _readMaxRecordingHours(managedEnvironmentSettings);
       _minDiskSpaceGb = _readMinDiskSpaceGb(managedEnvironmentSettings);
       _maxRetryMinutes = _readMaxRetryMinutes(managedEnvironmentSettings);
+      _streamIdleTimeoutSecs =
+          _readStreamIdleTimeoutSecs(managedEnvironmentSettings);
       _recordingRecoveryDuration =
           _readRecordingRecoveryDuration(managedEnvironmentSettings);
       _danmakuOutputFormat =
@@ -540,6 +553,27 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     return fallback;
   }
 
+  int _readStreamIdleTimeoutSecs(Map<String, String> env) {
+    final parsed = int.tryParse(env['STREAM_IDLE_TIMEOUT'] ?? '');
+    if (parsed == null) {
+      return _defaultStreamIdleTimeoutSecs;
+    }
+    if (_streamIdleTimeoutOptions.contains(parsed)) {
+      return parsed;
+    }
+
+    var best = _streamIdleTimeoutOptions.first;
+    var bestDiff = (parsed - best).abs();
+    for (final option in _streamIdleTimeoutOptions.skip(1)) {
+      final diff = (parsed - option).abs();
+      if (diff < bestDiff) {
+        best = option;
+        bestDiff = diff;
+      }
+    }
+    return best;
+  }
+
   String _readRecordingRecoveryDuration(Map<String, String> env) {
     final raw = (env['RECORDING_RECOVERY_DURATION'] ?? '').trim().toLowerCase();
     if (raw == 'reset') {
@@ -672,6 +706,15 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     if (!mounted) return;
     setState(() {
       _maxRetryMinutes = value;
+    });
+  }
+
+  Future<void> _setStreamIdleTimeoutSecs(int value) async {
+    if (!_streamIdleTimeoutOptions.contains(value)) return;
+    await _setManagedEnvironmentSetting('STREAM_IDLE_TIMEOUT', '$value');
+    if (!mounted) return;
+    setState(() {
+      _streamIdleTimeoutSecs = value;
     });
   }
 
@@ -1715,6 +1758,28 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         },
                         onChangeEnd: (value) {
                           _setMaxRetryMinutes(value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsOptionSlider(
+                        title: l10n.tr('streamIdleTimeoutTitle'),
+                        description: l10n.tr('streamIdleTimeoutDescription'),
+                        options: _streamIdleTimeoutOptions,
+                        value: _streamIdleTimeoutSecs,
+                        valueLabel: _streamIdleTimeoutSecs == 0
+                            ? l10n.tr('streamIdleTimeoutOffOption')
+                            : l10n.tr(
+                                'secondsOption',
+                                params: {'value': '$_streamIdleTimeoutSecs'},
+                              ),
+                        enabled: widget.controlsEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _streamIdleTimeoutSecs = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setStreamIdleTimeoutSecs(value);
                         },
                       ),
                       const SizedBox(height: 14),

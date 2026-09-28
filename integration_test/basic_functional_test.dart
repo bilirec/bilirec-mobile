@@ -44,7 +44,7 @@ final _savedEnvironmentSettingsTitleLabels =
 final _batteryDialogTitleLabels = labelsForKey('batteryDialogTitle');
 final _goToSettingsLabels = labelsForKey('goToSettings');
 const _logTag = 'BASIC_FUNCTIONAL_TEST';
-final _expectedRecordingPolicySliderValues = <double>[0, 3, 6, 1];
+final _expectedRecordingPolicySliderValues = <double>[0, 3, 6, 3, 1];
 final _expectedManagedEnvironmentAfterPolicy = <String, String>{
   'MAX_RECORDING_HOURS': '0',
   'MIN_DISK_SPACE_BYTES': '${10 * 1024 * 1024 * 1024}',
@@ -72,10 +72,10 @@ Future<void> _closeSettingsSheet(WidgetTester tester) async {
 
 Future<void> _setRecordingPolicyValues(WidgetTester tester) async {
   final sliders = tester.widgetList<Slider>(find.byType(Slider)).toList();
-  expect(sliders.length, greaterThanOrEqualTo(4), reason: '應至少有 4 個錄製策略滑動條');
+  expect(sliders.length, greaterThanOrEqualTo(5), reason: '應至少有 5 個錄製策略滑動條');
 
-  // 順序：時長上限、啟動前可用空間、斷線等待、同時錄製上限。
-  // 只操作前 4 個，避免因新增滑動條導致測試失敗
+  // 順序：時長上限、啟動前可用空間、斷線等待、流無數據等待、同時錄製上限。
+  // 只操作前 5 個，避免因新增滑動條導致測試失敗
   sliders[0].onChanged?.call(0);
   sliders[0].onChangeEnd?.call(0);
   await tester.pumpAndSettle();
@@ -85,8 +85,8 @@ Future<void> _setRecordingPolicyValues(WidgetTester tester) async {
   sliders[2].onChanged?.call(6);
   sliders[2].onChangeEnd?.call(6);
   await tester.pumpAndSettle();
-  sliders[3].onChanged?.call(1);
-  sliders[3].onChangeEnd?.call(1);
+  sliders[4].onChanged?.call(1);
+  sliders[4].onChangeEnd?.call(1);
   await tester.pumpAndSettle();
 }
 
@@ -434,11 +434,12 @@ void main() {
       final initialSliders = tester
           .widgetList<Slider>(find.byType(Slider))
           .toList(growable: false);
-      expect(initialSliders.length, greaterThanOrEqualTo(4));
+      expect(initialSliders.length, greaterThanOrEqualTo(5));
       expect(initialSliders[0].value, 5); // MAX_RECORDING_HOURS 預設 5
       expect(initialSliders[1].value, 2); // MIN_DISK_SPACE_BYTES 預設 5GB
       expect(initialSliders[2].value, 2); // MAX_RETRY_MINUTES 預設 10 分鐘
-      expect(initialSliders[3].value, 0); // MAX_CONCURRENT_RECORDINGS 預設 3 路
+      expect(initialSliders[3].value, 3); // STREAM_IDLE_TIMEOUT 預設 20 秒
+      expect(initialSliders[4].value, 0); // MAX_CONCURRENT_RECORDINGS 預設 3 路
 
       await _setRecordingPolicyValues(tester);
 
@@ -460,11 +461,12 @@ void main() {
         tester,
         expectedValues: _expectedRecordingPolicySliderValues,
       );
-      expect(slidersAfterRestart.length, greaterThanOrEqualTo(4));
+      expect(slidersAfterRestart.length, greaterThanOrEqualTo(5));
       expect(slidersAfterRestart[0].value, 0); // MAX_RECORDING_HOURS 改為 0（無限制）
       expect(slidersAfterRestart[1].value, 3); // MIN_DISK_SPACE_BYTES 改為 10GB
       expect(slidersAfterRestart[2].value, 6); // MAX_RETRY_MINUTES 改為 30 分鐘
-      expect(slidersAfterRestart[3].value, 1); // MAX_CONCURRENT_RECORDINGS 改為 4
+      expect(slidersAfterRestart[3].value, 3); // STREAM_IDLE_TIMEOUT 仍為預設 20 秒
+      expect(slidersAfterRestart[4].value, 1); // MAX_CONCURRENT_RECORDINGS 改為 4
 
       // 驗證資料庫層：確認持久化值正確寫入
       // 注意：新版本保存到 ManagedEnvironmentSettings，要用對應的 API 讀取
