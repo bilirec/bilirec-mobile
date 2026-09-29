@@ -9,11 +9,13 @@ class ConfigurableGithubApiService extends GithubApiService {
   ConfigurableGithubApiService({
     Dio? dio,
     this.apiBaseUrl = '',
+    this.githubBaseUrl = '',
   })  : _dio = dio ?? Dio(),
         super(dio: dio);
 
   final Dio _dio;
   final String apiBaseUrl;
+  final String githubBaseUrl;
 
   @override
   Future<GithubAPKRelease?> getLatestGithubAPKRelease({
@@ -46,10 +48,13 @@ class ConfigurableGithubApiService extends GithubApiService {
           apkKeyName,
           supportedAbis: supportedAbis,
         );
+        final apkUrl = release.apkUrl.startsWith(defaultGitHubApiBase)
+            ? rewriteGitHubApiUrlForProxy(release.apkUrl, apiBaseUrl)
+            : rewriteGitHubWebUrlForProxy(release.apkUrl, githubBaseUrl);
         return GithubAPKRelease(
           version: release.version,
           releaseNote: release.releaseNote,
-          apkUrl: rewriteGitHubUrlForProxy(release.apkUrl, apiBaseUrl),
+          apkUrl: apkUrl,
         );
       }
       debugPrint(

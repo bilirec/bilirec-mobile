@@ -16,6 +16,7 @@ import 'package:bilirec/shared/file_exporter.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
+import 'package:bilirec/app/widgets/github_proxy_custom_dialog.dart';
 import 'package:bilirec/shared/github_api_probe.dart';
 import 'package:bilirec/shared/github_api_proxy_presets.dart';
 import 'package:bilirec/shared/preferences.dart';
@@ -132,15 +133,14 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   Future<void> _managedEnvironmentWriteQueue = Future<void>.value();
 
   String _githubApiProxyPreset = githubApiProxyPresetOfficial;
-  final TextEditingController _githubApiCustomController =
-      TextEditingController();
-  static const Duration _githubApiCustomDebounce = Duration(milliseconds: 600);
-  Timer? _githubApiCustomDebounceTimer;
-  int _githubApiCustomCheckGeneration = 0;
-  bool _githubApiCustomChecking = false;
-  String? _githubApiCustomFieldError;
-  bool _githubApiCustomFieldOk = false;
-  bool _muteGitHubApiCustomListener = false;
+  GitHubProxySettings _githubProxySettings = const GitHubProxySettings(
+    apiBaseUrl: '',
+    githubBaseUrl: '',
+  );
+  int _githubApiPresetCheckGeneration = 0;
+  bool _githubApiPresetChecking = false;
+  String? _githubApiPresetFieldError;
+  bool _githubApiPresetFieldOk = false;
 
   final TextEditingController _outputDirController = TextEditingController();
   final FileExporter _fileExporter = FileExporter();
@@ -164,14 +164,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   @override
   void initState() {
     super.initState();
-    _githubApiCustomController.addListener(_onGitHubApiCustomControllerChanged);
     _bootstrap();
-  }
-
-  void _onGitHubApiCustomControllerChanged() {
-    if (_muteGitHubApiCustomListener) return;
-    if (_githubApiProxyPreset != githubApiProxyPresetCustom) return;
-    _scheduleGitHubApiCustomCheck();
   }
 
   Future<void> _bootstrap() async {
@@ -183,10 +176,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         await Preferences.getManagedEnvironmentSettings();
     final developEnvironmentSettings =
         await Preferences.getDevelopEnvironmentSettings();
-    final githubApiBase = await Preferences.getGitHubApiBaseUrl() ?? '';
+    final githubProxy = await Preferences.getGitHubProxySettings();
     if (!mounted) return;
     _outputDirController.text = outputPath;
-    _applyGitHubApiBaseToUi(githubApiBase, scheduleCheck: true);
+    _applyGitHubProxyToUi(githubProxy, scheduleCheck: true);
     setState(() {
       _useSsePush = useSsePush;
       _useAntiSleep = useAntiSleep;
@@ -229,171 +222,163 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
 
   @override
   void dispose() {
-    _githubApiCustomDebounceTimer?.cancel();
-    _githubApiCustomController.removeListener(_onGitHubApiCustomControllerChanged);
     _outputDirController.dispose();
-    _githubApiCustomController.dispose();
     super.dispose();
   }
 
-  void _applyGitHubApiBaseToUi(String stored, {bool scheduleCheck = false}) {
-    _muteGitHubApiCustomListener = true;
-    _githubApiProxyPreset = githubApiProxyPresetIdFromStored(stored);
-    if (_githubApiProxyPreset == githubApiProxyPresetCustom) {
-      _githubApiCustomController.text = stored.trim();
-    } else {
-      _githubApiCustomController.text = '';
-    }
-    _muteGitHubApiCustomListener = false;
-    if (!scheduleCheck || stored.trim().isEmpty) {
+  void _applyGitHubProxyToUi(
+    GitHubProxySettings stored, {
+    bool scheduleCheck = false,
+  }) {
+    _githubProxySettings = stored;
+    _githubApiProxyPreset = githubApiProxyPresetIdFromStored(
+      apiBase: stored.apiBaseUrl,
+      githubBase: stored.githubBaseUrl,
+    );
+    if (!scheduleCheck ||
+        (stored.apiBaseUrl.isEmpty && stored.githubBaseUrl.isEmpty)) {
       return;
     }
-    if (_githubApiProxyPreset == githubApiProxyPresetCustom) {
-      _scheduleGitHubApiCustomCheck();
-    } else if (_githubApiProxyPreset != githubApiProxyPresetOfficial) {
+    if (_githubApiProxyPreset != githubApiProxyPresetOfficial &&
+        _githubApiProxyPreset != githubApiProxyPresetCustom) {
       _scheduleGitHubApiPresetCheck(_githubApiProxyPreset);
     }
   }
 
-  void _resetGitHubApiCustomFieldState() {
-    _githubApiCustomCheckGeneration++;
-    _githubApiCustomChecking = false;
-    _githubApiCustomFieldError = null;
-    _githubApiCustomFieldOk = false;
-  }
-
-  void _scheduleGitHubApiCustomCheck() {
-    _githubApiCustomDebounceTimer?.cancel();
-    _githubApiCustomCheckGeneration++;
-    if (mounted) {
-      setState(() {
-        _githubApiCustomChecking = false;
-        _githubApiCustomFieldError = null;
-        _githubApiCustomFieldOk = false;
-      });
-    }
-
-    final base = githubApiBaseUrlForPresetId(
-      githubApiProxyPresetCustom,
-      _githubApiCustomController.text,
-    );
-    if (base.isEmpty) {
-      unawaited(_saveGitHubApiPreference(githubApiProxyPresetCustom));
-      return;
-    }
-
-    final generation = _githubApiCustomCheckGeneration;
-    _githubApiCustomDebounceTimer = Timer(_githubApiCustomDebounce, () {
-      unawaited(
-        _runGitHubApiProxyCheck(
-          apiBase: base,
-          generation: generation,
-          presetId: githubApiProxyPresetCustom,
-        ),
-      );
-    });
+  void _resetGitHubApiPresetFieldState() {
+    _githubApiPresetCheckGeneration++;
+    _githubApiPresetChecking = false;
+    _githubApiPresetFieldError = null;
+    _githubApiPresetFieldOk = false;
   }
 
   void _scheduleGitHubApiPresetCheck(String presetId) {
-    _githubApiCustomDebounceTimer?.cancel();
-    _githubApiCustomCheckGeneration++;
+    _githubApiPresetCheckGeneration++;
     if (mounted) {
-      setState(() {
-        _githubApiCustomChecking = false;
-        _githubApiCustomFieldError = null;
-        _githubApiCustomFieldOk = false;
-      });
+      setState(_resetGitHubApiPresetFieldState);
     }
 
-    final base = githubApiBaseUrlForPresetId(
-      presetId,
-      _githubApiCustomController.text,
-    );
-    if (base.isEmpty) {
+    final settings = githubProxySettingsForPresetId(presetId);
+    if (settings.apiBaseUrl.isEmpty) {
       return;
     }
 
-    final generation = _githubApiCustomCheckGeneration;
+    final generation = _githubApiPresetCheckGeneration;
     unawaited(
-      _runGitHubApiProxyCheck(
-        apiBase: base,
+      _runGitHubApiPresetCheck(
+        settings: settings,
         generation: generation,
         presetId: presetId,
       ),
     );
   }
 
-  Future<void> _saveGitHubApiPreference(String preset) async {
-    final base = githubApiBaseUrlForPresetId(
-      preset,
-      _githubApiCustomController.text,
-    );
-    await Preferences.setGitHubApiBaseUrl(base.isEmpty ? null : base);
+  Future<void> _saveGitHubProxyPreference(String preset) async {
+    final settings = githubProxySettingsForPresetId(preset);
+    await Preferences.setGitHubProxySettings(settings);
+    if (mounted) {
+      setState(() => _githubProxySettings = settings);
+    }
   }
 
-  Future<void> _persistGitHubApiBase(String preset) async {
-    _githubApiCustomDebounceTimer?.cancel();
-    if (preset == githubApiProxyPresetOfficial) {
-      if (mounted) {
-        setState(_resetGitHubApiCustomFieldState);
-      }
-      await _saveGitHubApiPreference(preset);
+  Future<void> _openGitHubProxyCustomDialog() async {
+    final storedPreset = githubApiProxyPresetIdFromStored(
+      apiBase: _githubProxySettings.apiBaseUrl,
+      githubBase: _githubProxySettings.githubBaseUrl,
+    );
+    final initial = storedPreset == githubApiProxyPresetCustom
+        ? _githubProxySettings
+        : const GitHubProxySettings(
+            apiBaseUrl: '',
+            githubBaseUrl: '',
+          );
+    final saved = await showGitHubProxyCustomDialog(
+      context,
+      initial: initial,
+      docsUrl: _githubApiProxyDocsUrl(),
+    );
+    if (!mounted || saved == null) {
       return;
     }
-    if (preset == githubApiProxyPresetCustom) {
-      _scheduleGitHubApiCustomCheck();
+    await Preferences.setGitHubProxySettings(saved);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _githubProxySettings = saved;
+      _githubApiProxyPreset = githubApiProxyPresetCustom;
+      _resetGitHubApiPresetFieldState();
+    });
+    _showToast(
+      '✅ ${l10n.tr('githubApiProxyCustomSaveSuccess')}',
+      location: AppToastLocation.bottom,
+    );
+  }
+
+  Future<void> _onGitHubApiProxyPresetChanged(String value) async {
+    if (value == githubApiProxyPresetCustom) {
+      setState(() {
+        _githubApiProxyPreset = githubApiProxyPresetCustom;
+        _resetGitHubApiPresetFieldState();
+      });
+      return;
+    }
+
+    setState(() => _githubApiProxyPreset = value);
+    if (value == githubApiProxyPresetOfficial) {
+      if (mounted) {
+        setState(_resetGitHubApiPresetFieldState);
+      }
+      await _saveGitHubProxyPreference(value);
       return;
     }
     if (mounted) {
-      setState(_resetGitHubApiCustomFieldState);
+      setState(_resetGitHubApiPresetFieldState);
     }
-    _scheduleGitHubApiPresetCheck(preset);
+    _scheduleGitHubApiPresetCheck(value);
   }
 
-  bool _githubApiProxySelectionMatches(String presetId, String apiBase) {
-    if (_githubApiProxyPreset != presetId) {
-      return false;
-    }
-    return githubApiBaseUrlForPresetId(
-          presetId,
-          _githubApiCustomController.text,
-        ) ==
-        apiBase;
-  }
-
-  Future<void> _runGitHubApiProxyCheck({
-    required String apiBase,
+  Future<void> _runGitHubApiPresetCheck({
+    required GitHubProxySettings settings,
     required int generation,
     required String presetId,
   }) async {
-    if (!mounted || generation != _githubApiCustomCheckGeneration) return;
+    if (!mounted || generation != _githubApiPresetCheckGeneration) {
+      return;
+    }
     setState(() {
-      _githubApiCustomChecking = true;
-      _githubApiCustomFieldError = null;
-      _githubApiCustomFieldOk = false;
+      _githubApiPresetChecking = true;
+      _githubApiPresetFieldError = null;
+      _githubApiPresetFieldOk = false;
     });
 
-    final reachable = await probeGitHubApiBase(apiBase: apiBase);
-    if (!mounted || generation != _githubApiCustomCheckGeneration) return;
+    final reachable =
+        await probeGitHubApiBase(apiBase: settings.apiBaseUrl);
+    if (!mounted || generation != _githubApiPresetCheckGeneration) {
+      return;
+    }
 
-    if (!_githubApiProxySelectionMatches(presetId, apiBase)) {
-      setState(() => _githubApiCustomChecking = false);
+    if (_githubApiProxyPreset != presetId) {
+      setState(() => _githubApiPresetChecking = false);
       return;
     }
 
     if (reachable) {
-      await Preferences.setGitHubApiBaseUrl(apiBase);
+      await Preferences.setGitHubProxySettings(settings);
+      if (mounted) {
+        setState(() => _githubProxySettings = settings);
+      }
     }
 
     setState(() {
-      _githubApiCustomChecking = false;
+      _githubApiPresetChecking = false;
       if (reachable) {
-        _githubApiCustomFieldError = null;
-        _githubApiCustomFieldOk = true;
+        _githubApiPresetFieldError = null;
+        _githubApiPresetFieldOk = true;
       } else {
-        _githubApiCustomFieldError =
+        _githubApiPresetFieldError =
             l10n.tr('githubApiProxyCustomUnreachable');
-        _githubApiCustomFieldOk = false;
+        _githubApiPresetFieldOk = false;
       }
     });
   }
@@ -403,7 +388,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         _githubApiProxyPreset == githubApiProxyPresetCustom) {
       return null;
     }
-    return _githubApiCustomFieldError;
+    return _githubApiPresetFieldError;
   }
 
   String? _githubApiProxyDropdownHelper() {
@@ -411,14 +396,10 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         _githubApiProxyPreset == githubApiProxyPresetCustom) {
       return null;
     }
-    return _githubApiCustomFieldHelperText();
-  }
-
-  String? _githubApiCustomFieldHelperText() {
-    if (_githubApiCustomChecking) {
+    if (_githubApiPresetChecking) {
       return l10n.tr('githubApiProxyCustomChecking');
     }
-    if (_githubApiCustomFieldOk && _githubApiCustomFieldError == null) {
+    if (_githubApiPresetFieldOk && _githubApiPresetFieldError == null) {
       return l10n.tr('githubApiProxyCustomReachable');
     }
     return null;
@@ -2006,6 +1987,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         value: _githubApiProxyPreset,
                         decoration: InputDecoration(
                           isDense: true,
@@ -2015,11 +1997,11 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                           helperText: _githubApiProxyDropdownHelper(),
                           helperMaxLines: 3,
                           helperStyle: theme.textTheme.bodySmall?.copyWith(
-                            color: _githubApiCustomChecking
+                            color: _githubApiPresetChecking
                                 ? colorScheme.onSurfaceVariant
                                 : colorScheme.primary,
                           ),
-                          suffixIcon: _githubApiCustomChecking &&
+                          suffixIcon: _githubApiPresetChecking &&
                                   _githubApiProxyPreset !=
                                       githubApiProxyPresetOfficial &&
                                   _githubApiProxyPreset !=
@@ -2060,44 +2042,21 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         onChanged: widget.controlsEnabled
                             ? (value) async {
                                 if (value == null) return;
-                                setState(() {
-                                  _githubApiProxyPreset = value;
-                                });
-                                await _persistGitHubApiBase(value);
+                                await _onGitHubApiProxyPresetChanged(value);
                               }
                             : null,
                       ),
                       if (_githubApiProxyPreset ==
                           githubApiProxyPresetCustom) ...[
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _githubApiCustomController,
-                          enabled: widget.controlsEnabled,
-                          decoration: InputDecoration(
-                            labelText: l10n.tr('githubApiProxyCustomLabel'),
-                            border: const OutlineInputBorder(),
-                            errorText: _githubApiCustomFieldError,
-                            errorMaxLines: 3,
-                            helperText: _githubApiCustomFieldHelperText(),
-                            helperMaxLines: 3,
-                            helperStyle: theme.textTheme.bodySmall?.copyWith(
-                              color: _githubApiCustomChecking
-                                  ? colorScheme.onSurfaceVariant
-                                  : colorScheme.primary,
-                            ),
-                            suffixIcon: _githubApiCustomChecking
-                                ? Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: colorScheme.primary,
-                                      ),
-                                    ),
-                                  )
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: widget.controlsEnabled
+                                ? _openGitHubProxyCustomDialog
                                 : null,
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            label: Text(l10n.tr('githubApiProxyCustomEdit')),
                           ),
                         ),
                       ],

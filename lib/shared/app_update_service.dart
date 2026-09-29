@@ -80,8 +80,11 @@ class AppUpdateService {
     if (override != null) {
       return override;
     }
-    final stored = await Preferences.getGitHubApiBaseUrl();
-    return ConfigurableGithubApiService(apiBaseUrl: stored ?? '');
+    final proxy = await Preferences.getGitHubProxySettings();
+    return ConfigurableGithubApiService(
+      apiBaseUrl: proxy.apiBaseUrl,
+      githubBaseUrl: proxy.githubBaseUrl,
+    );
   }
 
   static String normalizeVersionIdentifier(String value) {

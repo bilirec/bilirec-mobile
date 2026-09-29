@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:bilirec/shared/github_api_base.dart';
+import 'package:bilirec/shared/github_api_proxy_presets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String _outputDirKey = 'output_dir';
@@ -12,6 +14,7 @@ const String _lastSeenInstalledVersionKey = 'last_seen_installed_version';
 const String _managedEnvironmentSettingsKey = 'managed_environment_settings';
 const String _developEnvironmentSettingsKey = 'develop_environment_settings';
 const String _githubApiBaseUrlKey = 'github_api_base_url';
+const String _githubBaseUrlKey = 'github_base_url';
 
 const String coreRunningKey = 'core_running';
 
@@ -157,6 +160,42 @@ sealed class Preferences {
   static Future<String?> getGitHubApiBaseUrl() async {
     final prefs = _prefs;
     return prefs.getString(_githubApiBaseUrlKey);
+  }
+
+  static Future<void> setGitHubBaseUrl(String? value) async {
+    final prefs = _prefs;
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      await prefs.remove(_githubBaseUrlKey);
+      return;
+    }
+    await prefs.setString(
+      _githubBaseUrlKey,
+      normalizeGitHubBaseUrl(trimmed),
+    );
+  }
+
+  static Future<String?> getGitHubBaseUrl() async {
+    final prefs = _prefs;
+    return prefs.getString(_githubBaseUrlKey);
+  }
+
+  static Future<GitHubProxySettings> getGitHubProxySettings() async {
+    final api = await getGitHubApiBaseUrl() ?? '';
+    final github = await getGitHubBaseUrl() ?? '';
+    return GitHubProxySettings(
+      apiBaseUrl: normalizeGitHubApiBaseUrl(api),
+      githubBaseUrl: normalizeGitHubBaseUrl(github),
+    );
+  }
+
+  static Future<void> setGitHubProxySettings(GitHubProxySettings settings) async {
+    await setGitHubApiBaseUrl(
+      settings.apiBaseUrl.isEmpty ? null : settings.apiBaseUrl,
+    );
+    await setGitHubBaseUrl(
+      settings.githubBaseUrl.isEmpty ? null : settings.githubBaseUrl,
+    );
   }
 
   static Future<Map<String, String>> getDevelopEnvironmentSettings() async {

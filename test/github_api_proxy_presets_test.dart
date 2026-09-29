@@ -3,31 +3,46 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('preset id from stored URL', () {
-    expect(githubApiProxyPresetIdFromStored(null), githubApiProxyPresetOfficial);
+    expect(
+      githubApiProxyPresetIdFromStored(apiBase: null, githubBase: null),
+      githubApiProxyPresetOfficial,
+    );
     final first = kGitHubApiProxyPresets.first;
     expect(
-      githubApiProxyPresetIdFromStored(first.normalizedApiBaseUrl),
+      githubApiProxyPresetIdFromStored(
+        apiBase: first.normalizedApiBaseUrl,
+        githubBase: first.normalizedGithubBaseUrl,
+      ),
       first.id,
     );
     expect(
-      githubApiProxyPresetIdFromStored('https://example.com/proxy/'),
+      githubApiProxyPresetIdFromStored(
+        apiBase: 'https://example.com/proxy/',
+        githubBase: '',
+      ),
       githubApiProxyPresetCustom,
     );
   });
 
-  test('base URL for preset id', () {
+  test('proxy settings for preset id', () {
     expect(
-      githubApiBaseUrlForPresetId(githubApiProxyPresetOfficial, ''),
-      '',
+      githubProxySettingsForPresetId(githubApiProxyPresetOfficial),
+      const GitHubProxySettings(
+        apiBaseUrl: '',
+        githubBaseUrl: '',
+      ),
     );
     final second = kGitHubApiProxyPresets[1];
     expect(
-      githubApiBaseUrlForPresetId(second.id, ''),
-      second.normalizedApiBaseUrl,
+      githubProxySettingsForPresetId(second.id),
+      GitHubProxySettings(
+        apiBaseUrl: second.normalizedApiBaseUrl,
+        githubBaseUrl: second.normalizedGithubBaseUrl,
+      ),
     );
   });
 
   test('preset label from proxy root host', () {
-    expect(kGitHubApiProxyPresets.first.label, 'gh-proxy.com');
+    expect(kGitHubApiProxyPresets.first.label, 'gh.bilirec.org');
   });
 }

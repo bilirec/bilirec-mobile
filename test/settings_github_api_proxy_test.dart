@@ -10,7 +10,6 @@ import 'test_support/in_memory_shared_preferences_async_platform.dart';
 import 'test_support/l10n_test_helper.dart';
 
 const String _unreachableCustomGitHubApiBase = 'http://127.0.0.1:1/';
-const Duration _githubApiCustomDebounce = Duration(milliseconds: 600);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -23,16 +22,20 @@ void main() {
     'githubApiProxyTitle',
     AppLocaleConfig.traditionalCode,
   );
-  final _githubApiProxyCustomLabel = labelForKeyAndCode(
-    'githubApiProxyCustomLabel',
-    AppLocaleConfig.traditionalCode,
-  );
   final _githubApiProxyOptionCustom = labelForKeyAndCode(
     'githubApiProxyOptionCustom',
     AppLocaleConfig.traditionalCode,
   );
   final _githubApiProxyCustomUnreachable = labelForKeyAndCode(
     'githubApiProxyCustomUnreachable',
+    AppLocaleConfig.traditionalCode,
+  );
+  final _githubApiProxyCustomEdit = labelForKeyAndCode(
+    'githubApiProxyCustomEdit',
+    AppLocaleConfig.traditionalCode,
+  );
+  final _githubApiProxyCustomSave = labelForKeyAndCode(
+    'githubApiProxyCustomSave',
     AppLocaleConfig.traditionalCode,
   );
 
@@ -83,14 +86,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Finder _githubProxyCustomField() {
-    return find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField &&
-          widget.decoration?.labelText == _githubApiProxyCustomLabel,
-    );
-  }
-
   Future<bool> _waitForFinder(WidgetTester tester, Finder finder) async {
     const step = Duration(milliseconds: 100);
     const maxWait = Duration(seconds: 15);
@@ -104,7 +99,7 @@ void main() {
     return false;
   }
 
-  testWidgets('自訂 GitHub 反代輸入 debounce 後驗證失敗顯示欄位錯誤', (tester) async {
+  testWidgets('選自訂不彈窗；編輯後提交 API 驗證失敗顯示錯誤', (tester) async {
     await pumpSettingsSheet(tester);
 
     await tester.scrollUntilVisible(
@@ -119,11 +114,22 @@ void main() {
     await tester.tap(find.text(_githubApiProxyOptionCustom).last);
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('github_proxy_custom_api_field')), findsNothing);
+
+    await tester.tap(find.text(_githubApiProxyCustomEdit));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('github_proxy_custom_api_field')), findsOneWidget);
+
     await tester.enterText(
-      _githubProxyCustomField(),
+      find.byKey(const Key('github_proxy_custom_api_field')),
       _unreachableCustomGitHubApiBase,
     );
-    await tester.pump(_githubApiCustomDebounce);
+    await tester.pump();
+
+    await tester.ensureVisible(find.text(_githubApiProxyCustomSave));
+    await tester.tap(find.text(_githubApiProxyCustomSave));
+    await tester.pump();
 
     expect(
       await _waitForFinder(

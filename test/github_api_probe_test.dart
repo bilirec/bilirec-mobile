@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:bilirec/shared/github_api_base.dart';
 import 'package:bilirec/shared/github_api_probe.dart';
 
 void main() {
@@ -75,6 +76,69 @@ void main() {
         dio: dio,
       ),
       isFalse,
+    );
+  });
+
+  test('webBrowserDownloadUrlFromRelease prefers bilirec-release asset', () {
+    final url = webBrowserDownloadUrlFromRelease(<String, dynamic>{
+      'assets': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'name': 'other.apk',
+          'browser_download_url':
+              'https://github.com/bilirec/bilirec-mobile/releases/download/v1/other.apk',
+        },
+        <String, dynamic>{
+          'name': 'bilirec-release.apk',
+          'browser_download_url':
+              'https://github.com/bilirec/bilirec-mobile/releases/download/v1/bilirec-release.apk',
+        },
+      ],
+    });
+    expect(
+      url,
+      'https://github.com/bilirec/bilirec-mobile/releases/download/v1/bilirec-release.apk',
+    );
+  });
+
+  test('probeGitHubWebDownloadUrl rewrites and accepts range response', () async {
+    const official =
+        'https://github.com/bilirec/bilirec-mobile/releases/download/v1/bilirec-release.apk';
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          expect(
+            options.uri.toString(),
+            'https://gh.bilirec.org/https://github.com/bilirec/bilirec-mobile/releases/download/v1/bilirec-release.apk',
+          );
+          handler.resolve(
+            Response<List<int>>(
+              requestOptions: options,
+              statusCode: 206,
+              data: <int>[0],
+            ),
+          );
+        },
+      ),
+    );
+
+    expect(
+      await probeGitHubWebDownloadUrl(
+        githubBase: 'https://gh.bilirec.org/https://github.com/',
+        officialDownloadUrl: official,
+        dio: dio,
+      ),
+      isTrue,
+    );
+  });
+
+  test('probeGitHubWebDownloadUrl skips when github base is official', () async {
+    expect(
+      await probeGitHubWebDownloadUrl(
+        githubBase: '',
+        officialDownloadUrl: defaultGitHubWebBase,
+      ),
+      isTrue,
     );
   });
 }

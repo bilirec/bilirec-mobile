@@ -33,25 +33,34 @@ void main() {
     );
   });
 
-  test('rewriteGitHubUrlForProxy', () {
+  test('rewriteGitHubApiUrlForProxy', () {
     const asset =
         'https://api.github.com/repos/bilirec/bilirec-mobile/releases/assets/1';
     expect(
-      rewriteGitHubUrlForProxy(
+      rewriteGitHubApiUrlForProxy(
         asset,
         'https://gh-proxy.org/https://api.github.com/',
       ),
       'https://gh-proxy.org/https://api.github.com/repos/bilirec/bilirec-mobile/releases/assets/1',
     );
     expect(
-      rewriteGitHubUrlForProxy(asset, 'https://mirror.example.com/'),
+      rewriteGitHubApiUrlForProxy(asset, 'https://mirror.example.com/'),
       'https://mirror.example.com/repos/bilirec/bilirec-mobile/releases/assets/1',
     );
+    expect(rewriteGitHubApiUrlForProxy(asset, ''), asset);
+  });
+
+  test('rewriteGitHubWebUrlForProxy', () {
     const web =
         'https://github.com/bilirec/bilirec-mobile/releases/download/v1/app.apk';
+    expect(rewriteGitHubWebUrlForProxy(web, ''), web);
     expect(
-      rewriteGitHubUrlForProxy(web, 'https://mirror.example.com/'),
-      web,
+      rewriteGitHubWebUrlForProxy(
+        web,
+        'https://gh.bilirec.org/https://github.com/',
+      ),
+      'https://gh.bilirec.org/https://github.com/bilirec/bilirec-mobile/releases/download/v1/app.apk',
     );
   });
+
 }
