@@ -266,6 +266,20 @@ class AppLocalizations {
       'maxConcurrentRecordingsWarningElevated':
           '提高到此數值可能更明顯增加耗電與發熱，並進一步降低系統穩定性。',
       'maxConcurrentRecordingsWarningHigh': '提高到此數值可能大幅增加耗電與發熱，系統穩定性也更容易下降。',
+      'subcheckPolicyTitle': '檢測策略',
+      'subcheckPolicyDescription':
+          '以下選項影響開播狀態檢查的週期與分組，僅適用已開啟開播通知或自動錄製的房間。',
+      'subcheckLiveCheckTitle': '最低檢測間隔',
+      'subcheckLiveCheckDescription':
+          '完整輪詢週期的下限。需檢查的房間較少時，實際一輪通常即為此值；訂閱增多時，程序會依房間數自動拉長週期。',
+      'subcheckManyRoomsTitle': '每組房間數',
+      'subcheckManyRoomsDescription':
+          '每組一次批量查詢的目標房間數。',
+      'subcheckRateLimitTitle': '檢查前隨機延遲',
+      'subcheckRateLimitDescription':
+          '每組觸發檢查前，0～此秒數的隨機延遲，打散固定節奏。',
+      'roomsOption': '{value} 間',
+      'subcheckJitterOffOption': '0 秒',
       'danmakuPolicyTitle': '彈幕策略',
       'danmakuPolicyDescription':
           '這裡只決定彈幕檔案格式與高峰時的處理方式。是否同時錄製彈幕，請在錄製管理程式中為每次錄製或房間開啟。',
@@ -523,6 +537,19 @@ class AppLocalizations {
       'maxConcurrentRecordingsWarningElevated':
           '提高到此数值可能更明显增加耗电与发热，并进一步降低系统稳定性。',
       'maxConcurrentRecordingsWarningHigh': '提高到此数值可能大幅增加耗电与发热，系统稳定性也更容易下降。',
+      'subcheckPolicyTitle': '检测策略',
+      'subcheckPolicyDescription':
+          '以下选项影响开播状态检查的周期与分组，仅适用已开启开播通知或自动录制的房间。',
+      'subcheckLiveCheckTitle': '最低检测间隔',
+      'subcheckLiveCheckDescription':
+          '完整轮询周期的下限。需检查的房间较少时，实际一轮通常即为此值；订阅增多时，程序会依房间数自动拉长周期。',
+      'subcheckManyRoomsTitle': '每组房间数',
+      'subcheckManyRoomsDescription': '每组一次批量查询的目标房间数。',
+      'subcheckRateLimitTitle': '检查前随机延迟',
+      'subcheckRateLimitDescription':
+          '每组触发检查前，0～此秒数的随机延迟，打散固定节奏。',
+      'roomsOption': '{value} 间',
+      'subcheckJitterOffOption': '0 秒',
       'danmakuPolicyTitle': '弹幕策略',
       'danmakuPolicyDescription':
           '这里只决定弹幕文件格式与高峰时的处理方式。是否同时录制弹幕，请在录制管理程序中为每次录制或房间开启。',

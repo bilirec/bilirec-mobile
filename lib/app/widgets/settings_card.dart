@@ -109,6 +109,20 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   static const String _defaultDanmakuOutputFormat = 'jsonl';
   static const String _defaultDanmakuOverflowPolicy = 'drop';
 
+  static const List<int> _subcheckMinIntervalOptions = <int>[
+    10,
+    15,
+    30,
+    60,
+    120,
+  ];
+  static const List<int> _subcheckRoomsPerShardOptions = <int>[50, 100, 150];
+  static const List<int> _subcheckJitterSecsOptions = <int>[0, 2, 5];
+
+  static const int _defaultSubcheckMinIntervalSecs = 60;
+  static const int _defaultSubcheckRoomsPerShard = 50;
+  static const int _defaultSubcheckJitterSecs = 2;
+
   bool _useSsePush = false;
   bool _useAntiSleep = false;
   bool _useAutoRunOnBoot = false;
@@ -129,6 +143,9 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   String _recordingRecoveryDuration = 'preserve';
   String _danmakuOutputFormat = _defaultDanmakuOutputFormat;
   String _danmakuOverflowPolicy = _defaultDanmakuOverflowPolicy;
+  int _subcheckMinIntervalSecs = _defaultSubcheckMinIntervalSecs;
+  int _subcheckRoomsPerShard = _defaultSubcheckRoomsPerShard;
+  int _subcheckJitterSecs = _defaultSubcheckJitterSecs;
   Map<String, String> _developEnvironmentSettings = <String, String>{};
   Future<void> _managedEnvironmentWriteQueue = Future<void>.value();
 
@@ -216,6 +233,24 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         fallback: 1,
         min: 0,
         max: 5,
+      );
+      _subcheckMinIntervalSecs = _readSubcheckOptionFromEnv(
+        managedEnvironmentSettings,
+        'SUBCHECK_MIN_INTERVAL_SECS',
+        _subcheckMinIntervalOptions,
+        _defaultSubcheckMinIntervalSecs,
+      );
+      _subcheckRoomsPerShard = _readSubcheckOptionFromEnv(
+        managedEnvironmentSettings,
+        'SUBCHECK_ROOMS_PER_SHARD',
+        _subcheckRoomsPerShardOptions,
+        _defaultSubcheckRoomsPerShard,
+      );
+      _subcheckJitterSecs = _readSubcheckOptionFromEnv(
+        managedEnvironmentSettings,
+        'SUBCHECK_JITTER_SECS',
+        _subcheckJitterSecsOptions,
+        _defaultSubcheckJitterSecs,
       );
     });
   }
@@ -613,6 +648,89 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
       return SettingsHintTone.error;
     }
     return SettingsHintTone.warning;
+  }
+
+  int _readSubcheckOptionFromEnv(
+    Map<String, String> env,
+    String key,
+    List<int> options,
+    int fallback,
+  ) {
+    final parsed = int.tryParse(env[key] ?? '');
+    if (parsed == null) {
+      return fallback;
+    }
+    if (options.contains(parsed)) {
+      return parsed;
+    }
+
+    var best = options.first;
+    var bestDiff = (parsed - best).abs();
+    for (final option in options.skip(1)) {
+      final diff = (parsed - option).abs();
+      if (diff < bestDiff) {
+        best = option;
+        bestDiff = diff;
+      }
+    }
+    return best;
+  }
+
+  String _subcheckLiveCheckValueLabel(int secs) {
+    return l10n.tr('secondsOption', params: {'value': '$secs'});
+  }
+
+  String _subcheckManyRoomsValueLabel(int rooms) {
+    return l10n.tr('roomsOption', params: {'value': '$rooms'});
+  }
+
+  String _subcheckJitterValueLabel(int secs) {
+    if (secs == 0) {
+      return l10n.tr('subcheckJitterOffOption');
+    }
+    return l10n.tr('secondsOption', params: {'value': '$secs'});
+  }
+
+  Future<void> _setSubcheckMinIntervalSecs(int value) async {
+    if (!_subcheckMinIntervalOptions.contains(value)) {
+      return;
+    }
+    await _updateManagedEnvironmentSettings((current) {
+      current['SUBCHECK_MIN_INTERVAL_SECS'] = '$value';
+      return current;
+    });
+    if (!mounted) return;
+    setState(() {
+      _subcheckMinIntervalSecs = value;
+    });
+  }
+
+  Future<void> _setSubcheckRoomsPerShard(int value) async {
+    if (!_subcheckRoomsPerShardOptions.contains(value)) {
+      return;
+    }
+    await _updateManagedEnvironmentSettings((current) {
+      current['SUBCHECK_ROOMS_PER_SHARD'] = '$value';
+      return current;
+    });
+    if (!mounted) return;
+    setState(() {
+      _subcheckRoomsPerShard = value;
+    });
+  }
+
+  Future<void> _setSubcheckJitterSecs(int value) async {
+    if (!_subcheckJitterSecsOptions.contains(value)) {
+      return;
+    }
+    await _updateManagedEnvironmentSettings((current) {
+      current['SUBCHECK_JITTER_SECS'] = '$value';
+      return current;
+    });
+    if (!mounted) return;
+    setState(() {
+      _subcheckJitterSecs = value;
+    });
   }
 
   int _readMinDiskSpaceGb(Map<String, String> env) {
@@ -1825,6 +1943,70 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         },
                         onChangeEnd: (value) {
                           _setMaxConcurrentRecordings(value);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SettingsSectionCard(
+                    icon: Icons.podcasts_outlined,
+                    title: l10n.tr('subcheckPolicyTitle'),
+                    description: l10n.tr('subcheckPolicyDescription'),
+                    children: [
+                      SettingsOptionSlider(
+                        key: const Key('subcheck_min_interval_slider'),
+                        title: l10n.tr('subcheckLiveCheckTitle'),
+                        description: l10n.tr('subcheckLiveCheckDescription'),
+                        options: _subcheckMinIntervalOptions,
+                        value: _subcheckMinIntervalSecs,
+                        valueLabel:
+                            _subcheckLiveCheckValueLabel(_subcheckMinIntervalSecs),
+                        enabled: widget.controlsEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _subcheckMinIntervalSecs = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setSubcheckMinIntervalSecs(value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsOptionSlider(
+                        key: const Key('subcheck_rooms_per_shard_slider'),
+                        title: l10n.tr('subcheckManyRoomsTitle'),
+                        description: l10n.tr('subcheckManyRoomsDescription'),
+                        options: _subcheckRoomsPerShardOptions,
+                        value: _subcheckRoomsPerShard,
+                        valueLabel:
+                            _subcheckManyRoomsValueLabel(_subcheckRoomsPerShard),
+                        enabled: widget.controlsEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _subcheckRoomsPerShard = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setSubcheckRoomsPerShard(value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      SettingsOptionSlider(
+                        key: const Key('subcheck_jitter_secs_slider'),
+                        title: l10n.tr('subcheckRateLimitTitle'),
+                        description: l10n.tr('subcheckRateLimitDescription'),
+                        options: _subcheckJitterSecsOptions,
+                        value: _subcheckJitterSecs,
+                        valueLabel:
+                            _subcheckJitterValueLabel(_subcheckJitterSecs),
+                        enabled: widget.controlsEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _subcheckJitterSecs = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          _setSubcheckJitterSecs(value);
                         },
                       ),
                     ],

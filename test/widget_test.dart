@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
+import 'package:bilirec/app/widgets/settings/settings_option_slider.dart';
 import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/main.dart';
@@ -127,6 +128,9 @@ final _maxConcurrentRecordingsWarningLabels =
     labelsForKey('maxConcurrentRecordingsWarning');
 final _maxConcurrentRecordingsWarningHighLabels =
     labelsForKey('maxConcurrentRecordingsWarningHigh');
+final _subcheckPolicyTitleLabels = labelsForKey('subcheckPolicyTitle');
+final _subcheckPolicyDescriptionLabels =
+    labelsForKey('subcheckPolicyDescription');
 final _danmakuPolicyTitleLabels = labelsForKey('danmakuPolicyTitle');
 final _danmakuPolicyDescriptionLabels =
     labelsForKey('danmakuPolicyDescription');
@@ -272,6 +276,11 @@ void main() {
     );
     expect(
       _findFirstVisibleText(_maxConcurrentRecordingsWarningLabels),
+      findsOneWidget,
+    );
+    expect(_findFirstVisibleText(_subcheckPolicyTitleLabels), findsOneWidget);
+    expect(
+      _findFirstVisibleText(_subcheckPolicyDescriptionLabels),
       findsOneWidget,
     );
     expect(_findFirstVisibleText(_danmakuPolicyTitleLabels), findsOneWidget);
@@ -491,6 +500,36 @@ void main() {
 
     final envSettings = await Preferences.getManagedEnvironmentSettings();
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '15');
+  });
+
+  testWidgets('檢測策略設定變更會更新環境變數', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+
+    final minSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('subcheck_min_interval_slider')),
+    );
+    final roomsSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('subcheck_rooms_per_shard_slider')),
+    );
+    final jitterSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('subcheck_jitter_secs_slider')),
+    );
+
+    minSlider.onChangeEnd?.call(120);
+    await tester.pumpAndSettle();
+    roomsSlider.onChangeEnd?.call(100);
+    await tester.pumpAndSettle();
+    jitterSlider.onChangeEnd?.call(0);
+    await tester.pumpAndSettle();
+
+    final envSettings = await Preferences.getManagedEnvironmentSettings();
+    expect(envSettings['SUBCHECK_MIN_INTERVAL_SECS'], '120');
+    expect(envSettings['SUBCHECK_ROOMS_PER_SHARD'], '100');
+    expect(envSettings['SUBCHECK_JITTER_SECS'], '0');
   });
 
   testWidgets('彈幕策略設定變更會更新環境變數', (tester) async {
