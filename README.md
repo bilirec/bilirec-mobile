@@ -2,7 +2,7 @@
 
 Flutter Android 客户端，在手机上以前台服务方式运行 Bilirec 录制后端（内嵌 `libbilirec.so`）。
 
-**交流与反馈：** QQ 群 [834229325](https://qm.qq.com/q/oMTN3EsGBy)，用于交流和问题反映。
+**交流与反馈：** BUG / 問題回報与建议请到主仓库 [bilirec Issues](https://github.com/bilirec/bilirec/issues/new/choose)（选手机版或功能建议模板）。**在本仓库开的 Issue 会被自动关闭。** 使用疑问见 [FAQ](https://www.bilirec.org/zh-cn/guides/faq/) 或 QQ 群 [834229325](https://qm.qq.com/q/oMTN3EsGBy)。
 
 ## 快速开始
 

@@ -1,0 +1,49 @@
+# 用户反馈统一在 bilirec/bilirec 仓库提交；本仓 Issue 仅作指路后关闭。
+# 不处理 Bot 账号（Dependabot 等）。Security Advisory 不走 issues.opened。
+
+name: Redirect issues to bilirec
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  redirect:
+    if: github.event.issue.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment and close
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = `感谢反馈。
+
+            **本仓库（bilirec-mobile）不处理用户 BUG / 問題回報与功能请求。** 请前往主仓库使用对应模板重新提交（可复制本 Issue 正文）：
+
+            - [手机版 BUG / 問題回報](https://github.com/bilirec/bilirec/issues/new?template=bug-mobile.yml)
+            - [功能建议](https://github.com/bilirec/bilirec/issues/new?template=feature.yml)
+            - 若现象更像录制内容、订阅或转码：[核心 BUG / 問題回報](https://github.com/bilirec/bilirec/issues/new?template=bug-core.yml)（环境栏注明手机内嵌后端）
+            - [选择其他模板](https://github.com/bilirec/bilirec/issues/new/choose)
+
+            使用疑问请先查阅 [常见问题](https://www.bilirec.org/zh-cn/guides/faq/) 或 QQ 群 [834229325](https://qm.qq.com/q/oMTN3EsGBy)。
+
+            （原 Issue #${issue.number} 将自动关闭。）`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body,
+            });
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              state: 'closed',
+              state_reason: 'not_planned',
+            });
