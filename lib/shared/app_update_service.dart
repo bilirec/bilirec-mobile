@@ -349,11 +349,11 @@ class AppUpdateService {
     final primary = (releasePageUrl == null || releasePageUrl.isEmpty)
         ? releasePageFallbackUrl
         : releasePageUrl;
-    if (await openUrlPreferChrome(Uri.parse(primary))) {
+    if (await launchUrlInSystemBrowser(Uri.parse(primary))) {
       return true;
     }
     if (primary != releasePageFallbackUrl) {
-      return openUrlPreferChrome(Uri.parse(releasePageFallbackUrl));
+      return launchUrlInSystemBrowser(Uri.parse(releasePageFallbackUrl));
     }
     return false;
   }

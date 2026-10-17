@@ -15,7 +15,9 @@ import 'package:bilirec/shared/external_storage_permission_prompt.dart';
 import 'package:bilirec/shared/file_exporter.dart';
 import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/app_toast.dart';
+import 'package:bilirec/app/widgets/external_browser_picker_sheet.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
+import 'package:bilirec/shared/browser_packages.dart';
 import 'package:bilirec/app/widgets/github_proxy_custom_dialog.dart';
 import 'package:bilirec/shared/github_api_probe.dart';
 import 'package:bilirec/shared/github_api_proxy_presets.dart';
@@ -23,6 +25,7 @@ import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/saf_export_gateway.dart';
 import 'package:bilirec/shared/storage_protection_env.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -158,6 +161,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
   bool _githubApiPresetChecking = false;
   String? _githubApiPresetFieldError;
   bool _githubApiPresetFieldOk = false;
+  String? _externalBrowserChoice;
+  List<HttpsBrowserInfo> _installedHttpsBrowsers = const [];
 
   final TextEditingController _outputDirController = TextEditingController();
   final FileExporter _fileExporter = FileExporter();
@@ -194,6 +199,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
     final developEnvironmentSettings =
         await Preferences.getDevelopEnvironmentSettings();
     final githubProxy = await Preferences.getGitHubProxySettings();
+    final externalBrowserChoice = await Preferences.getExternalBrowserChoice();
     if (!mounted) return;
     _outputDirController.text = outputPath;
     _applyGitHubProxyToUi(githubProxy, scheduleCheck: true);
@@ -252,7 +258,45 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
         _subcheckJitterSecsOptions,
         _defaultSubcheckJitterSecs,
       );
+      _externalBrowserChoice = externalBrowserChoice;
     });
+    List<HttpsBrowserInfo> installedBrowsers = const [];
+    try {
+      installedBrowsers = await listHttpsBrowsers();
+    } catch (_) {
+      installedBrowsers = const [];
+    }
+    if (!mounted) return;
+    setState(() {
+      _installedHttpsBrowsers = installedBrowsers;
+    });
+  }
+
+  Future<void> _changeExternalBrowser() async {
+    final picked = await showExternalBrowserPickerSheet(
+      context,
+      currentChoice: _externalBrowserChoice,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    await Preferences.setExternalBrowserChoice(picked.choice);
+    final installedBrowsers = await listHttpsBrowsers();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _externalBrowserChoice = picked.choice;
+      _installedHttpsBrowsers = installedBrowsers;
+    });
+  }
+
+  Future<void> _clearExternalBrowserPreference() async {
+    await Preferences.clearExternalBrowserChoice();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _externalBrowserChoice = null);
   }
 
   @override
@@ -1740,6 +1784,47 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                   ),
                   const SizedBox(height: 20),
                   SettingsSectionCard(
+                    title: l10n.tr('externalBrowserSettingsTitle'),
+                    children: [
+                      SettingsHint(
+                        text: l10n.tr('externalBrowserSettingsDescription'),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        l10n.tr('externalBrowserCurrentLabel'),
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        externalBrowserDisplayLabel(
+                          l10n: l10n,
+                          storedChoice: _externalBrowserChoice,
+                          installedBrowsers: _installedHttpsBrowsers,
+                        ),
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed:
+                            widget.controlsEnabled ? _changeExternalBrowser : null,
+                        child: Text(l10n.tr('externalBrowserChangeButton')),
+                      ),
+                      if (kDebugMode) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: widget.controlsEnabled &&
+                                  _externalBrowserChoice != null
+                              ? _clearExternalBrowserPreference
+                              : null,
+                          child: Text(
+                            l10n.tr('externalBrowserClearPreferenceDebug'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SettingsSectionCard(
                     icon: Icons.storage_outlined,
                     title: l10n.tr('storagePolicyTitle'),
                     description: l10n.tr('storagePolicyDescription'),
@@ -2247,7 +2332,7 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                         text: l10n.tr('githubApiProxyHint'),
                         inlineLinkLabel: l10n.tr('githubApiProxyHintLink'),
                         onInlineLinkTap: () {
-                          openUrlPreferChrome(
+                          launchUrlInSystemBrowser(
                             Uri.parse(_githubApiProxyDocsUrl()),
                           );
                         },

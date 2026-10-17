@@ -289,7 +289,7 @@ class _GitHubProxyCustomDialogState extends State<GitHubProxyCustomDialog>
               text: l10n.tr('githubApiProxyHint'),
               inlineLinkLabel: l10n.tr('githubApiProxyHintLink'),
               onInlineLinkTap: () {
-                openUrlPreferChrome(Uri.parse(widget.docsUrl));
+                launchUrlInSystemBrowser(Uri.parse(widget.docsUrl));
               },
             ),
           ],

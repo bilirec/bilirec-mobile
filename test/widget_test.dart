@@ -175,6 +175,8 @@ void main() {
 
   const foregroundChannel = MethodChannel('flutter_foreground_task/methods');
   const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
+  const browserPackagesChannel =
+      MethodChannel('org.bilirec.bilirec/browser_packages');
 
   final fakeAsyncPrefs = InMemorySharedPreferencesAsyncPlatform();
   final originalAsyncPlatform = SharedPreferencesAsyncPlatform.instance;
@@ -206,6 +208,14 @@ void main() {
       }
       return null;
     });
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(browserPackagesChannel, (call) async {
+      if (call.method == 'listHttpsBrowsers') {
+        return <dynamic>[];
+      }
+      return null;
+    });
   });
 
   tearDown(() {
@@ -213,6 +223,8 @@ void main() {
         .setMockMethodCallHandler(foregroundChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProviderChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(browserPackagesChannel, null);
   });
 
   testWidgets('載入後顯示主控制頁與未運行狀態', (tester) async {
@@ -474,10 +486,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(_findFirstVisibleText(_settingsLabels));
     await tester.pumpAndSettle();
-    final reloadedSliders =
-        tester.widgetList<Slider>(find.byType(Slider)).toList();
-    expect(reloadedSliders.elementAt(1).value, 0);
-    expect(reloadedSliders.elementAt(2).value, 0);
+    expect(_findFirstVisibleText(_diskSpaceNoMinimumLabels), findsOneWidget);
+    expect(_findFirstVisibleText(_maxRetryMinutesNoWaitLabels), findsOneWidget);
   });
 
   testWidgets('同時錄製上限可設定為 15 路並顯示高負載警告', (tester) async {

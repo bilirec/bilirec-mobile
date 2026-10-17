@@ -343,7 +343,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
         showAppToast(context, l10n.tr('unexpectedStopBootEnabledHint'));
         break;
       case UnexpectedStopDialogAction.openOemDocs:
-        await openUrlPreferChrome(
+        await launchUrlInSystemBrowser(
           Uri.parse(androidMainlandDocsUrl(widget.currentLocale)),
         );
         break;
@@ -844,12 +844,13 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   }
 
   Future<void> _openFrontendFromUi() async {
-    final opened = await openUrlPreferChrome(
+    final opened = await openRecordingFrontendUrl(
+      context,
       Uri.parse('https://app.bilirec.org'),
     );
 
     if (!mounted) return;
-    if (!opened) {
+    if (opened == false) {
       showAppToast(context, l10n.tr('cannotOpenFrontendBrowser'));
     }
   }

@@ -15,6 +15,7 @@ const String _managedEnvironmentSettingsKey = 'managed_environment_settings';
 const String _developEnvironmentSettingsKey = 'develop_environment_settings';
 const String _githubApiBaseUrlKey = 'github_api_base_url';
 const String _githubBaseUrlKey = 'github_base_url';
+const String _externalBrowserChoiceKey = 'external_browser_choice';
 
 const String coreRunningKey = 'core_running';
 
@@ -196,6 +197,31 @@ sealed class Preferences {
     await setGitHubBaseUrl(
       settings.githubBaseUrl.isEmpty ? null : settings.githubBaseUrl,
     );
+  }
+
+  static Future<void> setExternalBrowserChoice(String value) async {
+    final prefs = _prefs;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      await prefs.remove(_externalBrowserChoiceKey);
+      return;
+    }
+    await prefs.setString(_externalBrowserChoiceKey, trimmed);
+  }
+
+  static Future<String?> getExternalBrowserChoice() async {
+    final prefs = _prefs;
+    return prefs.getString(_externalBrowserChoiceKey);
+  }
+
+  static Future<void> clearExternalBrowserChoice() async {
+    final prefs = _prefs;
+    await prefs.remove(_externalBrowserChoiceKey);
+  }
+
+  static Future<bool> hasExternalBrowserChoice() async {
+    final choice = await getExternalBrowserChoice();
+    return choice != null && choice.isNotEmpty;
   }
 
   static Future<Map<String, String>> getDevelopEnvironmentSettings() async {

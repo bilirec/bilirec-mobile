@@ -23,5 +23,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         flutterEngine.plugins.add(ApkSignaturePlugin())
+        flutterEngine.plugins.add(BrowserPackagesPlugin())
     }
 }
