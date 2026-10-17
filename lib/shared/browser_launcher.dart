@@ -90,14 +90,13 @@ Future<bool> _launchAndroidWithChoice(
   }
 }
 
+/// Opens [uri] only when a non-browser app (e.g. an installed PWA/WebAPK)
+/// handles it; returns false when none does.
 Future<bool> _tryLaunchInstalledPwa(Uri uri) async {
   try {
-    return await launchUrl(
-      uri,
-      mode: LaunchMode.externalNonBrowserApplication,
-    );
+    return await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication);
   } catch (e) {
-    debugLog('Failed to open as installed web app: $e');
+    debugLog('Failed to open url in non-browser app: $e');
     return false;
   }
 }
