@@ -64,6 +64,7 @@ runs:
       with:
         ndk-version: ${{ inputs.ndk_version }}
         local-cache: true
+        link-to-sdk: true
 
     - name: Format Profile Name for Cache Key
       id: format-profile
