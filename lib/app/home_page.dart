@@ -1,31 +1,28 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:bilirec/app/home/app_update_prompt.dart';
+import 'package:bilirec/app/home/service_session.dart';
+import 'package:bilirec/app/home/service_toggle.dart';
 import 'package:bilirec/app/widgets/home_page_language_menu.dart';
 import 'package:bilirec/app/widgets/service_action_section.dart';
 import 'package:bilirec/app/widgets/service_power_button_area.dart';
 import 'package:bilirec/app/widgets/service_status_row.dart';
 import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/app/widgets/unexpected_stop_dialog.dart';
-import 'package:bilirec/foreground/bilirec_task_handler.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/app_update_service.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/device_uptime.dart';
-import 'package:bilirec/shared/external_storage_permission_prompt.dart';
-import 'package:bilirec/shared/legacy_android_compatible.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/unexpected_stop.dart';
 import 'package:bilirec/shared/unexpected_stop_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-@pragma('vm:entry-point')
-void startCallback() {
-  FlutterForegroundTask.setTaskHandler(BilirecTaskHandler());
-}
+export 'package:bilirec/app/home/service_toggle.dart' show startCallback;
 
 class BilirecHomePage extends StatefulWidget {
   const BilirecHomePage({
@@ -41,148 +38,19 @@ class BilirecHomePage extends StatefulWidget {
   State<BilirecHomePage> createState() => _BilirecHomePageState();
 }
 
-enum ServiceUiState { stopped, starting, running, stopping }
-
-enum ServiceIntent { stopped, running }
-
-enum _SignatureMismatchDialogAction { openGithub, installAnyway, dismiss }
-
 class _BilirecHomePageState extends State<BilirecHomePage>
     with WidgetsBindingObserver {
-  ServiceUiState _serviceUiState = ServiceUiState.stopped;
-  ServiceIntent _desiredServiceState = ServiceIntent.stopped;
-  int _latestRequestId = 0;
-  int _healthCheckEpoch = 0;
+  final ServiceSession _session = ServiceSession();
   bool _isIgnoringBatteryOptimizations = false;
   bool _loading = true;
   bool _batteryDialogVisible = false;
-  bool _updateDialogVisible = false;
-  bool _hasCheckedStartupUpdate = false;
   bool _hasShownUnexpectedStopPromptThisSession = false;
-  String _statusKey = 'initializing';
-  Map<String, String> _statusParams = const {};
   final AppUpdateService _appUpdateService = AppUpdateService();
 
   AppLocalizations get l10n => AppLocalizations.of(context);
 
-  bool get _isServiceRunning => _serviceUiState == ServiceUiState.running;
-
-  bool get _isOperationInFlight =>
-      _serviceUiState == ServiceUiState.starting ||
-      _serviceUiState == ServiceUiState.stopping;
-
-  String get _statusText => l10n.tr(_statusKey, params: _statusParams);
-
-  void _setStatus(String key, {Map<String, String> params = const {}}) {
-    _statusKey = key;
-    _statusParams = params;
-  }
-
-  int _newRequest(ServiceIntent intent) {
-    _desiredServiceState = intent;
-    _healthCheckEpoch++;
-    return ++_latestRequestId;
-  }
-
-  bool _isLatestRequest(int requestId) => requestId == _latestRequestId;
-
-  Future<void> _confirmRunning(int requestId) async {
-    final epoch = ++_healthCheckEpoch;
-    final deadline = DateTime.now().add(const Duration(seconds: 15));
-    while (DateTime.now().isBefore(deadline)) {
-      if (!mounted ||
-          !_isLatestRequest(requestId) ||
-          _desiredServiceState != ServiceIntent.running ||
-          epoch != _healthCheckEpoch) {
-        return;
-      }
-
-      final running = await _isServiceCoreRunning();
-      if (running) {
-        if (!mounted ||
-            !_isLatestRequest(requestId) ||
-            _desiredServiceState != ServiceIntent.running ||
-            epoch != _healthCheckEpoch) {
-          return;
-        }
-        setState(() {
-          _serviceUiState = ServiceUiState.running;
-          _setStatus('backendRunning');
-        });
-        return;
-      }
-
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-    }
-
-    if (!mounted ||
-        !_isLatestRequest(requestId) ||
-        _desiredServiceState != ServiceIntent.running ||
-        epoch != _healthCheckEpoch) {
-      return;
-    }
-
-    await _stopForegroundIfRunning();
-    if (!mounted || !_isLatestRequest(requestId)) return;
-    setState(() {
-      _serviceUiState = ServiceUiState.stopped;
-      _desiredServiceState = ServiceIntent.stopped;
-      _setStatus('backendNoResponse');
-    });
-  }
-
-  Future<void> _confirmStopped(
-    int requestId, {
-    Duration timeout = const Duration(seconds: 20),
-  }) async {
-    final epoch = ++_healthCheckEpoch;
-    await Future<void>.delayed(timeout);
-
-    if (!mounted ||
-        !_isLatestRequest(requestId) ||
-        _desiredServiceState != ServiceIntent.stopped ||
-        epoch != _healthCheckEpoch) {
-      return;
-    }
-
-    // If task callback already reconciled UI, avoid overriding it.
-    if (_serviceUiState != ServiceUiState.stopping) {
-      return;
-    }
-
-    var stillRunning = true;
-    Object? runtimeError;
-    try {
-      stillRunning = await FlutterForegroundTask.isRunningService;
-    } catch (e) {
-      runtimeError = e;
-    }
-
-    if (!mounted ||
-        !_isLatestRequest(requestId) ||
-        _desiredServiceState != ServiceIntent.stopped ||
-        epoch != _healthCheckEpoch) {
-      return;
-    }
-
-    if (!stillRunning) {
-      setState(() {
-        _serviceUiState = ServiceUiState.stopped;
-        _desiredServiceState = ServiceIntent.stopped;
-        _setStatus('backendStopped');
-      });
-      return;
-    }
-
-    debugLog(
-      '[STOP/UI] confirm stop timeout, reconcile state to running (runtimeError=${runtimeError ?? '<none>'})',
-    );
-    setState(() {
-      _serviceUiState = ServiceUiState.running;
-      _desiredServiceState = ServiceIntent.running;
-      _setStatus('backendRunning');
-    });
-  }
+  String get _statusText =>
+      l10n.tr(_session.statusKey, params: _session.statusParams);
 
   String get _currentLanguageCode =>
       AppLocaleConfig.codeForLocale(widget.currentLocale);
@@ -190,9 +58,11 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   Future<void> _onLanguageSelected(String code) async {
     await widget.onLocaleChanged(AppLocaleConfig.localeForCode(code));
     if (!mounted) return;
-    setState(() {
-      _setStatus(_isServiceRunning ? 'backendRunning' : 'backendNotRunning');
-    });
+    _session.apply(
+      statusKey:
+          _session.isRunning ? 'backendRunning' : 'backendNotRunning',
+      statusParams: const {},
+    );
   }
 
   @override
@@ -206,8 +76,8 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_statusKey.isEmpty) {
-      _setStatus('initializing');
+    if (_session.statusKey.isEmpty) {
+      _session.setStatus('initializing');
     }
   }
 
@@ -215,7 +85,13 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     FlutterForegroundTask.removeTaskDataCallback(_onTaskData);
+    _session.dispose();
     super.dispose();
+  }
+
+  void _onTaskData(Object data) {
+    if (!mounted) return;
+    handleTaskData(_session, data);
   }
 
   @override
@@ -226,51 +102,41 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
   }
 
-  Future<bool> _isServiceCoreRunning() async {
-    try {
-      final running = await FlutterForegroundTask.isRunningService;
-      final healthy =
-          await FlutterForegroundTask.getData(key: coreRunningKey) as bool? ??
-              false;
-      return running && healthy;
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<void> _refreshServiceState() async {
-    final running = await _isServiceCoreRunning();
+    final running = await isServiceCoreRunning();
     if (!mounted) return;
     setState(() {
       _loading = false;
-      if (!_isOperationInFlight) {
-        _serviceUiState =
-            running ? ServiceUiState.running : ServiceUiState.stopped;
-      }
-      if (!running && !_isOperationInFlight) {
-        _setStatus('backendNotRunning');
-      }
     });
+    if (!_session.isInFlight) {
+      _session.apply(
+        uiState: running ? ServiceUiState.running : ServiceUiState.stopped,
+        statusKey: running ? _session.statusKey : 'backendNotRunning',
+        statusParams: running ? _session.statusParams : const {},
+      );
+      if (!running) {
+        _session.apply(statusKey: 'backendNotRunning', statusParams: const {});
+      }
+    }
   }
 
   Future<void> _bootstrap() async {
-    final running = await _isServiceCoreRunning();
+    final running = await isServiceCoreRunning();
     final ignoringOptimization = Platform.isAndroid
         ? await FlutterForegroundTask.isIgnoringBatteryOptimizations
         : true;
 
-    var statusKey = running ? 'backendRunning' : 'backendNotRunning';
-
     if (!mounted) return;
     setState(() {
-      _serviceUiState =
-          running ? ServiceUiState.running : ServiceUiState.stopped;
-      _desiredServiceState =
-          running ? ServiceIntent.running : ServiceIntent.stopped;
       _isIgnoringBatteryOptimizations = ignoringOptimization;
-      _setStatus(statusKey);
       _loading = false;
     });
+    _session.apply(
+      uiState: running ? ServiceUiState.running : ServiceUiState.stopped,
+      desired: running ? ServiceIntent.running : ServiceIntent.stopped,
+      statusKey: running ? 'backendRunning' : 'backendNotRunning',
+      statusParams: const {},
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runStartupDialogs());
@@ -281,7 +147,12 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     await _ensureBatteryDialog();
     await _runFirstLaunchAfterUpdateHooks();
     await _maybeShowUnexpectedStopDialog();
-    await _checkForAppUpdateOnStartup();
+    if (!mounted) return;
+    await AppUpdatePrompt(
+      context: context,
+      l10n: l10n,
+      service: _appUpdateService,
+    ).checkOnStartup();
   }
 
   Future<void> _runFirstLaunchAfterUpdateHooks() async {
@@ -301,7 +172,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       return;
     }
 
-    final running = await _isServiceCoreRunning();
+    final running = await isServiceCoreRunning();
     final snapshot = await UnexpectedStopPreferences.loadSnapshot();
     final autoRunOnBootEnabled = await Preferences.getEnableAutoRunOnBoot();
     final currentBootId = await readBootId();
@@ -355,523 +226,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
   }
 
-  Future<void> _checkForAppUpdateOnStartup() async {
-    if (_hasCheckedStartupUpdate || !mounted) {
-      return;
-    }
-    _hasCheckedStartupUpdate = true;
-
-    final update = await _appUpdateService.checkForUpdate();
-    if (!mounted || update == null || _updateDialogVisible) {
-      return;
-    }
-
-    _updateDialogVisible = true;
-    final displayVersion = 'v${update.version}';
-    final releaseNote = update.releaseNote.trim();
-    final contentText = releaseNote.isEmpty
-        ? l10n.tr('updateDialogContent', params: {'version': displayVersion})
-        : releaseNote;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final colorScheme = Theme.of(dialogContext).colorScheme;
-        final textTheme = Theme.of(dialogContext).textTheme;
-        return Dialog(
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.system_update_alt_rounded,
-                    color: colorScheme.onPrimaryContainer,
-                    size: 36,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  l10n.tr('updateDialogTitle',
-                      params: {'version': displayVersion}),
-                  textAlign: TextAlign.center,
-                  style: textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  l10n.tr('updateDialogContent',
-                      params: {'version': displayVersion}),
-                  style: textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 14),
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color:
-                        colorScheme.secondaryContainer.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: colorScheme.secondary.withValues(alpha: 0.28),
-                    ),
-                  ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 220),
-                    child: Scrollbar(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        child: Text(
-                          contentText,
-                          textAlign: TextAlign.start,
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSecondaryContainer,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () async {
-                      Navigator.of(dialogContext).pop();
-                      await _runUpdateNowFlow(update);
-                    },
-                    icon: const Icon(Icons.download_rounded),
-                    label: Text(l10n.tr('updateDialogUpdateNow')),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: Text(l10n.tr('updateDialogLater')),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.center,
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      final dialogNavigator = Navigator.of(dialogContext);
-                      await _appUpdateService.skipReminderForVersion(
-                        update.version,
-                      );
-                      if (!mounted) return;
-                      dialogNavigator.pop();
-                    },
-                    icon: const Icon(Icons.skip_next_rounded, size: 16),
-                    label: Text(l10n.tr('updateDialogSkipVersion')),
-                    style: TextButton.styleFrom(
-                      foregroundColor: colorScheme.onSurfaceVariant,
-                      textStyle: textTheme.labelMedium,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    _updateDialogVisible = false;
-  }
-
-  Future<void> _runUpdateNowFlow(AppUpdateCandidate update) async {
-    if (!mounted) return;
-    showAppToast(context, l10n.tr('updateDownloadStarted'));
-
-    final progressNotifier = ValueNotifier<double?>(null);
-    var progressDisposed = false;
-    final resultCompleter = Completer<AppUpdateExecutionResult>();
-    var startedOperation = false;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        final dialogNavigator = Navigator.of(dialogContext);
-        if (!startedOperation) {
-          startedOperation = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            AppUpdateExecutionResult result = AppUpdateExecutionResult.failed;
-            try {
-              result = await _appUpdateService.performUpdateWithFallback(
-                update,
-                onDownloadProgress: (received, total) {
-                  if (progressDisposed) {
-                    return;
-                  }
-                  if (total <= 0) {
-                    progressNotifier.value = null;
-                    return;
-                  }
-                  final ratio = received / total;
-                  progressNotifier.value = ratio.clamp(0.0, 1.0);
-                },
-              );
-            } catch (_) {
-              result = AppUpdateExecutionResult.failed;
-            } finally {
-              if (!resultCompleter.isCompleted) {
-                resultCompleter.complete(result);
-              }
-              if (dialogNavigator.mounted && dialogNavigator.canPop()) {
-                dialogNavigator.pop();
-              }
-            }
-          });
-        }
-
-        return PopScope(
-          canPop: false,
-          child: Dialog(
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-              child: ValueListenableBuilder<double?>(
-                valueListenable: progressNotifier,
-                builder: (context, progress, _) {
-                  final colorScheme = Theme.of(context).colorScheme;
-                  final textTheme = Theme.of(context).textTheme;
-                  final progressPercent = progress == null
-                      ? null
-                      : (progress * 100).clamp(0, 100).toStringAsFixed(0);
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Align(
-                        alignment: Alignment.center,
-                        child: Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.cloud_download_rounded,
-                            color: colorScheme.onPrimaryContainer,
-                            size: 30,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        l10n.tr('updateProgressDialogTitle'),
-                        textAlign: TextAlign.center,
-                        style: textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        l10n.tr('updateProgressDialogHint'),
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant,
-                          ),
-                        ),
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    progressPercent == null
-                                        ? l10n
-                                            .tr('updateProgressDialogPreparing')
-                                        : l10n.tr('updateProgressDialogPercent',
-                                            params: {
-                                                'progress': progressPercent
-                                              }),
-                                    style: textTheme.bodyMedium?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(999),
-                              child: LinearProgressIndicator(
-                                value: progress,
-                                minHeight: 8,
-                                backgroundColor:
-                                    colorScheme.surfaceContainerHighest,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    final result = await resultCompleter.future;
-    progressDisposed = true;
-    progressNotifier.dispose();
-
-    if (!mounted) {
-      return;
-    }
-    switch (result) {
-      case AppUpdateExecutionResult.installLaunched:
-        showAppToast(context, l10n.tr('updateInstallPromptHint'));
-        break;
-      case AppUpdateExecutionResult.signatureMismatch:
-        await _showSignatureMismatchDialog(update);
-        break;
-      case AppUpdateExecutionResult.releasePageOpened:
-        showAppToast(context, l10n.tr('updateOpenReleaseFallbackHint'));
-        break;
-      case AppUpdateExecutionResult.failed:
-        showAppToast(context, l10n.tr('updateOpenReleaseFailed'));
-        break;
-    }
-  }
-
-  Future<void> _showSignatureMismatchDialog(AppUpdateCandidate update) async {
-    if (!mounted) return;
-
-    final action = await showDialog<_SignatureMismatchDialogAction>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        final colorScheme = Theme.of(dialogContext).colorScheme;
-        final textTheme = Theme.of(dialogContext).textTheme;
-        return PopScope(
-          canPop: false,
-          child: Dialog(
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Align(
-                    alignment: Alignment.center,
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: colorScheme.errorContainer,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.gpp_bad_rounded,
-                        color: colorScheme.onErrorContainer,
-                        size: 30,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    l10n.tr('updateSignatureMismatchTitle'),
-                    textAlign: TextAlign.center,
-                    style: textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.tr('updateSignatureMismatchContent'),
-                    textAlign: TextAlign.center,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.of(dialogContext).pop(
-                      _SignatureMismatchDialogAction.openGithub,
-                    ),
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    label: Text(l10n.tr('updateSignatureMismatchOpenGithub')),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(
-                      _SignatureMismatchDialogAction.installAnyway,
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: Text(l10n.tr('updateSignatureMismatchInstallAnyway')),
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(
-                      _SignatureMismatchDialogAction.dismiss,
-                    ),
-                    child: Text(l10n.tr('updateSignatureMismatchDismiss')),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    if (!mounted || action == null) {
-      return;
-    }
-
-    switch (action) {
-      case _SignatureMismatchDialogAction.openGithub:
-        final opened =
-            await _appUpdateService.openReleasePage(update.releasePageUrl);
-        if (!opened && mounted) {
-          showAppToast(context, l10n.tr('updateOpenReleaseFailed'));
-        }
-      case _SignatureMismatchDialogAction.installAnyway:
-        final launched =
-            await _appUpdateService.installDownloadedApk(update.version);
-        if (!mounted) {
-          return;
-        }
-        if (launched) {
-          showAppToast(context, l10n.tr('updateInstallPromptHint'));
-        } else {
-          showAppToast(context, l10n.tr('updateOpenReleaseFailed'));
-        }
-      case _SignatureMismatchDialogAction.dismiss:
-        break;
-    }
-  }
-
-  void _onTaskData(Object data) {
-    if (data is! Map) return;
-
-    final type = data['type']?.toString();
-    if (!mounted) return;
-
-    switch (type) {
-      case 'service_started':
-        if (_desiredServiceState != ServiceIntent.running) {
-          break;
-        }
-        final ok = data['ok'] == true;
-        final result = data['result'];
-        final requestId = _latestRequestId;
-        setState(() {
-          if (ok) {
-            _serviceUiState = ServiceUiState.starting;
-            _setStatus('foregroundStartWaitingCore');
-          } else if (result == 1) {
-            _serviceUiState = ServiceUiState.stopped;
-            _desiredServiceState = ServiceIntent.stopped;
-            _setStatus('serviceStartFailedNativeExit');
-          } else {
-            _serviceUiState = ServiceUiState.stopped;
-            _desiredServiceState = ServiceIntent.stopped;
-            _setStatus('serviceStartFailedWithCode',
-                params: {'code': '$result'});
-          }
-        });
-        if (ok) {
-          unawaited(_confirmRunning(requestId));
-        } else {
-          unawaited(_stopForegroundIfRunning());
-        }
-        break;
-      case 'service_stopped':
-        if (_desiredServiceState == ServiceIntent.running &&
-            _isOperationInFlight) {
-          break;
-        }
-        final stoppedByUser = data['stoppedByUser'] == true;
-        setState(() {
-          _serviceUiState = ServiceUiState.stopped;
-          _desiredServiceState = ServiceIntent.stopped;
-          if (stoppedByUser) {
-            _setStatus('backendStopped');
-          } else {
-            _setStatus('backendNotRunning');
-          }
-        });
-        break;
-      case 'backend_dead':
-        final stoppedByUser = data['stoppedByUser'] == true;
-        setState(() {
-          _serviceUiState = ServiceUiState.stopped;
-          _desiredServiceState = ServiceIntent.stopped;
-          _setStatus('backendNoResponse');
-        });
-        if (!stoppedByUser) {
-          unawaited(_stopForegroundIfRunning());
-        }
-        break;
-      default:
-        break;
-    }
-  }
-
-  Future<void> _stopForegroundIfRunning() async {
-    try {
-      final running = await FlutterForegroundTask.isRunningService;
-      if (running) {
-        await FlutterForegroundTask.stopService();
-      }
-    } catch (_) {
-      // ignore, UI state will still be reconciled by refresh/task callbacks
-    }
-  }
-
   Future<void> _openFrontendFromUi() async {
     final opened = await openRecordingFrontendUrl(
       context,
@@ -891,18 +245,16 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
     await showModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true, // 必須為 true
-      backgroundColor: Colors.transparent, // 保持透明，因為我們會自己控制圓角
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return DraggableScrollableSheet(
           initialChildSize: 0.95,
           minChildSize: 0.6,
-          // 這是你的「安全區域」，小於此處會彈回
           maxChildSize: 0.95,
           snap: true,
           snapSizes: [0.6, 0.95],
           shouldCloseOnMinExtent: true,
-          // 關鍵：允許拖曳到 minChildSize 以下
           expand: false,
           builder: (context, scrollController) {
             return Container(
@@ -911,10 +263,16 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(32)),
               ),
-              child: SettingsDrawerSheet(
-                scrollController: scrollController,
-                controlsEnabled: !(_isOperationInFlight || _isServiceRunning),
-                onClose: () => Navigator.of(sheetContext).pop(),
+              child: ListenableBuilder(
+                listenable: _session,
+                builder: (context, _) {
+                  return SettingsDrawerSheet(
+                    scrollController: scrollController,
+                    controlsEnabled:
+                        !(_session.isInFlight || _session.isRunning),
+                    onClose: () => Navigator.of(sheetContext).pop(),
+                  );
+                },
               ),
             );
           },
@@ -975,202 +333,6 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     _batteryDialogVisible = false;
   }
 
-  Future<void> _toggleService(bool enable) async {
-    if (!Platform.isAndroid) {
-      setState(() {
-        _setStatus('androidOnly');
-      });
-      return;
-    }
-
-    if (_isOperationInFlight) {
-      return;
-    }
-
-    try {
-      if (enable) {
-        if (!_isIgnoringBatteryOptimizations) {
-          debugLog('跳過服務啟動，因為尚未獲得電池優化豁免');
-          return;
-        }
-
-        final outputDir = await Preferences.getOutputDir();
-        if (!mounted) return;
-        if (outputDir != null && outputDir.isNotEmpty) {
-          final permissionGranted =
-              await ensureExternalStoragePermissionWithPrompt(
-            context: context,
-            dialogTitle:
-                l10n.tr('startServiceExternalPathPermissionDialogTitle'),
-            dialogContent:
-                l10n.tr('startServiceExternalPathPermissionDialogContent'),
-            confirmLabel:
-                l10n.tr('startServiceExternalPathPermissionDialogConfirm'),
-            deniedToastMessage: l10n.tr('externalStoragePermissionDenied'),
-            showToast: (message) => showAppToast(context, message),
-            targetPath: outputDir,
-            promptOnlyForExternalPath: true,
-            showDeniedToastBeforePrompt: true,
-            showDeniedToastAfterDenied: false,
-          );
-          if (!permissionGranted) {
-            if (!mounted) return;
-            setState(() {
-              _setStatus('externalStoragePermissionDenied');
-            });
-            return;
-          }
-
-          final writable =
-              await ensureDirectoryWritableWithPermissionFromVersion(outputDir);
-          if (!writable) {
-            if (!mounted) return;
-            setState(() {
-              _setStatus('externalStoragePermissionDenied');
-            });
-            showAppToast(context, l10n.tr('externalStoragePermissionDenied'));
-            return;
-          }
-        }
-
-        final requestId = _newRequest(ServiceIntent.running);
-        setState(() {
-          _serviceUiState = ServiceUiState.starting;
-          _setStatus('startingService');
-        });
-
-        if (!_isLatestRequest(requestId) || !mounted) return;
-        await Future.delayed(const Duration(seconds: 1));
-
-        final permission =
-            await FlutterForegroundTask.checkNotificationPermission();
-        if (permission != NotificationPermission.granted) {
-          final requested =
-              await FlutterForegroundTask.requestNotificationPermission();
-          if (requested != NotificationPermission.granted) {
-            if (!_isLatestRequest(requestId) || !mounted) return;
-            setState(() {
-              _serviceUiState = ServiceUiState.stopped;
-              _desiredServiceState = ServiceIntent.stopped;
-              _setStatus('notificationPermissionDenied');
-            });
-            return;
-          }
-        }
-
-        final usingAntiSleep = await Preferences.getEnableAntiSleep();
-        final autoRunOnBoot = await Preferences.getEnableAutoRunOnBoot();
-
-        FlutterForegroundTask.init(
-          androidNotificationOptions: AndroidNotificationOptions(
-            channelId: 'bilirec_service_channel',
-            channelName: 'Bilirec 服務狀態',
-            channelDescription: '顯示 Bilirec 服務目前是否運作中',
-            channelImportance: NotificationChannelImportance.LOW,
-            priority: NotificationPriority.LOW,
-            onlyAlertOnce: true,
-            playSound: false,
-          ),
-          iosNotificationOptions: const IOSNotificationOptions(
-            showNotification: true,
-            playSound: false,
-          ),
-          foregroundTaskOptions: ForegroundTaskOptions(
-            eventAction: ForegroundTaskEventAction.repeat(15000),
-            autoRunOnBoot: autoRunOnBoot,
-            autoRunOnMyPackageReplaced: true,
-            allowWakeLock: true,
-            allowWifiLock:
-                !usingAntiSleep, // 如果啟用了防止休眠，則不使用普通的 Wi-Fi 鎖定，避免與高性能 Wi-Fi 鎖定衝突
-          ),
-        );
-
-        final serviceTypes = await getForegroundServiceTypesFromVersion();
-        final started = await FlutterForegroundTask.startService(
-          serviceId: 2026,
-          notificationTitle: l10n.tr('notificationTitleRunning'),
-          notificationText: l10n.tr('notificationTextRunning'),
-          notificationButtons: [
-            NotificationButton(
-                id: 'stop', text: l10n.tr('notificationButtonStop')),
-          ],
-          serviceTypes: serviceTypes,
-          callback: startCallback,
-        );
-
-        final ok = started is ServiceRequestSuccess;
-
-        if (!_isLatestRequest(requestId) || !mounted) {
-          return;
-        }
-
-        setState(() {
-          _serviceUiState =
-              ok ? ServiceUiState.starting : ServiceUiState.stopped;
-          if (!ok) {
-            _desiredServiceState = ServiceIntent.stopped;
-          }
-          _setStatus(
-              ok ? 'foregroundStartWaitingCore' : 'foregroundStartFailed');
-        });
-        if (ok) {
-          unawaited(_confirmRunning(requestId));
-        }
-      } else {
-        final requestId = _newRequest(ServiceIntent.stopped);
-        final stopOpId = DateTime.now().microsecondsSinceEpoch;
-        final stopSw = Stopwatch()..start();
-        debugLog('[STOP/UI][$stopOpId] requested (requestId=$requestId)');
-        setState(() {
-          _serviceUiState = ServiceUiState.stopping;
-        });
-
-        debugLog('[STOP/UI][$stopOpId] before _yieldToNextFrame');
-        await _yieldToNextFrame();
-        debugLog(
-            '[STOP/UI][$stopOpId] after _yieldToNextFrame (${stopSw.elapsedMilliseconds}ms)');
-        if (!_isLatestRequest(requestId) || !mounted) return;
-        await Future.delayed(const Duration(seconds: 1));
-
-        debugLog('[STOP/UI][$stopOpId] before markStoppedByUser()');
-        await UnexpectedStopPreferences.markStoppedByUser();
-        debugLog(
-            '[STOP/UI][$stopOpId] after markStoppedByUser() (${stopSw.elapsedMilliseconds}ms)');
-        debugLog(
-            '[STOP/UI][$stopOpId] before FlutterForegroundTask.stopService()');
-        final stopped = await FlutterForegroundTask.stopService();
-        debugLog(
-            '[STOP/UI][$stopOpId] after FlutterForegroundTask.stopService() (${stopSw.elapsedMilliseconds}ms) result=$stopped');
-        final ok = stopped is ServiceRequestSuccess;
-        if (!_isLatestRequest(requestId) || !mounted) {
-          return;
-        }
-        setState(() {
-          _serviceUiState =
-              ok ? ServiceUiState.stopping : ServiceUiState.running;
-          _desiredServiceState =
-              ok ? ServiceIntent.stopped : ServiceIntent.running;
-          _setStatus(ok ? 'foregroundStopWaitingCore' : 'stopServiceFailed');
-        });
-        if (ok) {
-          unawaited(_confirmStopped(requestId));
-        } else {
-          await UnexpectedStopPreferences.restoreAfterFailedStop();
-        }
-        debugLog(
-            '[STOP/UI][$stopOpId] completed (ok=$ok, total=${stopSw.elapsedMilliseconds}ms)');
-      }
-    } catch (e, stackTrace) {
-      debugLog('[STOP/UI] failed: $e');
-      debugLog('$stackTrace');
-      setState(() {
-        _serviceUiState = ServiceUiState.stopped;
-        _desiredServiceState = ServiceIntent.stopped;
-        _setStatus('serviceOperationFailed', params: {'error': '$e'});
-      });
-    }
-  }
-
   Future<void> _checkLocalhost8080() async {
     final client = HttpClient();
     const toastAnimation = AppToastAnimation.slide;
@@ -1227,92 +389,98 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     }
   }
 
-  Future<void> _yieldToNextFrame() {
-    final completer = Completer<void>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    });
-    return completer.future;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final statusColor = _isServiceRunning ? Colors.green : Colors.orange;
-    final size = MediaQuery.sizeOf(context);
-    final actionInFlight = _isOperationInFlight;
-    final buttonGradientColors = actionInFlight
-        ? const [
-            Color(0xFF4F7BFF),
-            Color(0xFF57C6FF),
-          ]
-        : (_isServiceRunning
+    return ListenableBuilder(
+      listenable: _session,
+      builder: (context, _) {
+        final isServiceRunning = _session.isRunning;
+        final actionInFlight = _session.isInFlight;
+        final statusColor = isServiceRunning ? Colors.green : Colors.orange;
+        final size = MediaQuery.sizeOf(context);
+        final buttonGradientColors = actionInFlight
             ? const [
-                Color(0xFF63B3ED),
-                Color(0xFF4FD1C5),
+                Color(0xFF4F7BFF),
+                Color(0xFF57C6FF),
               ]
-            : const [
-                Color(0xFF9AD9FF),
-                Color(0xFF7FC8FF),
-              ]);
+            : (isServiceRunning
+                ? const [
+                    Color(0xFF63B3ED),
+                    Color(0xFF4FD1C5),
+                  ]
+                : const [
+                    Color(0xFF9AD9FF),
+                    Color(0xFF7FC8FF),
+                  ]);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.tr('controlCenterTitle')),
-        actions: [
-          HomePageLanguageMenu(
-            currentLanguageCode: _currentLanguageCode,
-            onSelected: _onLanguageSelected,
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Stack(
-                  children: [
-                    ServicePowerButtonArea(
-                      size: size,
-                      actionInFlight: actionInFlight,
-                      isServiceRunning: _isServiceRunning,
-                      isStarting: _serviceUiState == ServiceUiState.starting,
-                      isStopping: _serviceUiState == ServiceUiState.stopping,
-                      buttonGradientColors: buttonGradientColors,
-                      onTap: () => _toggleService(!_isServiceRunning),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          ServiceStatusRow(
-                            statusColor: statusColor,
-                            statusText: _statusText,
-                          ),
-                          const SizedBox(height: 8),
-                          ServiceActionSection(
-                            visible: _isServiceRunning,
-                            onOpenFrontend: _openFrontendFromUi,
-                            onCheckBackendConnection: _checkLocalhost8080,
-                          ),
-                          SettingsCard(
-                            enabled:
-                                !(_isOperationInFlight || _isServiceRunning),
-                            onPressed: _openSettingsSheet,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(l10n.tr('controlCenterTitle')),
+            actions: [
+              HomePageLanguageMenu(
+                currentLanguageCode: _currentLanguageCode,
+                onSelected: _onLanguageSelected,
               ),
-            ),
+            ],
+          ),
+          body: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Stack(
+                      children: [
+                        ServicePowerButtonArea(
+                          size: size,
+                          actionInFlight: actionInFlight,
+                          isServiceRunning: isServiceRunning,
+                          isStarting:
+                              _session.uiState == ServiceUiState.starting,
+                          isStopping:
+                              _session.uiState == ServiceUiState.stopping,
+                          buttonGradientColors: buttonGradientColors,
+                          onTap: () => toggleBilirecService(
+                            host: ServiceToggleHost(
+                              session: _session,
+                              context: context,
+                              l10n: l10n,
+                              isIgnoringBatteryOptimizations:
+                                  _isIgnoringBatteryOptimizations,
+                            ),
+                            enable: !isServiceRunning,
+                          ),
+                        ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ServiceStatusRow(
+                                statusColor: statusColor,
+                                statusText: _statusText,
+                              ),
+                              const SizedBox(height: 8),
+                              ServiceActionSection(
+                                visible: isServiceRunning,
+                                onOpenFrontend: _openFrontendFromUi,
+                                onCheckBackendConnection: _checkLocalhost8080,
+                              ),
+                              SettingsCard(
+                                enabled: !(actionInFlight || isServiceRunning),
+                                onPressed: _openSettingsSheet,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        );
+      },
     );
   }
 }

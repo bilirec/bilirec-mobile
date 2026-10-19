@@ -323,14 +323,15 @@ class AppLocalizations {
       'ffmpegSettingsTitle': '轉換工具進階設定',
       'ffmpegSettingsDescription': '調整錄製過程中的轉換行為，確保穩定性與效能平衡。',
       'ffmpegAllowDuringRecordingTitle': '錄製中允許轉換',
-      'ffmpegAllowDuringRecordingDescription': '開啟後，App 將在錄製直播的同時同步在背景轉檔。',
+      'ffmpegAllowDuringRecordingDescription':
+          '開啟後，即使還有直播間在錄，也可以轉換已經錄完的檔案。實際是否轉檔，仍受下方路數上限限制。',
       'ffmpegAllowDuringRecordingWarning':
           '同步轉換會增加磁碟讀寫負載，若遇到錄製掉幀或手機發熱，建議關閉此選項。',
-      'ffmpegMaxActiveRecordingsTitle': '允許轉檔的「最高錄製路數」',
+      'ffmpegMaxActiveRecordingsTitle': '邊錄邊轉的路數上限',
       'ffmpegMaxActiveRecordingsDescription':
-          '當「正在錄製」的直播間數量超過此數值時，系統將自動暫停背景轉檔，優先確保錄製流暢。設定為 0 路表示不設限制（將面臨極高發熱與崩潰風險）。',
+          '「正在錄製」的直播間不超過此路數時，才繼續背景轉檔。超過則先不轉，等路數降下來再繼續，排隊中的任務不會取消。這不是「同時錄製上限」。設為「不限」時，錄製再多也會繼續轉檔。',
       'ffmpegMaxActiveOption': '{value} 路',
-      'ffmpegMaxActiveUnlimitedOption': '不限',
+      'ffmpegMaxActiveUnlimitedOption': '不限（錄製中也不停）',
       'hoursOption': '{value} 小時',
       'hoursUnlimitedOption': '不限',
       'minutesOption': '{value} 分鐘',
@@ -608,14 +609,15 @@ class AppLocalizations {
       'ffmpegSettingsTitle': '转换工具进阶设置',
       'ffmpegSettingsDescription': '调整录制过程中的转换行为，确保稳定性与性能平衡。',
       'ffmpegAllowDuringRecordingTitle': '录制中允许转换',
-      'ffmpegAllowDuringRecordingDescription': '开启后，App 将在录制直播的同时同步在后台转换。',
+      'ffmpegAllowDuringRecordingDescription':
+          '开启后，即使还有直播间在录，也可以转换已经录完的文件。实际是否转档，仍受下方路数上限限制。',
       'ffmpegAllowDuringRecordingWarning':
           '同步转换会增加磁盘读写负载，若遇到录制掉帧或手机发热，建议关闭此选项。',
-      'ffmpegMaxActiveRecordingsTitle': '允许转换的「最高录制路数」',
+      'ffmpegMaxActiveRecordingsTitle': '边录边转的路数上限',
       'ffmpegMaxActiveRecordingsDescription':
-          '当「正在录制」的直播间数量超过此数值时，系统将自动暂停后台转换，优先确保录制流畅。设置为 0 路表示不设限制（将面临极高发热与崩溃风险）。',
+          '「正在录制」的直播间不超过此路数时，才继续后台转档。超过则先不转，等路数降下来再继续，排队中的任务不会取消。这不是「同时录制上限」。设为「不限」时，录制再多也会继续转档。',
       'ffmpegMaxActiveOption': '{value} 路',
-      'ffmpegMaxActiveUnlimitedOption': '不限',
+      'ffmpegMaxActiveUnlimitedOption': '不限（录制中也不停）',
       'hoursOption': '{value} 小时',
       'hoursUnlimitedOption': '不限',
       'minutesOption': '{value} 分钟',
