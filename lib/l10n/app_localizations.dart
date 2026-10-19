@@ -131,8 +131,9 @@ class AppLocalizations {
       'updateOpenReleaseFailed': '更新失敗，且無法開啟下載頁面',
       'updateSignatureMismatchTitle': '簽名校驗失敗',
       'updateSignatureMismatchContent':
-          '已下載的更新檔與目前 App 的簽署憑證不一致，已拒絕安裝，以免安裝到不可信的檔案。\n\n你可以改從 GitHub 發行頁手動下載官方 APK。',
+          '已下載的更新檔與目前 App 的簽署憑證不一致。建議改從 GitHub 發行頁下載官方 APK。\n\n若你確認來源可信，仍可嘗試安裝；若曾更換簽署憑證，系統可能拒絕覆蓋安裝，需先卸載再安裝。',
       'updateSignatureMismatchOpenGithub': '前往 GitHub 下載',
+      'updateSignatureMismatchInstallAnyway': '仍要安裝',
       'updateSignatureMismatchDismiss': '關閉',
       'androidOnly': '目前只支援 Android',
       'startingService': '正在啟動 Bilirec 系統服務...',
@@ -416,8 +417,9 @@ class AppLocalizations {
       'updateOpenReleaseFailed': '更新失败，且无法打开下载页面',
       'updateSignatureMismatchTitle': '签名校验失败',
       'updateSignatureMismatchContent':
-          '已下载的更新文件与当前 App 的签署证书不一致，已拒绝安装，以免安装到不可信的文件。\n\n你可以改从 GitHub 发行页手动下载官方 APK。',
+          '已下载的更新文件与当前 App 的签署证书不一致。建议改从 GitHub 发行页下载官方 APK。\n\n若你确认来源可信，仍可尝试安装；若曾更换签署证书，系统可能拒绝覆盖安装，需先卸载再安装。',
       'updateSignatureMismatchOpenGithub': '前往 GitHub 下载',
+      'updateSignatureMismatchInstallAnyway': '仍要安装',
       'updateSignatureMismatchDismiss': '关闭',
       'androidOnly': '目前仅支持 Android',
       'startingService': '正在启动 Bilirec 系统服务...',

@@ -40,6 +40,17 @@ enum AppUpdateExecutionResult {
 
 enum _DownloadInstallOutcome { installed, signatureMismatch, failed }
 
+@visibleForTesting
+class ApkInternalDownloadResult {
+  const ApkInternalDownloadResult({
+    required this.path,
+    required this.reusedExistingFile,
+  });
+
+  final String path;
+  final bool reusedExistingFile;
+}
+
 class AppUpdateService {
   AppUpdateService({
     GithubReleaseApkUpdater? updater,
@@ -121,6 +132,10 @@ class AppUpdateService {
 
   static String updateApkFileNameForVersion(String version) {
     return 'bilirec-update-${normalizeVersionIdentifier(version)}.apk';
+  }
+
+  static String updateApkPartialFileNameForVersion(String version) {
+    return '${updateApkFileNameForVersion(version)}.partial';
   }
 
   static bool _isVersionedUpdateApkFileName(String name) {
@@ -358,50 +373,108 @@ class AppUpdateService {
     return false;
   }
 
+  /// Installs a previously downloaded update APK without re-checking signatures.
+  Future<bool> installDownloadedApk(String version) async {
+    try {
+      final normalizedVersion = normalizeVersionIdentifier(version);
+      if (normalizedVersion.isEmpty) {
+        return false;
+      }
+
+      final targetDirectory = await _temporaryDirectoryProvider();
+      final fileName = updateApkFileNameForVersion(normalizedVersion);
+      final file = File('${targetDirectory.path}/$fileName');
+      if (!await file.exists() || await file.length() == 0) {
+        debugLog('app_update: no downloaded apk to install for $normalizedVersion');
+        return false;
+      }
+
+      await _updater.installApk(file.path);
+      return true;
+    } catch (e) {
+      debugLog('app_update: install downloaded apk failed: $e');
+      return false;
+    }
+  }
+
   Future<_DownloadInstallOutcome> _downloadAndInstall(
     AppUpdateCandidate candidate, {
     void Function(int received, int total)? onDownloadProgress,
   }) async {
     try {
-      final filePath = await downloadApkToInternalStorage(
-            candidate.apkUrl,
-            version: candidate.version,
-            onDownloadProgress: onDownloadProgress,
-          ) ??
-          await _apkDownloader.downloadAPK(
-            candidate.apkUrl,
-            null,
-            onDownloadProgress,
-          );
-      if (filePath == null || filePath.isEmpty) {
-        debugLog('app_update: apk download failed');
-        return _DownloadInstallOutcome.failed;
-      }
+      var retriedAfterBadCache = false;
 
-      final signingMatches = await _apkSigningMatchesInstalled(filePath);
-      if (!signingMatches) {
+      while (true) {
+        final download = await downloadApkToInternalStorage(
+              candidate.apkUrl,
+              version: candidate.version,
+              onDownloadProgress: onDownloadProgress,
+            ) ??
+            await _downloadViaFallback(
+              candidate.apkUrl,
+              onDownloadProgress: onDownloadProgress,
+            );
+
+        if (download == null) {
+          debugLog('app_update: apk download failed');
+          return _DownloadInstallOutcome.failed;
+        }
+
+        final signingMatches =
+            await _apkSigningMatchesInstalled(download.path);
+        if (signingMatches) {
+          await _updater.installApk(download.path);
+          return _DownloadInstallOutcome.installed;
+        }
+
+        if (download.reusedExistingFile && !retriedAfterBadCache) {
+          debugLog(
+            'app_update: cached apk failed signing check, deleting and re-downloading ${download.path}',
+          );
+          await _deleteFileIfExists(download.path);
+          retriedAfterBadCache = true;
+          continue;
+        }
+
         debugLog(
-          'app_update: apk signature mismatch, refusing install of $filePath',
+          'app_update: apk signature mismatch, refusing auto-install of ${download.path}',
         );
         return _DownloadInstallOutcome.signatureMismatch;
       }
-
-      await _updater.installApk(filePath);
-      return _DownloadInstallOutcome.installed;
     } catch (e) {
       debugLog('app_update: apk install failed: $e');
       return _DownloadInstallOutcome.failed;
     }
   }
 
+  Future<ApkInternalDownloadResult?> _downloadViaFallback(
+    String apkUrl, {
+    void Function(int received, int total)? onDownloadProgress,
+  }) async {
+    final filePath = await _apkDownloader.downloadAPK(
+      apkUrl,
+      null,
+      onDownloadProgress,
+    );
+    if (filePath == null || filePath.isEmpty) {
+      return null;
+    }
+    return ApkInternalDownloadResult(
+      path: filePath,
+      reusedExistingFile: false,
+    );
+  }
+
   @visibleForTesting
-  Future<String?> downloadApkToInternalStorage(
+  Future<ApkInternalDownloadResult?> downloadApkToInternalStorage(
     String apkUrl, {
     required String version,
     void Function(int received, int total)? onDownloadProgress,
+    bool overwrite = false,
   }) async {
     HttpClient? client;
     IOSink? sink;
+    File? partialFile;
     try {
       final normalizedVersion = normalizeVersionIdentifier(version);
       if (normalizedVersion.isEmpty) {
@@ -411,16 +484,31 @@ class AppUpdateService {
 
       final targetDirectory = await _temporaryDirectoryProvider();
       final fileName = updateApkFileNameForVersion(normalizedVersion);
+      final partialFileName = updateApkPartialFileNameForVersion(normalizedVersion);
       final file = File('${targetDirectory.path}/$fileName');
+      partialFile = File('${targetDirectory.path}/$partialFileName');
 
       await cleanupOtherVersionedUpdateApks(
         targetDirectory,
         keepFileName: fileName,
       );
 
-      if (await file.exists() && await file.length() > 0) {
+      if (!overwrite &&
+          await file.exists() &&
+          await file.length() > 0) {
         debugLog('app_update: reusing downloaded apk ${file.path}');
-        return file.path;
+        return ApkInternalDownloadResult(
+          path: file.path,
+          reusedExistingFile: true,
+        );
+      }
+
+      if (overwrite && await file.exists()) {
+        await _deleteFileIfExists(file.path);
+      }
+
+      if (await partialFile.exists()) {
+        await _deleteFileIfExists(partialFile.path);
       }
 
       client = HttpClient();
@@ -433,7 +521,7 @@ class AppUpdateService {
         return null;
       }
 
-      sink = file.openWrite();
+      sink = partialFile.openWrite();
       var received = 0;
       final total = response.contentLength;
       await for (final chunk in response) {
@@ -445,18 +533,50 @@ class AppUpdateService {
       await sink.close();
       sink = null;
 
-      if (!await file.exists() || await file.length() == 0) {
+      if (received == 0) {
+        await _deleteFileIfExists(partialFile.path);
         return null;
       }
 
+      if (total > 0 && received != total) {
+        debugLog(
+          'app_update: incomplete download ($received of $total bytes), discarding partial file',
+        );
+        await _deleteFileIfExists(partialFile.path);
+        return null;
+      }
+
+      if (await file.exists()) {
+        await _deleteFileIfExists(file.path);
+      }
+      await partialFile.rename(file.path);
+      partialFile = null;
+
       debugLog('app_update: downloaded apk to internal storage ${file.path}');
-      return file.path;
+      return ApkInternalDownloadResult(
+        path: file.path,
+        reusedExistingFile: false,
+      );
     } catch (e) {
       debugLog('app_update: internal storage download failed: $e');
       return null;
     } finally {
       await sink?.close();
+      if (partialFile != null) {
+        await _deleteFileIfExists(partialFile.path);
+      }
       client?.close(force: true);
+    }
+  }
+
+  static Future<void> _deleteFileIfExists(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugLog('app_update: failed to delete file $path: $e');
     }
   }
 }

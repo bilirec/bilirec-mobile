@@ -366,40 +366,65 @@ void main() {
       await cached.writeAsBytes(const [9, 9, 9]);
       await stale.writeAsString('old');
 
-      final path = await makeService().downloadApkToInternalStorage(
+      final result = await makeService().downloadApkToInternalStorage(
         apkUrl,
         version: 'v1.0.3',
       );
 
-      expect(path, cached.path);
+      expect(result?.path, cached.path);
+      expect(result?.reusedExistingFile, isTrue);
       expect(requestCount, 0);
       expect(await cached.readAsBytes(), const [9, 9, 9]);
       expect(await stale.exists(), isFalse);
     });
 
     test('downloads to versioned filename when missing', () async {
-      final path = await makeService().downloadApkToInternalStorage(
+      final result = await makeService().downloadApkToInternalStorage(
         apkUrl,
         version: 'v1.0.3',
       );
 
-      expect(path, '${tempDir.path}/bilirec-update-1.0.3.apk');
+      expect(result?.path, '${tempDir.path}/bilirec-update-1.0.3.apk');
+      expect(result?.reusedExistingFile, isFalse);
       expect(requestCount, 1);
-      expect(await File(path!).readAsBytes(), apkBytes);
+      expect(await File(result!.path).readAsBytes(), apkBytes);
+      expect(
+        await File(
+          '${tempDir.path}/${AppUpdateService.updateApkPartialFileNameForVersion('1.0.3')}',
+        ).exists(),
+        isFalse,
+      );
     });
 
     test('re-downloads empty versioned file', () async {
       final empty = File('${tempDir.path}/bilirec-update-1.0.3.apk');
       await empty.writeAsBytes(const []);
 
-      final path = await makeService().downloadApkToInternalStorage(
+      final result = await makeService().downloadApkToInternalStorage(
         apkUrl,
         version: '1.0.3',
       );
 
-      expect(path, empty.path);
+      expect(result?.path, empty.path);
       expect(requestCount, 1);
       expect(await empty.readAsBytes(), apkBytes);
+    });
+
+    test('removes leftover partial file before downloading final apk', () async {
+      final partialPath =
+          '${tempDir.path}/${AppUpdateService.updateApkPartialFileNameForVersion('1.0.3')}';
+      final finalPath = '${tempDir.path}/bilirec-update-1.0.3.apk';
+      await File(partialPath).writeAsBytes(const [9, 9]);
+
+      final result = await makeService().downloadApkToInternalStorage(
+        apkUrl,
+        version: '1.0.3',
+      );
+
+      expect(result?.path, finalPath);
+      expect(await File(partialPath).exists(), isFalse);
+      expect(await File(finalPath).readAsBytes(), apkBytes);
+      expect(requestCount, 1);
     });
 
     test('deletes other versioned update apks when downloading', () async {
@@ -464,11 +489,14 @@ void main() {
     late Directory tempDir;
     late File cachedApk;
     late _RecordingUpdater updater;
+    late HttpServer server;
+    const apkBytes = [5, 6, 7, 8];
+    late String apkUrl;
 
-    const candidate = AppUpdateCandidate(
+    final candidate = AppUpdateCandidate(
       version: '1.0.4',
       releaseNote: 'test',
-      apkUrl: 'http://127.0.0.1:1/never-hit.apk',
+      apkUrl: 'http://127.0.0.1:1/placeholder.apk',
       releasePageUrl: 'https://example.invalid/releases',
     );
 
@@ -477,9 +505,19 @@ void main() {
       cachedApk = File('${tempDir.path}/bilirec-update-1.0.4.apk');
       await cachedApk.writeAsBytes(const [1, 2, 3, 4]);
       updater = _RecordingUpdater();
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response.statusCode = 200;
+        request.response.contentLength = apkBytes.length;
+        request.response.add(apkBytes);
+        await request.response.close();
+      });
+      apkUrl =
+          'http://${server.address.host}:${server.port}/bilirec-release.apk';
     });
 
     tearDown(() async {
+      await server.close(force: true);
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
@@ -497,13 +535,22 @@ void main() {
       );
     }
 
-    test('does not install when signing does not match', () async {
+    test('does not auto-install when fresh download signing does not match',
+        () async {
       final service = makeService(signing: (_) async => false);
 
-      final result = await service.performUpdateWithFallback(candidate);
+      final result = await service.performUpdateWithFallback(
+        AppUpdateCandidate(
+          version: candidate.version,
+          releaseNote: candidate.releaseNote,
+          apkUrl: apkUrl,
+          releasePageUrl: candidate.releasePageUrl,
+        ),
+      );
 
       expect(updater.installCount, 0);
       expect(result, AppUpdateExecutionResult.signatureMismatch);
+      expect(await cachedApk.readAsBytes(), apkBytes);
     });
 
     test('installs when signing matches', () async {
@@ -514,6 +561,50 @@ void main() {
       expect(updater.installCount, 1);
       expect(updater.lastPath, cachedApk.path);
       expect(result, AppUpdateExecutionResult.installLaunched);
+    });
+
+    test('re-downloads when stale cached apk fails signing check', () async {
+      var signingCalls = 0;
+      final service = makeService(signing: (_) async {
+        signingCalls++;
+        return signingCalls > 1;
+      });
+
+      final result = await service.performUpdateWithFallback(
+        AppUpdateCandidate(
+          version: candidate.version,
+          releaseNote: candidate.releaseNote,
+          apkUrl: apkUrl,
+          releasePageUrl: candidate.releasePageUrl,
+        ),
+      );
+
+      expect(signingCalls, 2);
+      expect(updater.installCount, 1);
+      expect(updater.lastPath, cachedApk.path);
+      expect(await cachedApk.readAsBytes(), apkBytes);
+      expect(result, AppUpdateExecutionResult.installLaunched);
+    });
+
+    test('installDownloadedApk skips signing check', () async {
+      final service = makeService(signing: (_) async => false);
+
+      await service.performUpdateWithFallback(
+        AppUpdateCandidate(
+          version: candidate.version,
+          releaseNote: candidate.releaseNote,
+          apkUrl: apkUrl,
+          releasePageUrl: candidate.releasePageUrl,
+        ),
+      );
+
+      expect(updater.installCount, 0);
+
+      final installed = await service.installDownloadedApk(candidate.version);
+
+      expect(installed, isTrue);
+      expect(updater.installCount, 1);
+      expect(updater.lastPath, cachedApk.path);
     });
   });
 }

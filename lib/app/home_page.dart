@@ -45,6 +45,8 @@ enum ServiceUiState { stopped, starting, running, stopping }
 
 enum ServiceIntent { stopped, running }
 
+enum _SignatureMismatchDialogAction { openGithub, installAnyway, dismiss }
+
 class _BilirecHomePageState extends State<BilirecHomePage>
     with WidgetsBindingObserver {
   ServiceUiState _serviceUiState = ServiceUiState.stopped;
@@ -678,7 +680,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
   Future<void> _showSignatureMismatchDialog(AppUpdateCandidate update) async {
     if (!mounted) return;
 
-    final shouldOpenGithub = await showDialog<bool>(
+    final action = await showDialog<_SignatureMismatchDialogAction>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
@@ -731,7 +733,9 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                   ),
                   const SizedBox(height: 20),
                   FilledButton.icon(
-                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    onPressed: () => Navigator.of(dialogContext).pop(
+                      _SignatureMismatchDialogAction.openGithub,
+                    ),
                     icon: const Icon(Icons.open_in_new_rounded),
                     label: Text(l10n.tr('updateSignatureMismatchOpenGithub')),
                     style: FilledButton.styleFrom(
@@ -740,9 +744,18 @@ class _BilirecHomePageState extends State<BilirecHomePage>
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    onPressed: () => Navigator.of(dialogContext).pop(
+                      _SignatureMismatchDialogAction.installAnyway,
+                    ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(l10n.tr('updateSignatureMismatchInstallAnyway')),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(
+                      _SignatureMismatchDialogAction.dismiss,
                     ),
                     child: Text(l10n.tr('updateSignatureMismatchDismiss')),
                   ),
@@ -754,14 +767,30 @@ class _BilirecHomePageState extends State<BilirecHomePage>
       },
     );
 
-    if (shouldOpenGithub != true || !mounted) {
+    if (!mounted || action == null) {
       return;
     }
 
-    final opened =
-        await _appUpdateService.openReleasePage(update.releasePageUrl);
-    if (!opened && mounted) {
-      showAppToast(context, l10n.tr('updateOpenReleaseFailed'));
+    switch (action) {
+      case _SignatureMismatchDialogAction.openGithub:
+        final opened =
+            await _appUpdateService.openReleasePage(update.releasePageUrl);
+        if (!opened && mounted) {
+          showAppToast(context, l10n.tr('updateOpenReleaseFailed'));
+        }
+      case _SignatureMismatchDialogAction.installAnyway:
+        final launched =
+            await _appUpdateService.installDownloadedApk(update.version);
+        if (!mounted) {
+          return;
+        }
+        if (launched) {
+          showAppToast(context, l10n.tr('updateInstallPromptHint'));
+        } else {
+          showAppToast(context, l10n.tr('updateOpenReleaseFailed'));
+        }
+      case _SignatureMismatchDialogAction.dismiss:
+        break;
     }
   }
 
