@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:bilirec/app/widgets/settings/settings_hint.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
@@ -126,7 +128,7 @@ class _BrowserPickerListHint extends StatelessWidget {
   }
 }
 
-class _BrowserPickerScrollableContent extends StatelessWidget {
+class _BrowserPickerScrollableContent extends StatefulWidget {
   const _BrowserPickerScrollableContent({
     required this.l10n,
     required this.browsers,
@@ -142,21 +144,64 @@ class _BrowserPickerScrollableContent extends StatelessWidget {
   final ValueChanged<String> onSelected;
 
   @override
+  State<_BrowserPickerScrollableContent> createState() =>
+      _BrowserPickerScrollableContentState();
+}
+
+class _BrowserPickerScrollableContentState
+    extends State<_BrowserPickerScrollableContent> {
+  Map<String, Uint8List> _iconsByPackage = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIcons();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BrowserPickerScrollableContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameBrowserPackages(oldWidget.browsers, widget.browsers)) {
+      _loadIcons();
+    }
+  }
+
+  bool _sameBrowserPackages(
+    List<HttpsBrowserInfo> a,
+    List<HttpsBrowserInfo> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].packageName != b[i].packageName) return false;
+    }
+    return true;
+  }
+
+  Future<void> _loadIcons() async {
+    final packageNames =
+        widget.browsers.map((browser) => browser.packageName).toList();
+    final icons = await loadHttpsBrowserIcons(packageNames);
+    if (!mounted) return;
+    setState(() => _iconsByPackage = icons);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (showListHint) ...[
-          _BrowserPickerListHint(l10n: l10n),
+        if (widget.showListHint) ...[
+          _BrowserPickerListHint(l10n: widget.l10n),
           const SizedBox(height: 12),
         ],
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 320),
           child: _BrowserPickerBody(
-            browsers: browsers,
-            selectedChoice: selectedChoice,
-            onSelected: onSelected,
+            browsers: widget.browsers,
+            iconsByPackage: _iconsByPackage,
+            selectedChoice: widget.selectedChoice,
+            onSelected: widget.onSelected,
           ),
         ),
       ],
@@ -167,11 +212,13 @@ class _BrowserPickerScrollableContent extends StatelessWidget {
 class _BrowserPickerBody extends StatelessWidget {
   const _BrowserPickerBody({
     required this.browsers,
+    required this.iconsByPackage,
     required this.selectedChoice,
     required this.onSelected,
   });
 
   final List<HttpsBrowserInfo> browsers;
+  final Map<String, Uint8List> iconsByPackage;
   final String? selectedChoice;
   final ValueChanged<String> onSelected;
 
@@ -183,6 +230,7 @@ class _BrowserPickerBody extends StatelessWidget {
       children: [
         _BrowserChoiceTile(
           title: l10n.tr('externalBrowserSystemDefault'),
+          leading: const _BrowserLeadingIcon.systemDefault(),
           selected: selectedChoice == externalBrowserChoiceSystem,
           onTap: () => onSelected(externalBrowserChoiceSystem),
         ),
@@ -190,6 +238,9 @@ class _BrowserPickerBody extends StatelessWidget {
           (browser) => _BrowserChoiceTile(
             title: browser.label,
             subtitle: browser.packageName,
+            leading: _BrowserLeadingIcon.packageIcon(
+              iconsByPackage[browser.packageName],
+            ),
             selected: selectedChoice == browser.packageName,
             onTap: () => onSelected(browser.packageName),
           ),
@@ -199,15 +250,50 @@ class _BrowserPickerBody extends StatelessWidget {
   }
 }
 
+class _BrowserLeadingIcon extends StatelessWidget {
+  const _BrowserLeadingIcon._({required this.child});
+
+  const _BrowserLeadingIcon.systemDefault() : this._(child: const Icon(Icons.language));
+
+  _BrowserLeadingIcon.packageIcon(Uint8List? png)
+      : this._(
+          child: png != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.memory(
+                    png,
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
+                )
+              : const Icon(Icons.public),
+        );
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Center(child: child),
+    );
+  }
+}
+
 class _BrowserChoiceTile extends StatelessWidget {
   const _BrowserChoiceTile({
     required this.title,
+    required this.leading,
     required this.selected,
     required this.onTap,
     this.subtitle,
   });
 
   final String title;
+  final Widget leading;
   final String? subtitle;
   final bool selected;
   final VoidCallback onTap;
@@ -215,6 +301,7 @@ class _BrowserChoiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      leading: leading,
       title: Text(title),
       subtitle: subtitle == null ? null : Text(subtitle!),
       trailing: selected ? const Icon(Icons.check) : null,
