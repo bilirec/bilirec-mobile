@@ -20,101 +20,176 @@ Future<ExternalBrowserPickerResult?> showExternalBrowserPickerSheet(
   BuildContext context, {
   String? currentChoice,
   bool promptToRemember = false,
-}) async {
-  final l10n = AppLocalizations.of(context);
-  final browsers = await listHttpsBrowsers();
-  if (!context.mounted) {
-    return null;
-  }
-
-  if (!promptToRemember) {
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(l10n.tr('externalBrowserPickerTitle')),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: _BrowserPickerScrollableContent(
-              l10n: l10n,
-              browsers: browsers,
-              selectedChoice: currentChoice,
-              showListHint: true,
-              onSelected: (choice) => Navigator.of(dialogContext).pop(choice),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(l10n.tr('unexpectedStopDismiss')),
-            ),
-          ],
-        );
-      },
-    );
-    if (choice == null) {
-      return null;
-    }
-    return ExternalBrowserPickerResult(choice: choice, remember: true);
-  }
-
+}) {
   return showDialog<ExternalBrowserPickerResult>(
     context: context,
     builder: (dialogContext) {
-      var selectedChoice = currentChoice ?? externalBrowserChoiceSystem;
-      var rememberChoice = true;
-
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: Text(l10n.tr('externalBrowserPickerTitle')),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _BrowserPickerScrollableContent(
-                    l10n: l10n,
-                    browsers: browsers,
-                    selectedChoice: selectedChoice,
-                    showListHint: true,
-                    onSelected: (choice) {
-                      setState(() => selectedChoice = choice);
-                    },
-                  ),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(l10n.tr('externalBrowserRememberChoice')),
-                    value: rememberChoice,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => rememberChoice = value);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(l10n.tr('unexpectedStopDismiss')),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  ExternalBrowserPickerResult(
-                    choice: selectedChoice,
-                    remember: rememberChoice,
-                  ),
-                ),
-                child: Text(l10n.tr('externalBrowserPickerConfirm')),
-              ),
-            ],
-          );
-        },
+      return _ExternalBrowserPickerDialog(
+        currentChoice: currentChoice,
+        promptToRemember: promptToRemember,
       );
     },
   );
+}
+
+class _ExternalBrowserPickerDialog extends StatefulWidget {
+  const _ExternalBrowserPickerDialog({
+    required this.currentChoice,
+    required this.promptToRemember,
+  });
+
+  final String? currentChoice;
+  final bool promptToRemember;
+
+  @override
+  State<_ExternalBrowserPickerDialog> createState() =>
+      _ExternalBrowserPickerDialogState();
+}
+
+class _ExternalBrowserPickerDialogState extends State<_ExternalBrowserPickerDialog> {
+  List<HttpsBrowserInfo> _browsers = const [];
+  bool _browsersLoading = true;
+  bool _browsersLoadFailed = false;
+  late String _selectedChoice;
+  bool _rememberChoice = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedChoice = widget.currentChoice ?? externalBrowserChoiceSystem;
+    _loadBrowsers();
+  }
+
+  Future<void> _loadBrowsers() async {
+    setState(() {
+      _browsersLoading = true;
+      _browsersLoadFailed = false;
+    });
+    try {
+      final browsers = await listHttpsBrowsers();
+      if (!mounted) return;
+      setState(() {
+        _browsers = browsers;
+        _browsersLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _browsers = const [];
+        _browsersLoading = false;
+        _browsersLoadFailed = true;
+      });
+    }
+  }
+
+  void _popWithChoice(String choice, {required bool remember}) {
+    Navigator.of(context).pop(
+      ExternalBrowserPickerResult(choice: choice, remember: remember),
+    );
+  }
+
+  Widget _buildBrowserListArea(AppLocalizations l10n) {
+    if (_browsersLoading) {
+      return const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_browsersLoadFailed) {
+      return SizedBox(
+        height: 200,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.tr('externalBrowserListLoadFailed')),
+              const SizedBox(height: 12),
+              FilledButton.tonal(
+                onPressed: _loadBrowsers,
+                child: Text(l10n.tr('externalBrowserListRetry')),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return _BrowserPickerScrollableContent(
+      l10n: l10n,
+      browsers: _browsers,
+      selectedChoice: _selectedChoice,
+      showListHint: true,
+      onSelected: (choice) {
+        if (widget.promptToRemember) {
+          setState(() => _selectedChoice = choice);
+          return;
+        }
+        _popWithChoice(choice, remember: true);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    if (!widget.promptToRemember) {
+      return AlertDialog(
+        title: Text(l10n.tr('externalBrowserPickerTitle')),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: _buildBrowserListArea(l10n),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.tr('unexpectedStopDismiss')),
+          ),
+        ],
+      );
+    }
+
+    return AlertDialog(
+      title: Text(l10n.tr('externalBrowserPickerTitle')),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildBrowserListArea(l10n),
+            if (!_browsersLoading && !_browsersLoadFailed) ...[
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(l10n.tr('externalBrowserRememberChoice')),
+                value: _rememberChoice,
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _rememberChoice = value);
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.tr('unexpectedStopDismiss')),
+        ),
+        FilledButton(
+          onPressed: _browsersLoading || _browsersLoadFailed
+              ? null
+              : () => _popWithChoice(
+                    _selectedChoice,
+                    remember: _rememberChoice,
+                  ),
+          child: Text(l10n.tr('externalBrowserPickerConfirm')),
+        ),
+      ],
+    );
+  }
 }
 
 class _BrowserPickerListHint extends StatelessWidget {
@@ -271,7 +346,8 @@ class _BrowserPickerBody extends StatelessWidget {
 class _BrowserLeadingIcon extends StatelessWidget {
   const _BrowserLeadingIcon._({required this.child});
 
-  const _BrowserLeadingIcon.systemDefault() : this._(child: const Icon(Icons.language));
+  const _BrowserLeadingIcon.systemDefault()
+      : this._(child: const Icon(Icons.language));
 
   _BrowserLeadingIcon.packageIcon({
     required Uint8List? png,

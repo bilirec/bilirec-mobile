@@ -70,6 +70,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Open picker'));
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
     await tester.pumpAndSettle();
 
     expect(find.text('Example Browser'), findsOneWidget);
