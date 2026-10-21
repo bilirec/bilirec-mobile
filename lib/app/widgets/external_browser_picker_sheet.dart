@@ -329,7 +329,6 @@ class _BrowserPickerBody extends StatelessWidget {
         ...browsers.map(
           (browser) => _BrowserChoiceTile(
             title: browser.label,
-            subtitle: browser.packageName,
             leading: _BrowserLeadingIcon.packageIcon(
               png: iconsByPackage[browser.packageName],
               loading: iconsLoading,
@@ -442,12 +441,10 @@ class _BrowserChoiceTile extends StatelessWidget {
     required this.leading,
     required this.selected,
     required this.onTap,
-    this.subtitle,
   });
 
   final String title;
   final Widget leading;
-  final String? subtitle;
   final bool selected;
   final VoidCallback onTap;
 
@@ -456,7 +453,6 @@ class _BrowserChoiceTile extends StatelessWidget {
     return ListTile(
       leading: leading,
       title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
       trailing: selected ? const Icon(Icons.check) : null,
       onTap: onTap,
     );
