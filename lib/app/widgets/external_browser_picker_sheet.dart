@@ -317,9 +317,17 @@ class _BrowserPickerBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return ListView(
-      shrinkWrap: true,
-      children: [
+    final listTileTheme = ListTileTheme.of(context).copyWith(
+      contentPadding: EdgeInsets.zero,
+      minLeadingWidth: 40,
+      horizontalTitleGap: 12,
+    );
+    return ListTileTheme(
+      data: listTileTheme,
+      child: ListView(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        children: [
         _BrowserChoiceTile(
           title: l10n.tr('externalBrowserSystemDefault'),
           leading: const _BrowserLeadingIcon.systemDefault(),
@@ -337,7 +345,8 @@ class _BrowserPickerBody extends StatelessWidget {
             onTap: () => onSelected(browser.packageName),
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 }
