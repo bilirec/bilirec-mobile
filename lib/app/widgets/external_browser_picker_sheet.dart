@@ -151,6 +151,7 @@ class _BrowserPickerScrollableContent extends StatefulWidget {
 class _BrowserPickerScrollableContentState
     extends State<_BrowserPickerScrollableContent> {
   Map<String, Uint8List> _iconsByPackage = const {};
+  bool _iconsLoading = false;
 
   @override
   void initState() {
@@ -180,9 +181,22 @@ class _BrowserPickerScrollableContentState
   Future<void> _loadIcons() async {
     final packageNames =
         widget.browsers.map((browser) => browser.packageName).toList();
+    if (packageNames.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _iconsByPackage = const {};
+        _iconsLoading = false;
+      });
+      return;
+    }
+
+    setState(() => _iconsLoading = true);
     final icons = await loadHttpsBrowserIcons(packageNames);
     if (!mounted) return;
-    setState(() => _iconsByPackage = icons);
+    setState(() {
+      _iconsByPackage = icons;
+      _iconsLoading = false;
+    });
   }
 
   @override
@@ -200,6 +214,7 @@ class _BrowserPickerScrollableContentState
           child: _BrowserPickerBody(
             browsers: widget.browsers,
             iconsByPackage: _iconsByPackage,
+            iconsLoading: _iconsLoading,
             selectedChoice: widget.selectedChoice,
             onSelected: widget.onSelected,
           ),
@@ -213,12 +228,14 @@ class _BrowserPickerBody extends StatelessWidget {
   const _BrowserPickerBody({
     required this.browsers,
     required this.iconsByPackage,
+    required this.iconsLoading,
     required this.selectedChoice,
     required this.onSelected,
   });
 
   final List<HttpsBrowserInfo> browsers;
   final Map<String, Uint8List> iconsByPackage;
+  final bool iconsLoading;
   final String? selectedChoice;
   final ValueChanged<String> onSelected;
 
@@ -239,7 +256,8 @@ class _BrowserPickerBody extends StatelessWidget {
             title: browser.label,
             subtitle: browser.packageName,
             leading: _BrowserLeadingIcon.packageIcon(
-              iconsByPackage[browser.packageName],
+              png: iconsByPackage[browser.packageName],
+              loading: iconsLoading,
             ),
             selected: selectedChoice == browser.packageName,
             onTap: () => onSelected(browser.packageName),
@@ -255,8 +273,10 @@ class _BrowserLeadingIcon extends StatelessWidget {
 
   const _BrowserLeadingIcon.systemDefault() : this._(child: const Icon(Icons.language));
 
-  _BrowserLeadingIcon.packageIcon(Uint8List? png)
-      : this._(
+  _BrowserLeadingIcon.packageIcon({
+    required Uint8List? png,
+    required bool loading,
+  }) : this._(
           child: png != null
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -268,7 +288,9 @@ class _BrowserLeadingIcon extends StatelessWidget {
                     gaplessPlayback: true,
                   ),
                 )
-              : const Icon(Icons.public),
+              : loading
+                  ? const _BrowserIconSkeleton()
+                  : const Icon(Icons.public),
         );
 
   final Widget child;
@@ -279,6 +301,61 @@ class _BrowserLeadingIcon extends StatelessWidget {
       width: 40,
       height: 40,
       child: Center(child: child),
+    );
+  }
+}
+
+class _BrowserIconSkeleton extends StatefulWidget {
+  const _BrowserIconSkeleton();
+
+  @override
+  State<_BrowserIconSkeleton> createState() => _BrowserIconSkeletonState();
+}
+
+class _BrowserIconSkeletonState extends State<_BrowserIconSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment(-1.0 + 2.0 * _controller.value, 0),
+                end: Alignment(2.0 * _controller.value, 0),
+                colors: [
+                  colorScheme.surfaceContainerHighest,
+                  colorScheme.surfaceContainerHigh,
+                  colorScheme.surfaceContainerHighest,
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
