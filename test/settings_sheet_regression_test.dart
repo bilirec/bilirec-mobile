@@ -1,6 +1,5 @@
 import 'package:bilirec/app/widgets/settings/settings_option_slider.dart';
 import 'package:bilirec/app/widgets/settings/settings_range_slider.dart';
-import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/main.dart';
 import 'package:bilirec/shared/preferences.dart';
 import 'package:bilirec/shared/storage_protection_env.dart';
