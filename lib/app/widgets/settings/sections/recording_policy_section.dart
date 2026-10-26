@@ -35,6 +35,14 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     25,
     30,
   ];
+  static const List<int> _maxRecoveryAttemptOptions = <int>[
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+  ];
   static const List<int> _streamIdleTimeoutOptions = <int>[
     0,
     10,
@@ -54,6 +62,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
   static const int _defaultMaxRecordingHours = 5;
   static const int _defaultMinDiskSpaceGb = 5;
   static const int _defaultMaxRetryMinutes = 10;
+  static const int _defaultMaxRecoveryAttempts = 15;
   static const int _defaultStreamIdleTimeoutSecs = 20;
   static const int _defaultMaxConcurrentRecordings =
       _minMaxConcurrentRecordings;
@@ -61,6 +70,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
   int? _maxRecordingHours;
   int? _minDiskSpaceGb;
   int? _maxRetryMinutes;
+  int? _maxRecoveryAttempts;
   int? _streamIdleTimeoutSecs;
   int? _maxConcurrentRecordings;
   String? _recordingRecoveryDuration;
@@ -80,6 +90,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
       _maxRecordingHours = _readMaxRecordingHours(settings);
       _minDiskSpaceGb = _readMinDiskSpaceGb(settings);
       _maxRetryMinutes = _readMaxRetryMinutes(settings);
+      _maxRecoveryAttempts = _readMaxRecoveryAttempts(settings);
       _streamIdleTimeoutSecs = _readStreamIdleTimeoutSecs(settings);
       _recordingRecoveryDuration = _readRecordingRecoveryDuration(settings);
       _maxConcurrentRecordings = _readMaxConcurrentRecordings(settings);
@@ -120,6 +131,30 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     return fallback;
   }
 
+  int _nearestOption(List<int> options, int parsed) {
+    var best = options.first;
+    var bestDiff = (parsed - best).abs();
+    for (final option in options.skip(1)) {
+      final diff = (parsed - option).abs();
+      if (diff < bestDiff) {
+        best = option;
+        bestDiff = diff;
+      }
+    }
+    return best;
+  }
+
+  int _readMaxRecoveryAttempts(Map<String, String> env) {
+    final parsed = int.tryParse(env['MAX_RECOVERY_ATTEMPTS'] ?? '');
+    if (parsed == null) {
+      return _defaultMaxRecoveryAttempts;
+    }
+    if (_maxRecoveryAttemptOptions.contains(parsed)) {
+      return parsed;
+    }
+    return _nearestOption(_maxRecoveryAttemptOptions, parsed);
+  }
+
   int _readStreamIdleTimeoutSecs(Map<String, String> env) {
     final parsed = int.tryParse(env['STREAM_IDLE_TIMEOUT'] ?? '');
     if (parsed == null) {
@@ -128,17 +163,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     if (_streamIdleTimeoutOptions.contains(parsed)) {
       return parsed;
     }
-
-    var best = _streamIdleTimeoutOptions.first;
-    var bestDiff = (parsed - best).abs();
-    for (final option in _streamIdleTimeoutOptions.skip(1)) {
-      final diff = (parsed - option).abs();
-      if (diff < bestDiff) {
-        best = option;
-        bestDiff = diff;
-      }
-    }
-    return best;
+    return _nearestOption(_streamIdleTimeoutOptions, parsed);
   }
 
   String _readRecordingRecoveryDuration(Map<String, String> env) {
@@ -231,6 +256,15 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     });
   }
 
+  Future<void> _setMaxRecoveryAttempts(int value) async {
+    if (!_maxRecoveryAttemptOptions.contains(value)) return;
+    await widget.managedEnvironment.set('MAX_RECOVERY_ATTEMPTS', '$value');
+    if (!mounted) return;
+    setState(() {
+      _maxRecoveryAttempts = value;
+    });
+  }
+
   Future<void> _setStreamIdleTimeoutSecs(int value) async {
     if (!_streamIdleTimeoutOptions.contains(value)) return;
     await widget.managedEnvironment.set('STREAM_IDLE_TIMEOUT', '$value');
@@ -276,12 +310,14 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     final hours = _maxRecordingHours;
     final disk = _minDiskSpaceGb;
     final retry = _maxRetryMinutes;
+    final recoveryAttempts = _maxRecoveryAttempts;
     final idle = _streamIdleTimeoutSecs;
     final concurrent = _maxConcurrentRecordings;
     final recovery = _recordingRecoveryDuration;
     if (hours == null ||
         disk == null ||
         retry == null ||
+        recoveryAttempts == null ||
         idle == null ||
         concurrent == null ||
         recovery == null) {
@@ -358,6 +394,27 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
           },
           onChangeEnd: (value) {
             _setMaxRetryMinutes(value);
+          },
+        ),
+        const SizedBox(height: 14),
+        SettingsOptionSlider(
+          key: const Key('max_recovery_attempts_slider'),
+          title: l10n.tr('maxRecoveryAttemptsTitle'),
+          description: l10n.tr('maxRecoveryAttemptsDescription'),
+          options: _maxRecoveryAttemptOptions,
+          value: recoveryAttempts,
+          valueLabel: l10n.tr(
+            'attemptsOption',
+            params: {'value': '$recoveryAttempts'},
+          ),
+          enabled: widget.enabled,
+          onChanged: (value) {
+            setState(() {
+              _maxRecoveryAttempts = value;
+            });
+          },
+          onChangeEnd: (value) {
+            _setMaxRecoveryAttempts(value);
           },
         ),
         const SizedBox(height: 14),

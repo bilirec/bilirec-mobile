@@ -117,6 +117,8 @@ final _recordingPolicyDescriptionLabels =
 final _maxRecordingHoursTitleLabels = labelsForKey('maxRecordingHoursTitle');
 final _minDiskSpaceTitleLabels = labelsForKey('minDiskSpaceTitle');
 final _maxRetryMinutesTitleLabels = labelsForKey('maxRetryMinutesTitle');
+final _maxRecoveryAttemptsTitleLabels =
+    labelsForKey('maxRecoveryAttemptsTitle');
 final _diskSpaceNoMinimumLabels = labelsForKey('diskSpaceNoMinimumOption');
 final _maxRetryMinutesNoWaitLabels =
     labelsForKey('maxRetryMinutesNoWaitOption');
@@ -279,6 +281,10 @@ void main() {
     expect(_findFirstVisibleText(_minDiskSpaceTitleLabels), findsOneWidget);
     expect(_findFirstVisibleText(_maxRetryMinutesTitleLabels), findsOneWidget);
     expect(
+      _findFirstVisibleText(_maxRecoveryAttemptsTitleLabels),
+      findsOneWidget,
+    );
+    expect(
       _findFirstVisibleText(_recordingRecoveryDurationTitleLabels),
       findsOneWidget,
     );
@@ -408,7 +414,7 @@ void main() {
 
     final sliders = tester.widgetList<Slider>(find.byType(Slider));
 
-    // 設定順序：時長上限、啟動前可用空間、斷線等待、流無數據等待、同時錄製上限。
+    // 設定順序：時長上限、啟動前可用空間、下線重試、斷流恢復次數、流無數據等待、同時錄製上限。
     sliders.elementAt(0).onChanged?.call(12);
     sliders.elementAt(0).onChangeEnd?.call(12);
     await tester.pumpAndSettle();
@@ -418,11 +424,16 @@ void main() {
     sliders.elementAt(2).onChanged?.call(6); // 0,5,10,15,20,25,30 -> index 6
     sliders.elementAt(2).onChangeEnd?.call(6);
     await tester.pumpAndSettle();
-    sliders.elementAt(3).onChanged?.call(6); // 0,10,15,20,30,45,60 -> 60s
-    sliders.elementAt(3).onChangeEnd?.call(6);
+    final recoveryAttemptsSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('max_recovery_attempts_slider')),
+    );
+    recoveryAttemptsSlider.onChangeEnd?.call(30);
     await tester.pumpAndSettle();
-    sliders.elementAt(4).onChanged?.call(3); // 3,4,5,6 -> index 3
-    sliders.elementAt(4).onChangeEnd?.call(3);
+    sliders.elementAt(4).onChanged?.call(6); // 0,10,15,20,30,45,60 -> 60s
+    sliders.elementAt(4).onChangeEnd?.call(6);
+    await tester.pumpAndSettle();
+    sliders.elementAt(5).onChanged?.call(3); // 3,4,5,6 -> index 3
+    sliders.elementAt(5).onChangeEnd?.call(3);
     await tester.pumpAndSettle();
 
     final recoveryButton = tester.widget<SegmentedButton<String>>(
@@ -449,6 +460,7 @@ void main() {
       '${10 * 1024 * 1024 * 1024}',
     );
     expect(envSettings['MAX_RETRY_MINUTES'], '30');
+    expect(envSettings['MAX_RECOVERY_ATTEMPTS'], '30');
     expect(envSettings['STREAM_IDLE_TIMEOUT'], '60');
     expect(envSettings['RECORDING_RECOVERY_DURATION'], 'reset');
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
@@ -498,9 +510,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final sliders = tester.widgetList<Slider>(find.byType(Slider));
-    // 設定順序：時長上限、啟動前可用空間、斷線等待、流無數據等待、同時錄製上限。
-    sliders.elementAt(4).onChanged?.call(12); // 3..15 -> index 12 = 15
-    sliders.elementAt(4).onChangeEnd?.call(12);
+    // 設定順序：時長上限、啟動前可用空間、下線重試、斷流恢復次數、流無數據等待、同時錄製上限。
+    sliders.elementAt(5).onChanged?.call(12); // 3..15 -> index 12 = 15
+    sliders.elementAt(5).onChangeEnd?.call(12);
     await tester.pumpAndSettle();
 
     expect(

@@ -266,6 +266,9 @@ class AppLocalizations {
       'maxRetryMinutesTitle': '下線後服務重試時長',
       'maxRetryMinutesDescription':
           '直播下線後，服務會持續重試到指定時長，再結束此次錄製。',
+      'maxRecoveryAttemptsTitle': '斷流恢復次數',
+      'maxRecoveryAttemptsDescription':
+          '直播未下播、但因網路不穩定等原因斷流時，服務會按此次數重試恢復。與「下線後服務重試時長」無關。',
       'streamIdleTimeoutTitle': '流無數據等待',
       'streamIdleTimeoutDescription':
           '讀取直播流時，若長時間沒有新資料則斷線重連。',
@@ -338,6 +341,7 @@ class AppLocalizations {
       'hoursUnlimitedOption': '不限',
       'minutesOption': '{value} 分鐘',
       'secondsOption': '{value} 秒',
+      'attemptsOption': '{value} 次',
       'maxRetryMinutesNoWaitOption': '不等待',
       'diskSpaceOption': '{value} GB',
       'diskSpaceNoMinimumOption': '不檢查',
@@ -555,6 +559,9 @@ class AppLocalizations {
       'maxRetryMinutesTitle': '下线后服务重试时长',
       'maxRetryMinutesDescription':
           '直播下线后，服务会持续重试到指定时长，再结束此次录制。',
+      'maxRecoveryAttemptsTitle': '断流恢复次数',
+      'maxRecoveryAttemptsDescription':
+          '直播未下播、但因网络不稳定等原因断流时，服务会按此次数重试恢复。与「下线后服务重试时长」无关。',
       'streamIdleTimeoutTitle': '流无数据等待',
       'streamIdleTimeoutDescription':
           '读取直播流时，若长时间没有新数据则断线重连。',
@@ -626,6 +633,7 @@ class AppLocalizations {
       'hoursUnlimitedOption': '不限',
       'minutesOption': '{value} 分钟',
       'secondsOption': '{value} 秒',
+      'attemptsOption': '{value} 次',
       'maxRetryMinutesNoWaitOption': '不等待',
       'diskSpaceOption': '{value} GB',
       'diskSpaceNoMinimumOption': '不检查',
