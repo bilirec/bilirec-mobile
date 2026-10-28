@@ -202,6 +202,9 @@ class BilirecSseHandler {
       'live_ended' => 'sseTitleLiveEnded',
       'live_record_stopped' => 'sseTitleRecordStopped',
       'live_detected' => 'sseTitleLive',
+      'metrics_timeline_gap' => 'sseTitleMetricsTimelineGap',
+      'metrics_slow_io' => 'sseTitleMetricsSlowIO',
+      'metrics_enqueue_wait' => 'sseTitleMetricsEnqueue',
       _ => 'sseUnknownEvent',
     };
 
@@ -236,6 +239,16 @@ class BilirecSseHandler {
   }
 
   String _buildBody(BilirecSseEvent event) {
+    const metricsTypes = {
+      'metrics_timeline_gap',
+      'metrics_slow_io',
+      'metrics_enqueue_wait',
+    };
+    if (metricsTypes.contains(event.type) &&
+        event.message.trim().isNotEmpty) {
+      return _truncate(_singleLine(event.message.trim()), 200);
+    }
+
     final noTitleTypes = {'live_ended', 'live_record_stopped'};
     if (!noTitleTypes.contains(event.type) &&
         event.roomTitle.trim().isNotEmpty) {
