@@ -15,6 +15,13 @@ const AndroidNotificationChannel sseEventChannel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
+// Android identifies a notification by (tag, id). The id stays fixed so the
+// tag replaces the previous notification for the same room and event type.
+// Keep the tag: without it every room collapses onto this one id.
+// Do not schedule anything with this id. cancel() also clears the
+// AlarmManager pending intent registered under the id.
+const int _sseNotificationId = 4000;
+
 String generateSseToken() {
   final random = Random.secure();
   final bytes = Uint8List.fromList(
@@ -70,7 +77,7 @@ class BilirecSseHandler {
 
   bool _notificationsReady = false;
   String? _token;
-  int _notificationId = 4000;
+  final Set<String> _activeNotificationTags = <String>{};
   HttpClient? _client;
   StreamSubscription<String>? _lineSubscription;
   Timer? _reconnectTimer;
@@ -89,6 +96,7 @@ class BilirecSseHandler {
   Future<void> stop() async {
     _token = null;
     await _closeConnection();
+    await _cancelActiveNotifications();
   }
 
   Future<void> _closeConnection() async {
@@ -99,6 +107,15 @@ class BilirecSseHandler {
     _client?.close(force: true);
     _client = null;
     _dataBuffer.clear();
+  }
+
+  Future<void> _cancelActiveNotifications() async {
+    if (_activeNotificationTags.isEmpty) return;
+    final tags = _activeNotificationTags.toList();
+    _activeNotificationTags.clear();
+    for (final tag in tags) {
+      await notifications.cancel(_sseNotificationId, tag: tag);
+    }
   }
 
   Future<void> _ensureNotificationReady() async {
@@ -219,8 +236,13 @@ class BilirecSseHandler {
         ? 'room-${event.roomId}-${event.type}'
         : 'bilirec-${event.type}';
 
+    // Record the tag before show so stop() can cancel a post still in flight.
+    // onlyAlertOnce stays at its default (false): an update alerts again.
+    _activeNotificationTags.add(tag);
+    if (_token == null) return;
+
     await notifications.show(
-      _notificationId++,
+      _sseNotificationId,
       title,
       body,
       NotificationDetails(
@@ -234,6 +256,11 @@ class BilirecSseHandler {
         ),
       ),
     );
+
+    if (_token == null) {
+      await notifications.cancel(_sseNotificationId, tag: tag);
+      return;
+    }
 
     debugLog('顯示通知: $title - $body (tag: $tag)');
   }
