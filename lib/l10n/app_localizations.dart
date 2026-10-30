@@ -356,9 +356,16 @@ class AppLocalizations {
       'sseTitleLiveEnded': '{streamer} 已下播',
       'sseTitleRecordStopped': '{streamer} 錄製已停止',
       'sseTitleLive': '{streamer} 已開播',
-      'sseTitleMetricsTimelineGap': '{streamer} 錄製畫面跳過',
-      'sseTitleMetricsSlowIO': '{streamer} 寫入過慢',
-      'sseTitleMetricsEnqueue': '{streamer} 寫入隊列堵塞',
+      'sseTitleMetricsTimelineGap': '檢測到 {streamer} 的直播流不連續，請檢查網路',
+      'sseTitleMetricsSlowIO': '檢測到 {streamer} 的儲存裝置回應過慢，請檢查磁碟',
+      'sseTitleMetricsEnqueue': '檢測到 {streamer} 的寫入速度不足，請檢查磁碟',
+      'durationMinuteUnit': '分鐘',
+      'sseBodyMetricsTimelineGap':
+          '由於網路不穩定的緣故，從上游源接收到的直播流不連續，導致本次錄製內容已缺失 {amount}，錄播極大概率已出現跳幀現象。',
+      'sseBodyMetricsSlowIO':
+          '由於儲存裝置回應過慢的緣故，本次錄製的資料寫入曾受阻 {count} 次，錄播可能出現卡頓，嚴重時會影響分段完整性。',
+      'sseBodyMetricsEnqueue':
+          '由於寫入速度低於直播碼率的緣故，本次錄製的資料寫入已累計等待 {seconds} 秒，錄播可能出現卡頓或分段延遲。',
       'sseUnknownEvent': '收到直播事件通知',
       'sseAtTime': '時間：{time}',
       'sseBodyDefault': '請開啟錄製管理程式查看詳情',
@@ -651,9 +658,16 @@ class AppLocalizations {
       'sseTitleLiveEnded': '{streamer} 已下播',
       'sseTitleRecordStopped': '{streamer} 录制已停止',
       'sseTitleLive': '{streamer} 已开播',
-      'sseTitleMetricsTimelineGap': '{streamer} 录制画面跳过',
-      'sseTitleMetricsSlowIO': '{streamer} 写入过慢',
-      'sseTitleMetricsEnqueue': '{streamer} 写入队列堵塞',
+      'sseTitleMetricsTimelineGap': '检测到 {streamer} 的直播流不连续，请检查网络',
+      'sseTitleMetricsSlowIO': '检测到 {streamer} 的存储设备响应过慢，请检查磁盘',
+      'sseTitleMetricsEnqueue': '检测到 {streamer} 的写入速度不足，请检查磁盘',
+      'durationMinuteUnit': '分钟',
+      'sseBodyMetricsTimelineGap':
+          '由于网络不稳定的缘故，从上游源接收到的直播流不连续，导致本次录制内容已缺失 {amount}，录播极大概率已出现跳帧现象。',
+      'sseBodyMetricsSlowIO':
+          '由于存储设备响应过慢的缘故，本次录制的数据写入曾受阻 {count} 次，录播可能出现卡顿，严重时会影响分段完整性。',
+      'sseBodyMetricsEnqueue':
+          '由于写入速度低于直播码率的缘故，本次录制的数据写入已累计等待 {seconds} 秒，录播可能出现卡顿或分段延迟。',
       'sseUnknownEvent': '收到直播事件通知',
       'sseAtTime': '时间：{time}',
       'sseBodyDefault': '请打开录制管理程序查看详情',

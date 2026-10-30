@@ -38,6 +38,7 @@ class BilirecSseEvent {
     required this.roomTitle,
     required this.message,
     required this.timestamp,
+    this.alertValue = 0,
   });
 
   final String type;
@@ -47,6 +48,11 @@ class BilirecSseEvent {
   final String message;
   final int timestamp;
 
+  /// Metrics alert magnitude. The unit follows [type]: seconds for
+  /// metrics_timeline_gap and metrics_enqueue_wait, event count for
+  /// metrics_slow_io.
+  final double alertValue;
+
   factory BilirecSseEvent.fromJson(Map<String, dynamic> map) {
     return BilirecSseEvent(
       type: map['type']?.toString() ?? 'live_detected',
@@ -55,12 +61,18 @@ class BilirecSseEvent {
       roomTitle: map['room_title']?.toString() ?? '',
       message: map['message']?.toString() ?? '',
       timestamp: _toInt(map['timestamp']),
+      alertValue: _toDouble(map['alert_value']),
     );
   }
 
   static int _toInt(dynamic value) {
     if (value is int) return value;
     return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 
@@ -266,14 +278,13 @@ class BilirecSseHandler {
   }
 
   String _buildBody(BilirecSseEvent event) {
-    const metricsTypes = {
-      'metrics_timeline_gap',
-      'metrics_slow_io',
-      'metrics_enqueue_wait',
-    };
-    if (metricsTypes.contains(event.type) &&
-        event.message.trim().isNotEmpty) {
-      return _truncate(_singleLine(event.message.trim()), 200);
+    if (_metricsBodyKey(event.type) != null) {
+      // Prefer localized text so a zh-TW UI never shows the server's zh-CN message.
+      final text = _buildMetricsBody(event);
+      if (text != null && text.isNotEmpty) return _truncate(text, 200);
+      if (event.message.trim().isNotEmpty) {
+        return _truncate(_singleLine(event.message.trim()), 200);
+      }
     }
 
     final noTitleTypes = {'live_ended', 'live_record_stopped'};
@@ -295,6 +306,39 @@ class BilirecSseHandler {
     }
 
     return l10n.tr('sseBodyDefault');
+  }
+
+  static String? _metricsBodyKey(String type) => switch (type) {
+    'metrics_timeline_gap' => 'sseBodyMetricsTimelineGap',
+    'metrics_slow_io' => 'sseBodyMetricsSlowIO',
+    'metrics_enqueue_wait' => 'sseBodyMetricsEnqueue',
+    _ => null,
+  };
+
+  String? _buildMetricsBody(BilirecSseEvent event) {
+    final key = _metricsBodyKey(event.type);
+    if (key == null || event.alertValue <= 0) return null;
+    return switch (event.type) {
+      'metrics_timeline_gap' => l10n.tr(key, params: {
+          'amount': _formatGapAmount(event.alertValue),
+        }),
+      'metrics_slow_io' => l10n.tr(key, params: {
+          'count': event.alertValue.round().toString(),
+        }),
+      'metrics_enqueue_wait' => l10n.tr(key, params: {
+          'seconds': event.alertValue.toStringAsFixed(1),
+        }),
+      _ => null,
+    };
+  }
+
+  /// Mirrors the server's rounding so zh-TW and zh-CN read the same.
+  String _formatGapAmount(double seconds) {
+    if (seconds < 90) return '${seconds.round()} 秒';
+    final minutes = seconds / 60;
+    final unit = l10n.tr('durationMinuteUnit');
+    if (minutes < 10) return '${minutes.toStringAsFixed(1)} $unit';
+    return '${minutes.round()} $unit';
   }
 
   String _singleLine(String text) =>
