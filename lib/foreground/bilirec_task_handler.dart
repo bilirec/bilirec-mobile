@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:bilirec/foreground/network_lock_service.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/backend_base_uri.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/device_uptime.dart';
 import 'package:bilirec/shared/preferences.dart';
@@ -206,8 +207,9 @@ class BilirecTaskHandler extends TaskHandler {
   Future<bool> _isRecording() async {
     final client = HttpClient();
     try {
+      final baseUri = await backendBaseUri();
       final req = await client
-          .getUrl(Uri.parse('http://127.0.0.1:8080/record/list'))
+          .getUrl(baseUri.replace(path: '/record/list'))
           .timeout(const Duration(seconds: 3));
       final res = await req.close().timeout(const Duration(seconds: 3));
       final body = await res.transform(utf8.decoder).join();
@@ -224,7 +226,7 @@ class BilirecTaskHandler extends TaskHandler {
     final client = HttpClient();
     try {
       final req = await client
-          .getUrl(Uri.parse('http://127.0.0.1:8080/'))
+          .getUrl(await backendBaseUri())
           .timeout(const Duration(seconds: 3));
       final res = await req.close().timeout(const Duration(seconds: 3));
       await res.drain<void>();

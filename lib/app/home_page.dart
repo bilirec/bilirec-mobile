@@ -13,6 +13,7 @@ import 'package:bilirec/app/widgets/unexpected_stop_dialog.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/shared/app_toast.dart';
 import 'package:bilirec/shared/app_update_service.dart';
+import 'package:bilirec/shared/backend_base_uri.dart';
 import 'package:bilirec/shared/browser_launcher.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:bilirec/shared/device_uptime.dart';
@@ -340,7 +341,7 @@ class _BilirecHomePageState extends State<BilirecHomePage>
     const toastEdgeDistance = 80.0;
     try {
       final request = await client
-          .getUrl(Uri.parse('http://127.0.0.1:8080/'))
+          .getUrl(await backendBaseUri())
           .timeout(const Duration(seconds: 2));
       final response =
           await request.close().timeout(const Duration(seconds: 2));

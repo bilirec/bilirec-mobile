@@ -5,6 +5,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:bilirec/l10n/app_localizations.dart';
+import 'package:bilirec/shared/backend_base_uri.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -152,8 +153,10 @@ class BilirecSseHandler {
     _client = client;
 
     try {
-      final uri = Uri.parse(
-        'http://127.0.0.1:8080/notify/sse?token=${Uri.encodeQueryComponent(_token!)}',
+      final baseUri = await backendBaseUri();
+      final uri = baseUri.replace(
+        path: '/notify/sse',
+        queryParameters: {'token': _token!},
       );
       final req = await client.getUrl(uri).timeout(const Duration(seconds: 8));
       req.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
@@ -202,7 +205,7 @@ class BilirecSseHandler {
 
   void _scheduleReconnect() {
     if (!canRun() || _token == null) return;
-    debugLog('SSE 連線中斷，5 秒後嘗試重新連線');
+    debugLog('SSE 連線中斷，3 秒後嘗試重新連線');
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(
       const Duration(seconds: 3),
