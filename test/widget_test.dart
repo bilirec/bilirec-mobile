@@ -131,6 +131,8 @@ final _maxConcurrentRecordingsWarningLabels =
     labelsForKey('maxConcurrentRecordingsWarning');
 final _maxConcurrentRecordingsWarningHighLabels =
     labelsForKey('maxConcurrentRecordingsWarningHigh');
+final _previewMediaMaxQueuedBytesTitleLabels =
+    labelsForKey('previewMediaMaxQueuedBytesTitle');
 final _subcheckPolicyTitleLabels = labelsForKey('subcheckPolicyTitle');
 final _subcheckPolicyDescriptionLabels =
     labelsForKey('subcheckPolicyDescription');
@@ -448,6 +450,12 @@ void main() {
     concurrentSlider.onChanged?.call(6); // 6 路
     concurrentSlider.onChangeEnd?.call(6);
     await tester.pumpAndSettle();
+    final previewMediaSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('preview_media_max_queued_bytes_slider')),
+    );
+    previewMediaSlider.onChanged?.call(16); // 16 MB
+    previewMediaSlider.onChangeEnd?.call(16);
+    await tester.pumpAndSettle();
 
     final recoveryButton = tester.widget<SegmentedButton<String>>(
       find.byKey(const Key('recording_recovery_duration_segments')),
@@ -477,8 +485,35 @@ void main() {
     expect(envSettings['STREAM_IDLE_TIMEOUT'], '60');
     expect(envSettings['RECORDING_RECOVERY_DURATION'], 'reset');
     expect(envSettings['MAX_CONCURRENT_RECORDINGS'], '6');
+    expect(envSettings['PREVIEW_MEDIA_MAX_QUEUED_BYTES'],
+        '${16 * 1024 * 1024}');
     expect(envSettings['CONVERT_TO_MP4'], 'true');
     expect(envSettings['DELETE_SOURCE_AFTER_CONVERT'], 'true');
+  });
+
+  testWidgets('未設定時預覽緩衝上限顯示預設 4 MB', (tester) async {
+    await tester.pumpWidget(const BilirecApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(_findFirstVisibleText(_settingsLabels));
+    await tester.pumpAndSettle();
+
+    // 滑桿區塊載入完成後，新滑桿存在且落在預設 4 MB 選項。
+    final previewTitle = _findFirstVisibleText(
+      _previewMediaMaxQueuedBytesTitleLabels,
+    );
+    expect(previewTitle, findsOneWidget);
+    final previewMediaSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('preview_media_max_queued_bytes_slider')),
+    );
+    expect(previewMediaSlider.value, 4);
+
+    final envSettings = await Preferences.getManagedEnvironmentSettings();
+    expect(
+      envSettings.containsKey('PREVIEW_MEDIA_MAX_QUEUED_BYTES'),
+      isFalse,
+      reason: '未操作前不應寫入環境變數（沿用後端預設）',
+    );
   });
 
   testWidgets('錄製策略可設定不等待重試與不檢查空間', (tester) async {

@@ -346,6 +346,10 @@ class AppLocalizations {
       'diskSpaceOption': '{value} GB',
       'diskSpaceNoMinimumOption': '不檢查',
       'concurrentRecordingOption': '{value} 路',
+      'megabytesOption': '{value} MB',
+      'previewMediaMaxQueuedBytesTitle': '預覽緩衝上限',
+      'previewMediaMaxQueuedBytesDescription':
+          '每個錄製中預覽的觀看連線在後端可積壓的資料量上限，超出後該連線會被斷開、需重新開啟；調低可節省記憶體（預設 4 MB），看 2K／4K 或常回看追看可調高。',
       'notificationTitleRunning': 'Bilirec 系統服務運行中',
       'notificationTextRunning': '開啟錄製管理程式即可開始錄製',
       'notificationButtonStop': '停止服務',
@@ -652,6 +656,10 @@ class AppLocalizations {
       'diskSpaceOption': '{value} GB',
       'diskSpaceNoMinimumOption': '不检查',
       'concurrentRecordingOption': '{value} 路',
+      'megabytesOption': '{value} MB',
+      'previewMediaMaxQueuedBytesTitle': '预览缓冲上限',
+      'previewMediaMaxQueuedBytesDescription':
+          '每个录制中预览的观看连接在后端可积压的数据量上限，超出后该连接会被断开、需重新打开；调低可节省内存（默认 4 MB），看 2K／4K 或常回看追看可调高。',
       'notificationTitleRunning': 'Bilirec 系统服务运行中',
       'notificationTextRunning': '打开录制管理程序即可开始录制',
       'notificationButtonStop': '停止服务',

@@ -58,6 +58,14 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     _maxMaxConcurrentRecordings - _minMaxConcurrentRecordings + 1,
     (index) => _minMaxConcurrentRecordings + index,
   );
+  static const int _previewMediaMb = 1024 * 1024;
+  static const List<int> _previewMediaMaxQueuedMbOptions = <int>[
+    1,
+    2,
+    4,
+    8,
+    16,
+  ];
 
   static const int _defaultMaxRecordingHours = 5;
   static const int _defaultMinDiskSpaceGb = 5;
@@ -66,6 +74,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
   static const int _defaultStreamIdleTimeoutSecs = 20;
   static const int _defaultMaxConcurrentRecordings =
       _minMaxConcurrentRecordings;
+  static const int _defaultPreviewMediaMaxQueuedMb = 4;
 
   int? _maxRecordingHours;
   int? _minDiskSpaceGb;
@@ -73,6 +82,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
   int? _maxRecoveryAttempts;
   int? _streamIdleTimeoutSecs;
   int? _maxConcurrentRecordings;
+  int? _previewMediaMaxQueuedMb;
   String? _recordingRecoveryDuration;
 
   AppLocalizations get l10n => AppLocalizations.of(context);
@@ -94,6 +104,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
       _streamIdleTimeoutSecs = _readStreamIdleTimeoutSecs(settings);
       _recordingRecoveryDuration = _readRecordingRecoveryDuration(settings);
       _maxConcurrentRecordings = _readMaxConcurrentRecordings(settings);
+      _previewMediaMaxQueuedMb = _readPreviewMediaMaxQueuedMb(settings);
     });
   }
 
@@ -211,6 +222,18 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     return best;
   }
 
+  int _readPreviewMediaMaxQueuedMb(Map<String, String> env) {
+    final bytes = int.tryParse(env['PREVIEW_MEDIA_MAX_QUEUED_BYTES'] ?? '');
+    if (bytes == null || bytes <= 0) {
+      return _defaultPreviewMediaMaxQueuedMb;
+    }
+    final mb = (bytes / _previewMediaMb).round();
+    if (_previewMediaMaxQueuedMbOptions.contains(mb)) {
+      return mb;
+    }
+    return _nearestOption(_previewMediaMaxQueuedMbOptions, mb);
+  }
+
   String _maxConcurrentRecordingsWarningText(AppLocalizations l10n, int value) {
     if (value >= 11) {
       return l10n.tr('maxConcurrentRecordingsWarningHigh');
@@ -305,6 +328,19 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     });
   }
 
+  Future<void> _setPreviewMediaMaxQueuedMb(int value) async {
+    if (!_previewMediaMaxQueuedMbOptions.contains(value)) return;
+    final bytes = value * _previewMediaMb;
+    await widget.managedEnvironment.set(
+      'PREVIEW_MEDIA_MAX_QUEUED_BYTES',
+      '$bytes',
+    );
+    if (!mounted) return;
+    setState(() {
+      _previewMediaMaxQueuedMb = value;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final hours = _maxRecordingHours;
@@ -313,6 +349,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
     final recoveryAttempts = _maxRecoveryAttempts;
     final idle = _streamIdleTimeoutSecs;
     final concurrent = _maxConcurrentRecordings;
+    final previewMb = _previewMediaMaxQueuedMb;
     final recovery = _recordingRecoveryDuration;
     if (hours == null ||
         disk == null ||
@@ -320,6 +357,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
         recoveryAttempts == null ||
         idle == null ||
         concurrent == null ||
+        previewMb == null ||
         recovery == null) {
       return const SizedBox(height: 48);
     }
@@ -499,6 +537,27 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
           },
           onChangeEnd: (value) {
             _setMaxConcurrentRecordings(value);
+          },
+        ),
+        const SizedBox(height: 14),
+        SettingsOptionSlider(
+          key: const Key('preview_media_max_queued_bytes_slider'),
+          title: l10n.tr('previewMediaMaxQueuedBytesTitle'),
+          description: l10n.tr('previewMediaMaxQueuedBytesDescription'),
+          options: _previewMediaMaxQueuedMbOptions,
+          value: previewMb,
+          valueLabel: l10n.tr(
+            'megabytesOption',
+            params: {'value': '$previewMb'},
+          ),
+          enabled: widget.enabled,
+          onChanged: (value) {
+            setState(() {
+              _previewMediaMaxQueuedMb = value;
+            });
+          },
+          onChangeEnd: (value) {
+            _setPreviewMediaMaxQueuedMb(value);
           },
         ),
       ],
