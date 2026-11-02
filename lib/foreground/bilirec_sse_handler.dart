@@ -9,12 +9,16 @@ import 'package:bilirec/shared/backend_base_uri.dart';
 import 'package:bilirec/shared/debugger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-const AndroidNotificationChannel sseEventChannel = AndroidNotificationChannel(
-  'bilirec_sse_event',
-  'Bilirec SSE 推送',
-  description: 'Bilirec 直播事件推送提醒',
-  importance: Importance.high,
-);
+const String sseEventChannelId = 'bilirec_sse_event';
+
+AndroidNotificationChannel sseEventChannel(AppLocalizations l10n) {
+  return AndroidNotificationChannel(
+    sseEventChannelId,
+    l10n.tr('sseChannelName'),
+    description: l10n.tr('sseChannelDescription'),
+    importance: Importance.high,
+  );
+}
 
 // Android identifies a notification by (tag, id). The id stays fixed so the
 // tag replaces the previous notification for the same room and event type.
@@ -101,7 +105,7 @@ class BilirecSseHandler {
     await notifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(sseEventChannel);
+        ?.createNotificationChannel(sseEventChannel(l10n));
     await _ensureNotificationReady();
     await _connect();
   }
@@ -140,7 +144,7 @@ class BilirecSseHandler {
     await notifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(sseEventChannel);
+        ?.createNotificationChannel(sseEventChannel(l10n));
     _notificationsReady = true;
   }
 
@@ -262,9 +266,9 @@ class BilirecSseHandler {
       body,
       NotificationDetails(
         android: AndroidNotificationDetails(
-          sseEventChannel.id,
-          sseEventChannel.name,
-          channelDescription: sseEventChannel.description,
+          sseEventChannelId,
+          l10n.tr('sseChannelName'),
+          channelDescription: l10n.tr('sseChannelDescription'),
           importance: Importance.high,
           priority: Priority.high,
           tag: tag,

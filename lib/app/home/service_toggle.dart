@@ -329,8 +329,8 @@ Future<void> toggleBilirecService({
       FlutterForegroundTask.init(
         androidNotificationOptions: AndroidNotificationOptions(
           channelId: 'bilirec_service_channel',
-          channelName: 'Bilirec 服務狀態',
-          channelDescription: '顯示 Bilirec 服務目前是否運作中',
+          channelName: host.l10n.tr('serviceChannelName'),
+          channelDescription: host.l10n.tr('serviceChannelDescription'),
           channelImportance: NotificationChannelImportance.LOW,
           priority: NotificationPriority.LOW,
           onlyAlertOnce: true,
