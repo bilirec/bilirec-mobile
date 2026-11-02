@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 import 'package:bilirec/app/widgets/settings/settings_option_slider.dart';
+import 'package:bilirec/app/widgets/settings/settings_range_slider.dart';
 import 'package:bilirec/app/widgets/settings_card.dart';
 import 'package:bilirec/l10n/app_localizations.dart';
 import 'package:bilirec/main.dart';
@@ -412,28 +413,40 @@ void main() {
     await tester.tap(_findFirstVisibleText(_settingsLabels));
     await tester.pumpAndSettle();
 
-    final sliders = tester.widgetList<Slider>(find.byType(Slider));
-
-    // 設定順序：時長上限、啟動前可用空間、下線重試、斷流恢復次數、流無數據等待、同時錄製上限。
-    sliders.elementAt(0).onChanged?.call(12);
-    sliders.elementAt(0).onChangeEnd?.call(12);
+    final recordingHoursSlider = tester.widget<SettingsRangeSlider>(
+      find.byKey(const Key('max_recording_hours_slider')),
+    );
+    recordingHoursSlider.onChanged?.call(12);
+    recordingHoursSlider.onChangeEnd?.call(12);
     await tester.pumpAndSettle();
-    sliders.elementAt(1).onChanged?.call(3); // 0GB,2GB,5GB,10GB -> index 3
-    sliders.elementAt(1).onChangeEnd?.call(3);
+    final diskSpaceSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('min_disk_space_slider')),
+    );
+    diskSpaceSlider.onChanged?.call(10); // 10GB
+    diskSpaceSlider.onChangeEnd?.call(10);
     await tester.pumpAndSettle();
-    sliders.elementAt(2).onChanged?.call(6); // 0,5,10,15,20,25,30 -> index 6
-    sliders.elementAt(2).onChangeEnd?.call(6);
+    final retryMinutesSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('max_retry_minutes_slider')),
+    );
+    retryMinutesSlider.onChanged?.call(30); // 30 分鐘
+    retryMinutesSlider.onChangeEnd?.call(30);
     await tester.pumpAndSettle();
     final recoveryAttemptsSlider = tester.widget<SettingsOptionSlider>(
       find.byKey(const Key('max_recovery_attempts_slider')),
     );
     recoveryAttemptsSlider.onChangeEnd?.call(30);
     await tester.pumpAndSettle();
-    sliders.elementAt(4).onChanged?.call(6); // 0,10,15,20,30,45,60 -> 60s
-    sliders.elementAt(4).onChangeEnd?.call(6);
+    final streamIdleSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('stream_idle_timeout_slider')),
+    );
+    streamIdleSlider.onChanged?.call(60); // 60 秒
+    streamIdleSlider.onChangeEnd?.call(60);
     await tester.pumpAndSettle();
-    sliders.elementAt(5).onChanged?.call(3); // 3,4,5,6 -> index 3
-    sliders.elementAt(5).onChangeEnd?.call(3);
+    final concurrentSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('max_concurrent_recordings_slider')),
+    );
+    concurrentSlider.onChanged?.call(6); // 6 路
+    concurrentSlider.onChangeEnd?.call(6);
     await tester.pumpAndSettle();
 
     final recoveryButton = tester.widget<SegmentedButton<String>>(
@@ -475,12 +488,17 @@ void main() {
     await tester.tap(_findFirstVisibleText(_settingsLabels));
     await tester.pumpAndSettle();
 
-    final sliders = tester.widgetList<Slider>(find.byType(Slider)).toList();
-    sliders.elementAt(1).onChanged?.call(0);
-    sliders.elementAt(1).onChangeEnd?.call(0);
+    final diskSpaceSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('min_disk_space_slider')),
+    );
+    diskSpaceSlider.onChanged?.call(0); // 不檢查
+    diskSpaceSlider.onChangeEnd?.call(0);
     await tester.pumpAndSettle();
-    sliders.elementAt(2).onChanged?.call(0);
-    sliders.elementAt(2).onChangeEnd?.call(0);
+    final retryMinutesSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('max_retry_minutes_slider')),
+    );
+    retryMinutesSlider.onChanged?.call(0); // 不等待
+    retryMinutesSlider.onChangeEnd?.call(0);
     await tester.pumpAndSettle();
 
     final envSettings = await Preferences.getManagedEnvironmentSettings();
@@ -509,10 +527,11 @@ void main() {
     await tester.tap(_findFirstVisibleText(_settingsLabels));
     await tester.pumpAndSettle();
 
-    final sliders = tester.widgetList<Slider>(find.byType(Slider));
-    // 設定順序：時長上限、啟動前可用空間、下線重試、斷流恢復次數、流無數據等待、同時錄製上限。
-    sliders.elementAt(5).onChanged?.call(12); // 3..15 -> index 12 = 15
-    sliders.elementAt(5).onChangeEnd?.call(12);
+    final concurrentSlider = tester.widget<SettingsOptionSlider>(
+      find.byKey(const Key('max_concurrent_recordings_slider')),
+    );
+    concurrentSlider.onChanged?.call(15); // 15 路
+    concurrentSlider.onChangeEnd?.call(15);
     await tester.pumpAndSettle();
 
     expect(

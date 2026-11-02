@@ -330,6 +330,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
       description: l10n.tr('recordingPolicyDescription'),
       children: [
         SettingsRangeSlider(
+          key: const Key('max_recording_hours_slider'),
           title: l10n.tr('maxRecordingHoursTitle'),
           description: l10n.tr('maxRecordingHoursDescription'),
           value: hours,
@@ -354,6 +355,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
         ),
         const SizedBox(height: 14),
         SettingsOptionSlider(
+          key: const Key('min_disk_space_slider'),
           title: l10n.tr('minDiskSpaceTitle'),
           description: l10n.tr('minDiskSpaceDescription'),
           options: _diskSpaceOptionsGb,
@@ -376,6 +378,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
         ),
         const SizedBox(height: 14),
         SettingsOptionSlider(
+          key: const Key('max_retry_minutes_slider'),
           title: l10n.tr('maxRetryMinutesTitle'),
           description: l10n.tr('maxRetryMinutesDescription'),
           options: _retryMinuteOptions,
@@ -419,6 +422,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
         ),
         const SizedBox(height: 14),
         SettingsOptionSlider(
+          key: const Key('stream_idle_timeout_slider'),
           title: l10n.tr('streamIdleTimeoutTitle'),
           description: l10n.tr('streamIdleTimeoutDescription'),
           options: _streamIdleTimeoutOptions,
@@ -474,6 +478,7 @@ class _RecordingPolicySectionState extends State<RecordingPolicySection> {
         ),
         const SizedBox(height: 14),
         SettingsOptionSlider(
+          key: const Key('max_concurrent_recordings_slider'),
           title: l10n.tr('maxConcurrentRecordingsTitle'),
           description: l10n.tr('maxConcurrentRecordingsDescription'),
           hint: SettingsHint(
