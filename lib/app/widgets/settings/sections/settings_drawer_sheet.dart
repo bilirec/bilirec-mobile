@@ -5,6 +5,7 @@ import 'package:bilirec/app/widgets/settings/sections/develop_environment_sectio
 import 'package:bilirec/app/widgets/settings/sections/external_browser_section.dart';
 import 'package:bilirec/app/widgets/settings/sections/general_toggles_section.dart';
 import 'package:bilirec/app/widgets/settings/sections/github_proxy_section.dart';
+import 'package:bilirec/app/widgets/settings/sections/notification_policy_section.dart';
 import 'package:bilirec/app/widgets/settings/sections/output_path_section.dart';
 import 'package:bilirec/app/widgets/settings/sections/recording_policy_section.dart';
 import 'package:bilirec/app/widgets/settings/sections/subcheck_policy_section.dart';
@@ -71,6 +72,8 @@ class _SettingsDrawerSheetState extends State<SettingsDrawerSheet> {
                     enabled: enabled,
                     managedEnvironment: _managedEnvironment,
                   ),
+                  const SizedBox(height: 20),
+                  NotificationPolicySection(enabled: enabled),
                   const SizedBox(height: 20),
                   SubcheckPolicySection(
                     enabled: enabled,

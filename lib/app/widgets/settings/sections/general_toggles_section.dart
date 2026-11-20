@@ -15,7 +15,6 @@ class GeneralTogglesSection extends StatefulWidget {
 }
 
 class _GeneralTogglesSectionState extends State<GeneralTogglesSection> {
-  bool? _useSsePush;
   bool? _useAntiSleep;
   bool? _useAutoRunOnBoot;
 
@@ -26,21 +25,13 @@ class _GeneralTogglesSectionState extends State<GeneralTogglesSection> {
   }
 
   Future<void> _load() async {
-    final sse = await Preferences.getEnableSsePush();
     final antiSleep = await Preferences.getEnableAntiSleep();
     final autoRun = await Preferences.getEnableAutoRunOnBoot();
     if (!mounted) return;
     setState(() {
-      _useSsePush = sse;
       _useAntiSleep = antiSleep;
       _useAutoRunOnBoot = autoRun;
     });
-  }
-
-  Future<void> _setSse(bool value) async {
-    await Preferences.setEnableSsePush(value);
-    if (!mounted) return;
-    setState(() => _useSsePush = value);
   }
 
   Future<void> _setAntiSleep(bool value) async {
@@ -57,10 +48,9 @@ class _GeneralTogglesSectionState extends State<GeneralTogglesSection> {
 
   @override
   Widget build(BuildContext context) {
-    final sse = _useSsePush;
     final antiSleep = _useAntiSleep;
     final autoRun = _useAutoRunOnBoot;
-    if (sse == null || antiSleep == null || autoRun == null) {
+    if (antiSleep == null || autoRun == null) {
       return const SizedBox(height: 48);
     }
 
@@ -68,22 +58,6 @@ class _GeneralTogglesSectionState extends State<GeneralTogglesSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SettingsSectionCard(
-          children: [
-            SettingsSwitchRow(
-              title: l10n.tr('ssePushSwitchTitle'),
-              description: l10n.tr('ssePushDescription'),
-              value: sse,
-              enabled: widget.enabled,
-              onChanged: _setSse,
-            ),
-            const SizedBox(height: 12),
-            SettingsHint(
-              text: l10n.tr('ssePushHint'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
         SettingsSectionCard(
           children: [
             SettingsSwitchRow(

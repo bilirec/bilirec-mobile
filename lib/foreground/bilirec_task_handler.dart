@@ -34,6 +34,7 @@ class BilirecTaskHandler extends TaskHandler {
   bool _antiSleepEnabled = false;
   bool _networkLockRequested = false;
   String? _sseToken;
+  bool _metricsAlertsEnabled = true;
   Map<String, String> _managedEnvironmentSettings = const {};
   Map<String, String> _developEnvironmentSettings = const {};
 
@@ -50,6 +51,7 @@ class BilirecTaskHandler extends TaskHandler {
       outputDir = saved.isNotEmpty ? saved : null;
       _sseEnabled = await Preferences.getEnableSsePush();
       _sseToken = _sseEnabled ? generateSseToken() : null;
+      _metricsAlertsEnabled = await Preferences.getEnableMetricsAlerts();
       _antiSleepEnabled = await Preferences.getEnableAntiSleep();
       _managedEnvironmentSettings =
           await Preferences.getManagedEnvironmentSettings();
@@ -83,6 +85,8 @@ class BilirecTaskHandler extends TaskHandler {
     if (_sseToken != null && _sseToken!.isNotEmpty) {
       startEnv['NOTIFY_SSE_TOKEN'] = _sseToken!;
     }
+    // libbilirec 的 Android 預設把告警打開；空字串會被跳過，所以一定要傳明確的 true/false。
+    startEnv['NOTIFY_METRICS_ALERTS'] = _metricsAlertsEnabled ? 'true' : 'false';
     // GitHub API proxy is App-only (APK update checks). Do not inject GITHUB_API_URL
     // into libbilirec; Android core uses CHECK_UPDATE=false at startup.
     // Developer environment settings should have higher priority than managed settings.

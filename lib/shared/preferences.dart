@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const String _outputDirKey = 'output_dir';
 const String _localeCodeKey = 'locale_code';
 const String _enableSsePushKey = 'enable_sse_push';
+const String _enableMetricsAlertsKey = 'enable_metrics_alerts';
 const String _enableAntiSleepKey = 'enable_antisleep';
 const String _enableAutoRunOnBootKey = 'enable_auto_run_on_boot';
 const String _skippedUpdateVersionKey = 'skipped_update_version';
@@ -58,6 +59,16 @@ sealed class Preferences {
   static Future<bool> getEnableSsePush() async {
     final prefs = _prefs;
     return await prefs.getBool(_enableSsePushKey) ?? false;
+  }
+
+  static Future<void> setEnableMetricsAlerts(bool value) async {
+    final prefs = _prefs;
+    await prefs.setBool(_enableMetricsAlertsKey, value);
+  }
+
+  static Future<bool> getEnableMetricsAlerts() async {
+    final prefs = _prefs;
+    return await prefs.getBool(_enableMetricsAlertsKey) ?? true;
   }
 
   static Future<void> setEnableAntiSleep(bool value) async {
