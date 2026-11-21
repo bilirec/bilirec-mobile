@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:bilirec/app/widgets/external_browser_picker_sheet.dart';
 import 'package:bilirec/l10n/app_localizations.dart';

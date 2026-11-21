@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:bilirec/shared/browser_packages.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

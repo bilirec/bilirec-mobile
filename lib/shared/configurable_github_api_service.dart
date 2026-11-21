@@ -7,11 +7,10 @@ import 'package:bilirec/shared/github_api_base.dart';
 /// [GithubApiService] that honors a configurable GitHub API base URL.
 class ConfigurableGithubApiService extends GithubApiService {
   ConfigurableGithubApiService({
-    Dio? dio,
+    super.dio,
     this.apiBaseUrl = '',
     this.githubBaseUrl = '',
-  })  : _dio = dio ?? Dio(),
-        super(dio: dio);
+  }) : _dio = dio ?? Dio();
 
   final Dio _dio;
   final String apiBaseUrl;

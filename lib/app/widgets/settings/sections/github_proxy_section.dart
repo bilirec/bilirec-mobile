@@ -258,7 +258,7 @@ class _GithubProxySectionState extends State<GithubProxySection> {
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           isExpanded: true,
-          value: _githubApiProxyPreset,
+          initialValue: _githubApiProxyPreset,
           decoration: InputDecoration(
             isDense: true,
             border: const OutlineInputBorder(),
